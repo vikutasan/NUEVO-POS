@@ -1,11 +1,13 @@
-# Base de datos y backend del POS nuevo — FASE 1.
+# Base de datos y backend del POS nuevo — FASE 1 + P2.7.
 #
 # PostgreSQL 15 (stack obligatorio, Prompt del Arquitecto §7.1). Es una base
 # SEPARADA de la del ERP: el POS nuevo no comparte base con el ERP instalado.
 #
 # El servicio `api` es el entorno reproducible donde corre la puerta F1
-# (alembic upgrade/downgrade + pytest). No hay Python en el host, así que la
-# verificación se ejecuta dentro del contenedor (stack obligatorio: Docker).
+# (alembic upgrade/downgrade + pytest) Y, desde P2.7, el servidor HTTP
+# (uvicorn) que sirve los 4 endpoints del frontend mínimo en el puerto 5101.
+# No hay Python en el host, así que todo se ejecuta dentro del contenedor
+# (stack obligatorio: Docker).
 #
 # Uso:
 #   docker compose up -d
@@ -13,6 +15,11 @@
 #   docker compose run --rm api alembic downgrade base
 #   docker compose run --rm api alembic upgrade head
 #   docker compose run --rm api pytest -v
+#   docker compose run --rm api python scripts/seed_demo.py
+#
+#   # P2.7 — el servidor HTTP queda arriba con `up -d`:
+#   curl http://localhost:5101/health
+#   curl "http://localhost:5101/catalog/products-for-sale?channel=PANADERIA"
 
 services:
   db:
@@ -38,13 +45,24 @@ services:
     working_dir: /app
     environment:
       DATABASE_URL: postgresql+asyncpg://pos:pos@db:5432/nuevo_pos
+    ports:
+      - "5101:5101"
     volumes:
       - ./apps/api:/app
     depends_on:
       db:
         condition: service_healthy
+    # P2.7: en vez de quedarse dormido con `tail -f /dev/null`, el contenedor
+    # instala dependencias y levanta el servidor HTTP del POS nuevo.
     command: >
-      sh -c "pip install --quiet --no-cache-dir -r requirements.txt && tail -f /dev/null"
+      sh -c "pip install --quiet --no-cache-dir -r requirements.txt &&
+             uvicorn main:app --host 0.0.0.0 --port 5101"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5101/health').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
 volumes:
   nuevo_pos_data:

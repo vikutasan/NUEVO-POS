@@ -1,0 +1,59 @@
+/* Estilos globales del POS nuevo — P2.1 / P2.6.
+ *
+ * La paleta canónica se aplica aquí como variables CSS para que el fondo
+ * profundo y el acento viajen intactos en los 3 modos (R-03). Tailwind aporta
+ * las utilidades; estas variables son la base del documento.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Paleta canónica (PALETA_CANONICA). */
+  --acento: #c1d72e;
+  --fondo-profundo: #0a0a0a;
+  --fondo-profundo-alt: #080808;
+  --fondo-panel: #1a1a1a;
+  --crema-ticket: #fdfbf7;
+  --peligro: #ef4444;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--fondo-profundo);
+  color: var(--crema-ticket);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  /* R-02: la tipografía escala con el viewport, no se fija en px. */
+  font-size: clamp(0.875rem, 0.8rem + 0.3vw, 1.125rem);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* R-04: todo control interactivo respeta el target táctil de 44×44px. */
+button,
+[role='button'] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Scrollbar discreta, coherente con el fondo profundo. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--fondo-profundo-alt);
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--acento);
+}
