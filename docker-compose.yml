@@ -1,0 +1,50 @@
+# Base de datos y backend del POS nuevo — FASE 1.
+#
+# PostgreSQL 15 (stack obligatorio, Prompt del Arquitecto §7.1). Es una base
+# SEPARADA de la del ERP: el POS nuevo no comparte base con el ERP instalado.
+#
+# El servicio `api` es el entorno reproducible donde corre la puerta F1
+# (alembic upgrade/downgrade + pytest). No hay Python en el host, así que la
+# verificación se ejecuta dentro del contenedor (stack obligatorio: Docker).
+#
+# Uso:
+#   docker compose up -d
+#   docker compose run --rm api alembic upgrade head
+#   docker compose run --rm api alembic downgrade base
+#   docker compose run --rm api alembic upgrade head
+#   docker compose run --rm api pytest -v
+
+services:
+  db:
+    image: postgres:15
+    container_name: nuevo_pos_db
+    environment:
+      POSTGRES_USER: pos
+      POSTGRES_PASSWORD: pos
+      POSTGRES_DB: nuevo_pos
+    ports:
+      - "5432:5432"
+    volumes:
+      - nuevo_pos_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pos -d nuevo_pos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: python:3.12-slim
+    container_name: nuevo_pos_api
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pos:pos@db:5432/nuevo_pos
+    volumes:
+      - ./apps/api:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "pip install --quiet --no-cache-dir -r requirements.txt && tail -f /dev/null"
+
+volumes:
+  nuevo_pos_data:

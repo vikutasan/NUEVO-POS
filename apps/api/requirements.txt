@@ -1,0 +1,15 @@
+# Dependencias del backend del POS nuevo — FASE 1.
+# Stack obligatorio (Prompt del Arquitecto §7.1): Python + FastAPI +
+# SQLAlchemy async + Alembic + PostgreSQL 15 + pytest.
+
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+sqlalchemy[asyncio]==2.0.35
+asyncpg==0.29.0
+alembic==1.13.3
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# Pruebas
+pytest==8.3.3
+pytest-asyncio==0.24.0

@@ -1,0 +1,16 @@
+{
+  "name": "nuevo-pos",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Nuevo POS del ERP R de Rico — FASE 0 (Andamiaje). Repositorio separado del ERP; no lo toca.",
+  "type": "module",
+  "scripts": {
+    "lint": "node scripts/lint.mjs",
+    "test": "node scripts/test.mjs",
+    "guards": "node scripts/guards.mjs",
+    "ci": "npm run lint && npm run test && npm run guards"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
