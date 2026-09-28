@@ -1,10 +1,17 @@
 /**
- * Tailwind del POS nuevo — P2.1 / P2.6.
+ * Tailwind del POS nuevo — P2.1 / P2.6 / Fase 0.
  *
  * La paleta canónica viene de `PALETA_CANONICA` en
  * `apps/api/superficie/registry.py` (Documento 7 §2.1). Aquí se materializa como
  * tokens de Tailwind para que las interfaces la usen por nombre y no por hex
  * suelto. Los radios canónicos (Documento 7 §2.3) también se declaran.
+ *
+ * FASE 0 (28 Sep 2026): los tokens de color ahora apuntan a variables CSS
+ * (`var(--x)`) en vez de hex compilado. Esto permite cambiar el tema en
+ * runtime sin recompilar. Los valores se declaran como canales RGB en
+ * `index.css` (:root). Las opacidades de Tailwind (`bg-acento/40`,
+ * `text-crema-ticket/50`) siguen funcionando gracias al patrón
+ * `rgb(var(--x) / <alpha-value>)`.
  *
  * Los 3 modos (R-03) son explícitos: MÓVIL es la base, `md:` es COMPACTO
  * (768–1023px) y `lg:` es MOSTRADOR (≥1024px). No se inventan breakpoints.
@@ -16,12 +23,14 @@ export default {
     extend: {
       colors: {
         // Paleta canónica (PALETA_CANONICA).
-        acento: '#c1d72e',
-        'fondo-profundo': '#0a0a0a',
-        'fondo-profundo-alt': '#080808',
-        'fondo-panel': '#1a1a1a',
-        'crema-ticket': '#fdfbf7',
-        peligro: '#ef4444',
+        // Fase 0: tokens → var(--x) para theming en runtime.
+        // Los valores de cada variable se declaran en index.css como canales RGB.
+        acento:              'rgb(var(--acento) / <alpha-value>)',
+        'fondo-profundo':    'rgb(var(--fondo-profundo) / <alpha-value>)',
+        'fondo-profundo-alt':'rgb(var(--fondo-profundo-alt) / <alpha-value>)',
+        'fondo-panel':       'rgb(var(--fondo-panel) / <alpha-value>)',
+        'crema-ticket':      'rgb(var(--crema-ticket) / <alpha-value>)',
+        peligro:             'rgb(var(--peligro) / <alpha-value>)',
       },
       borderRadius: {
         // Radios canónicos (RADIOS_CANONICOS).

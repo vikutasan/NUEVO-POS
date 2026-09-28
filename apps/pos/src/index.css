@@ -1,8 +1,24 @@
-/* Estilos globales del POS nuevo — P2.1 / P2.6.
+/* Estilos globales del POS nuevo — P2.1 / P2.6 / Fase 0.
  *
  * La paleta canónica se aplica aquí como variables CSS para que el fondo
  * profundo y el acento viajen intactos en los 3 modos (R-03). Tailwind aporta
  * las utilidades; estas variables son la base del documento.
+ *
+ * FASE 0 (28 Sep 2026): las variables ahora se declaran como CANALES RGB
+ * separados por espacio (ej: `193 215 46` en vez de `#c1d72e`). Esto es
+ * necesario porque Tailwind usa el patrón `rgb(var(--x) / <alpha-value>)`
+ * para que funcionen las opacidades (`bg-acento/40`, `text-crema-ticket/50`).
+ *
+ * Para cambiar el tema en runtime, basta con reescribir estos 6 valores
+ * en :root (o en el contenedor del módulo) con `element.style.setProperty()`.
+ *
+ * Tabla de conversión (referencia):
+ *   #c1d72e → 193 215 46   (acento / verde lima)
+ *   #0a0a0a → 10 10 10     (fondo profundo / casi negro)
+ *   #080808 → 8 8 8        (fondo profundo alt / negro)
+ *   #1a1a1a → 26 26 26     (fondo panel / gris oscuro)
+ *   #fdfbf7 → 253 251 247  (crema ticket / blanco cálido)
+ *   #ef4444 → 239 68 68    (peligro / rojo)
  */
 
 @tailwind base;
@@ -10,13 +26,15 @@
 @tailwind utilities;
 
 :root {
-  /* Paleta canónica (PALETA_CANONICA). */
-  --acento: #c1d72e;
-  --fondo-profundo: #0a0a0a;
-  --fondo-profundo-alt: #080808;
-  --fondo-panel: #1a1a1a;
-  --crema-ticket: #fdfbf7;
-  --peligro: #ef4444;
+  /* Paleta canónica (PALETA_CANONICA) — Fase 0: canales RGB, no hex.
+   * Cada valor son los 3 canales separados por espacio (R G B).
+   * Tailwind los interpreta como rgb(R G B / alpha). */
+  --acento: 193 215 46;
+  --fondo-profundo: 10 10 10;
+  --fondo-profundo-alt: 8 8 8;
+  --fondo-panel: 26 26 26;
+  --crema-ticket: 253 251 247;
+  --peligro: 239 68 68;
 }
 
 html,
@@ -27,8 +45,8 @@ body,
 }
 
 body {
-  background-color: var(--fondo-profundo);
-  color: var(--crema-ticket);
+  background-color: rgb(var(--fondo-profundo));
+  color: rgb(var(--crema-ticket));
   font-family: Inter, system-ui, -apple-system, sans-serif;
   /* R-02: la tipografía escala con el viewport, no se fija en px. */
   font-size: clamp(0.875rem, 0.8rem + 0.3vw, 1.125rem);
@@ -48,12 +66,15 @@ button,
   height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--fondo-profundo-alt);
+  background: rgb(var(--fondo-profundo-alt));
 }
 ::-webkit-scrollbar-thumb {
+  /* #2a2a2a es un valor decorativo para el scrollbar, no un token canónico.
+   * Se deja como hex porque no participa del sistema de temas. */
   background: #2a2a2a;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--acento);
+  background: rgb(var(--acento));
 }
+
