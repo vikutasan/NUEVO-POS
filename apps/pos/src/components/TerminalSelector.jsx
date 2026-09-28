@@ -2,15 +2,14 @@
  * TerminalSelector — Pantalla de selección de terminal.
  *
  * FICHA 12 de ESPECIFICACION_DE_INTERFACES_POS.md:
- * Landing page del POS. Muestra las terminales como tarjetas con 3 estados
- * visuales: libre (verde), mía (azul), ocupada (rojo/naranja).
+ * Landing page del POS. Estética igualada al POS viejo:
+ *   - Fondo madera (--madera)
+ *   - Tarjetas oscuras con esquinas redondeadas
+ *   - 3 estados: libre (🖥️), mía (🔑 dorada), ocupada (🔒 roja)
  *
- * Cicatriz portada: el bug del POS viejo donde el ocupante veía su propia
- * terminal como "libre" (solo 2 ramas en vez de 3). Ahora resolveCardState()
- * produce 3 estados explícitos.
+ * Cicatriz portada: 3 estados explícitos (no 2).
  *
  * @see useTerminals en hooks/useTerminals.js
- * @see resolveCardState en utils/terminalCardState.js
  */
 
 import React, { useState } from 'react';
@@ -25,38 +24,118 @@ const PRESET_ICONS = [
   { label: 'Caja', value: '💰' },
 ];
 
-function renderIcon(icon) {
-  if (!icon) return <span className="text-5xl">🖥️</span>;
-  if (icon.endsWith('.png') || icon.startsWith('data:')) {
-    return <img src={icon} alt="" className="w-16 h-16 object-contain" />;
-  }
-  return <span className="text-5xl">{icon}</span>;
-}
-
-/* ─── Estilos por estado de tarjeta ─── */
-const CARD_STYLES = {
-  free: {
-    border: 'border-white/10 hover:border-green-400/60',
-    bg: 'bg-black/20 hover:bg-green-900/20',
-    badge: 'bg-green-500/20 text-green-400',
-    badgeText: '🟢 LIBRE',
-    cursor: 'cursor-pointer',
+/* ─── Estilos inline (no dependen de Tailwind para funcionar) ─── */
+const styles = {
+  page: {
+    minHeight: '100vh',
+    background: 'rgb(var(--madera, 222 180 124))',
+    color: 'rgb(var(--crema-ticket, 253 251 247))',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+    position: 'relative',
   },
-  mine: {
-    border: 'border-blue-500/50',
-    bg: 'bg-blue-900/20',
-    badge: 'bg-blue-500/20 text-blue-400',
-    badgeText: '🔵 TU TERMINAL',
-    cursor: 'cursor-pointer',
+  subtitle: {
+    color: '#ea580c',
+    fontWeight: 900,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5em',
+    fontSize: '0.7rem',
+    marginBottom: '0.5rem',
   },
-  occupied: {
-    border: 'border-red-500/30',
-    bg: 'bg-black/30',
-    badge: 'bg-red-500/20 text-red-400',
-    badgeText: '🔴 OCUPADA',
-    cursor: 'cursor-not-allowed opacity-60',
+  title: {
+    fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+    fontWeight: 900,
+    textTransform: 'uppercase',
+    fontStyle: 'italic',
+    letterSpacing: '-0.03em',
+    color: '#fff',
+    marginBottom: '0.25rem',
+  },
+  titleFaded: {
+    opacity: 0.15,
+  },
+  greeting: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: '0.875rem',
+    marginBottom: '2.5rem',
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+    gap: '1.25rem',
+    maxWidth: '1100px',
+    width: '100%',
+    marginBottom: '2rem',
+  },
+  managerBtn: {
+    position: 'absolute',
+    top: '1.5rem',
+    right: '1.5rem',
+    background: '#ea580c',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '1rem',
+    padding: '0.75rem 1.5rem',
+    fontWeight: 800,
+    fontSize: '0.75rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.1em',
+    cursor: 'pointer',
   },
 };
+
+/* ─── Estilos de tarjeta por estado ─── */
+function getCardStyle(state) {
+  const base = {
+    background: 'rgba(30, 30, 30, 0.85)',
+    borderRadius: '35px',
+    border: '2px solid transparent',
+    padding: '1.5rem 1rem',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.5rem',
+    cursor: 'pointer',
+    transition: 'all 0.4s ease',
+    minHeight: '200px',
+    justifyContent: 'center',
+    position: 'relative',
+  };
+
+  if (state === 'free') {
+    return { ...base, border: '2px solid rgba(255,255,255,0.08)' };
+  }
+  if (state === 'mine') {
+    return { ...base, border: '2px solid rgba(234,88,12,0.5)', background: 'rgba(40, 30, 20, 0.9)' };
+  }
+  // occupied
+  return {
+    ...base,
+    border: '2px solid rgba(127, 29, 29, 0.5)',
+    background: 'rgba(50, 20, 20, 0.85)',
+    cursor: 'not-allowed',
+    opacity: 0.85,
+  };
+}
+
+function getBadge(state) {
+  if (state === 'free') return null;
+  if (state === 'mine') {
+    return {
+      text: 'TU SESIÓN',
+      bg: '#ea580c',
+      color: '#fff',
+    };
+  }
+  return {
+    text: 'OCUPADA',
+    bg: '#991b1b',
+    color: '#fca5a5',
+  };
+}
 
 export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   const {
@@ -71,6 +150,9 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   const [editIcon, setEditIcon] = useState('');
   const [toast, setToast] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const canManage = currentUser?.role === 'ADMIN'
+    || currentUser?.permissions?.access_terminal_manager === 'full';
 
   const showToast = (msg, type = 'info') => {
     setToast({ msg, type });
@@ -97,49 +179,30 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   }
 
   /* ─── Gestión ─── */
-  function startEdit(t) {
-    setEditingId(t.id);
-    setEditName(t.name);
-    setEditIcon(t.icon);
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setEditName('');
-    setEditIcon('');
-  }
-
-  function applyEdit() {
-    updateTerminal(editingId, { name: editName, icon: editIcon });
-    cancelEdit();
-  }
+  function startEdit(t) { setEditingId(t.id); setEditName(t.name); setEditIcon(t.icon); }
+  function cancelEdit() { setEditingId(null); setEditName(''); setEditIcon(''); }
+  function applyEdit() { updateTerminal(editingId, { name: editName, icon: editIcon }); cancelEdit(); }
 
   function handleRemove(tid) {
     const result = removeTerminal(tid);
-    if (!result.success) {
-      showToast(result.message, 'error');
-      return;
-    }
+    if (!result.success) { showToast(result.message, 'error'); return; }
     setConfirmDelete(null);
   }
 
   async function handleSave() {
     const result = await saveConfig();
-    if (result.success) {
-      showToast('✅ Configuración guardada', 'success');
-    } else {
-      showToast('❌ Error al guardar', 'error');
-    }
+    showToast(result.success ? '✅ Configuración guardada' : '❌ Error al guardar',
+              result.success ? 'success' : 'error');
   }
 
-  /* ─── Loading state ─── */
+  /* ─── Loading ─── */
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-screen"
-           style={{ background: 'var(--pos-bg, #0a0a0a)' }}>
-        <div className="text-center animate-pulse">
-          <div className="text-6xl mb-6">🖥️</div>
-          <p className="text-white/40 text-sm font-bold uppercase tracking-[0.3em]">
+      <div style={{ ...styles.page, justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🖥️</div>
+          <p style={{ opacity: 0.4, fontWeight: 700, textTransform: 'uppercase',
+                      letterSpacing: '0.3em', fontSize: '0.8rem', color: '#fff' }}>
             Cargando terminales...
           </p>
         </div>
@@ -150,75 +213,71 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   /* ─── Manager mode ─── */
   if (showManager) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-10 min-h-screen
-                      animate-in fade-in zoom-in-95 duration-700"
-           style={{ background: 'var(--pos-bg, #0a0a0a)', color: 'var(--pos-text, #fff)' }}>
-
-        <div className="text-center mb-10">
-          <h3 className="text-orange-500 font-black uppercase tracking-[0.5em] text-xs mb-4">
-            Administración
-          </h3>
-          <h2 className="text-5xl font-black uppercase tracking-tighter italic">
-            Gestor de <span className="opacity-20">Terminales</span>
+      <div style={{ ...styles.page }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <p style={styles.subtitle}>Administración</p>
+          <h2 style={{ ...styles.title, fontSize: 'clamp(1.8rem, 4vw, 3rem)' }}>
+            Gestor de <span style={styles.titleFaded}>Terminales</span>
           </h2>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 max-w-7xl w-full mb-10">
+        <div style={styles.grid}>
           {terminals.map(t => {
             const isEditing = editingId === t.id;
             return (
-              <div key={t.id}
-                   className={`rounded-[30px] border p-6 flex flex-col items-center gap-4
-                              transition-all duration-300
-                              ${isEditing
-                                ? 'bg-orange-600/10 border-orange-500/40'
-                                : 'bg-black/20 border-white/5'}`}>
-                <div className="w-20 h-20 flex items-center justify-center bg-white/5 rounded-2xl">
-                  {renderIcon(isEditing ? editIcon : t.icon)}
+              <div key={t.id} style={{
+                ...getCardStyle('free'),
+                ...(isEditing ? { border: '2px solid #ea580c' } : {}),
+              }}>
+                <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center',
+                              justifyContent: 'center', background: 'rgba(255,255,255,0.05)',
+                              borderRadius: '1rem', fontSize: '2.5rem' }}>
+                  {isEditing ? (editIcon || '🖥️') : (t.icon || '🖥️')}
                 </div>
 
                 {isEditing ? (
                   <>
-                    <input value={editName}
-                           onChange={e => setEditName(e.target.value)}
-                           className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2
-                                      text-center text-sm text-white" />
-                    <div className="flex flex-wrap gap-2 justify-center">
+                    <input value={editName} onChange={e => setEditName(e.target.value)}
+                           style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)',
+                                    borderRadius: '0.75rem', padding: '0.5rem', textAlign: 'center',
+                                    color: '#fff', fontSize: '0.8rem' }} />
+                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', justifyContent: 'center' }}>
                       {PRESET_ICONS.map(p => (
-                        <button key={p.value}
-                                onClick={() => setEditIcon(p.value)}
-                                className={`text-2xl p-1 rounded-lg transition-all
-                                           ${editIcon === p.value ? 'bg-orange-500/30 scale-125' : 'hover:bg-white/10'}`}>
+                        <button key={p.value} onClick={() => setEditIcon(p.value)}
+                                style={{ fontSize: '1.5rem', padding: '0.25rem', borderRadius: '0.5rem',
+                                         background: editIcon === p.value ? 'rgba(234,88,12,0.3)' : 'transparent',
+                                         border: 'none', cursor: 'pointer',
+                                         transform: editIcon === p.value ? 'scale(1.2)' : 'scale(1)' }}>
                           {p.value}
                         </button>
                       ))}
                     </div>
-                    <div className="flex gap-2 w-full">
+                    <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
                       <button onClick={applyEdit}
-                              className="flex-1 bg-green-600 hover:bg-green-500 text-white text-xs
-                                         font-bold py-2 rounded-xl transition-colors">
+                              style={{ flex: 1, background: '#16a34a', color: '#fff', border: 'none',
+                                       borderRadius: '0.75rem', padding: '0.5rem', fontWeight: 700, cursor: 'pointer' }}>
                         ✓
                       </button>
                       <button onClick={cancelEdit}
-                              className="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs
-                                         font-bold py-2 rounded-xl transition-colors">
+                              style={{ flex: 1, background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none',
+                                       borderRadius: '0.75rem', padding: '0.5rem', fontWeight: 700, cursor: 'pointer' }}>
                         ✗
                       </button>
                     </div>
                   </>
                 ) : (
                   <>
-                    <span className="text-sm font-bold">{t.name}</span>
-                    <span className="text-[10px] text-white/30 font-mono">{t.id}</span>
-                    <div className="flex gap-2">
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>{t.name}</span>
+                    <span style={{ fontSize: '0.6rem', opacity: 0.3, fontFamily: 'monospace' }}>{t.id}</span>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => startEdit(t)}
-                              className="text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5
-                                         rounded-xl transition-colors">
+                              style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', color: '#fff',
+                                       border: 'none', borderRadius: '0.75rem', padding: '0.4rem 0.75rem', cursor: 'pointer' }}>
                         ✏️
                       </button>
                       <button onClick={() => setConfirmDelete(t.id)}
-                              className="text-xs bg-red-900/20 hover:bg-red-900/40 px-3 py-1.5
-                                         rounded-xl transition-colors text-red-400">
+                              style={{ fontSize: '0.75rem', background: 'rgba(153,27,27,0.2)', color: '#fca5a5',
+                                       border: 'none', borderRadius: '0.75rem', padding: '0.4rem 0.75rem', cursor: 'pointer' }}>
                         🗑️
                       </button>
                     </div>
@@ -228,47 +287,52 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
             );
           })}
 
-          {/* Add terminal button */}
+          {/* Add terminal */}
           <button onClick={() => addTerminal('end')}
-                  className="rounded-[30px] border-2 border-dashed border-white/10 p-6
-                             flex flex-col items-center justify-center gap-4 min-h-[200px]
-                             hover:border-orange-500/40 hover:bg-orange-600/5 transition-all group">
-            <span className="text-4xl group-hover:scale-125 transition-transform">+</span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-white/30
-                             group-hover:text-orange-400">
-              Agregar
-            </span>
+                  style={{ ...getCardStyle('free'), border: '2px dashed rgba(255,255,255,0.1)',
+                           background: 'transparent' }}>
+            <span style={{ fontSize: '2.5rem' }}>+</span>
+            <span style={{ fontSize: '0.6rem', fontWeight: 900, textTransform: 'uppercase',
+                           letterSpacing: '0.15em', opacity: 0.3 }}>Agregar</span>
           </button>
         </div>
 
-        <div className="flex gap-4">
+        <div style={{ display: 'flex', gap: '1rem' }}>
           <button onClick={handleSave}
-                  className="bg-green-600 hover:bg-green-500 text-white font-bold
-                             px-8 py-3 rounded-2xl transition-colors text-sm uppercase tracking-wider">
+                  style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '1rem',
+                           padding: '0.75rem 2rem', fontWeight: 800, fontSize: '0.8rem',
+                           textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer' }}>
             💾 Guardar cambios
           </button>
           <button onClick={() => setShowManager(false)}
-                  className="bg-white/10 hover:bg-white/20 text-white font-bold
-                             px-8 py-3 rounded-2xl transition-colors text-sm uppercase tracking-wider">
+                  style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none',
+                           borderRadius: '1rem', padding: '0.75rem 2rem', fontWeight: 800,
+                           fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer' }}>
             ← Volver
           </button>
         </div>
 
         {/* Confirm delete modal */}
         {confirmDelete && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-            <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 max-w-sm text-center">
-              <p className="text-lg font-bold mb-4">¿Eliminar {confirmDelete}?</p>
-              <p className="text-white/50 text-sm mb-6">Esta acción no se puede deshacer.</p>
-              <div className="flex gap-3">
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+            <div style={{ background: '#1c1917', border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '1.5rem', padding: '2rem', maxWidth: '24rem', textAlign: 'center' }}>
+              <p style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', color: '#fff' }}>
+                ¿Eliminar {confirmDelete}?
+              </p>
+              <p style={{ opacity: 0.5, fontSize: '0.85rem', marginBottom: '1.5rem', color: '#fff' }}>
+                Esta acción no se puede deshacer.
+              </p>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button onClick={() => handleRemove(confirmDelete)}
-                        className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold
-                                   py-3 rounded-2xl transition-colors">
+                        style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none',
+                                 borderRadius: '1rem', padding: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
                   Eliminar
                 </button>
                 <button onClick={() => setConfirmDelete(null)}
-                        className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold
-                                   py-3 rounded-2xl transition-colors">
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none',
+                                 borderRadius: '1rem', padding: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
                   Cancelar
                 </button>
               </div>
@@ -279,96 +343,122 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
     );
   }
 
-  /* ─── Selector principal ─── */
+  /* ═══════════════════════════════════════════════════════════════
+     ═══ SELECTOR PRINCIPAL — estética del POS viejo ═══════════
+     ═══════════════════════════════════════════════════════════════ */
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 min-h-screen
-                    animate-in fade-in zoom-in-95 duration-700"
-         style={{ background: 'var(--pos-bg, #0a0a0a)', color: 'var(--pos-text, #fff)' }}>
+    <div style={styles.page}>
+
+      {/* Manager button — top right como el POS viejo */}
+      {canManage && (
+        <button onClick={() => setShowManager(true)} style={styles.managerBtn}>
+          ⚙️ Gestor de Terminales
+        </button>
+      )}
 
       {/* Header */}
-      <div className="text-center mb-12">
-        <h3 className="text-orange-500 font-black uppercase tracking-[0.5em] text-xs mb-4">
-          R de Rico • Punto de Venta
-        </h3>
-        <h1 className="text-5xl md:text-6xl font-black uppercase tracking-tighter italic mb-3">
-          Selecciona tu <span className="opacity-20">Terminal</span>
+      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+        <p style={styles.subtitle}>Configuración de Estación</p>
+        <h1 style={styles.title}>
+          Selecciona tu <span style={styles.titleFaded}>Terminal</span>
         </h1>
         {currentUser && (
-          <p className="text-white/40 text-sm">
-            Hola, <span className="text-white/70 font-bold">{currentUser.name}</span>
+          <p style={styles.greeting}>
+            Hola, <strong style={{ color: 'rgba(255,255,255,0.7)' }}>{currentUser.name}</strong>
           </p>
         )}
       </div>
 
       {/* Grid de terminales */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 max-w-7xl w-full mb-12">
+      <div style={styles.grid}>
         {terminals.map(t => {
           const state = getCardState(t.id);
           const net = getNetStatus(t.id);
-          const style = CARD_STYLES[state];
-          const status = statuses[t.id];
+          const badge = getBadge(state);
+          const info = statuses[t.id];
+          const cardStyle = getCardStyle(state);
 
           return (
             <button key={t.id}
                     onClick={() => handleSelect(t.id)}
                     disabled={locking || state === 'occupied'}
-                    className={`rounded-[30px] border ${style.border} ${style.bg} ${style.cursor}
-                               p-8 flex flex-col items-center gap-4 transition-all duration-500
-                               shadow-2xl hover:shadow-3xl hover:-translate-y-1
-                               disabled:pointer-events-none`}>
+                    style={cardStyle}>
 
-              {/* Icon */}
-              <div className="w-20 h-20 flex items-center justify-center bg-white/5 rounded-2xl
-                              transition-transform group-hover:scale-110">
-                {renderIcon(t.icon)}
-              </div>
-
-              {/* Name */}
-              <span className="text-sm font-bold">{t.name}</span>
-
-              {/* Status badge */}
-              <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1
-                               rounded-full ${style.badge}`}>
-                {style.badgeText}
-              </span>
-
-              {/* Occupier info */}
-              {state === 'occupied' && status?.occupier_name && (
-                <span className="text-[10px] text-white/30">
-                  {status.occupier_name}
-                </span>
+              {/* Badge — esquina superior derecha */}
+              {badge && (
+                <div style={{
+                  position: 'absolute', top: '0.75rem', right: '0.75rem',
+                  background: badge.bg, color: badge.color,
+                  fontSize: '0.55rem', fontWeight: 900, textTransform: 'uppercase',
+                  letterSpacing: '0.08em', padding: '0.25rem 0.6rem',
+                  borderRadius: '0.5rem',
+                }}>
+                  {badge.text}
+                </div>
               )}
 
-              {/* Net status indicator */}
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ background: net.color }} />
-                <span className="text-[9px] text-white/30 font-mono">{net.label}</span>
+              {/* Icon — diferente por estado */}
+              <div style={{ fontSize: '3.5rem', marginTop: badge ? '0.5rem' : 0 }}>
+                {state === 'mine' ? '🔑' : state === 'occupied' ? '🔒' : (t.icon || '🖥️')}
+              </div>
+
+              {/* Info por estado */}
+              {state === 'free' && (
+                <>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>{t.name}</span>
+                  <span style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase',
+                                 letterSpacing: '0.15em', opacity: 0.3, color: '#fff' }}>
+                    Punto de Venta
+                  </span>
+                </>
+              )}
+
+              {state === 'mine' && (
+                <>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
+                                 letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)' }}>
+                    Sesión Activa
+                  </span>
+                  <span style={{ fontSize: '1rem', fontWeight: 900, color: '#fff' }}>
+                    {currentUser?.name || 'Usuario'}
+                  </span>
+                </>
+              )}
+
+              {state === 'occupied' && (
+                <>
+                  <span style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase',
+                                 letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)' }}>
+                    En uso por
+                  </span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#fff' }}>
+                    {info?.occupier_name || 'Otro usuario'}
+                  </span>
+                </>
+              )}
+
+              {/* Net status dot */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem' }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: net.color }} />
+                <span style={{ fontSize: '0.55rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)',
+                               textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {net.label}
+                </span>
               </div>
             </button>
           );
         })}
       </div>
 
-      {/* Bottom actions */}
-      <div className="flex gap-4">
-        {(currentUser?.role === 'ADMIN' || currentUser?.permissions?.access_terminal_manager === 'full') && (
-          <button onClick={() => setShowManager(true)}
-                  className="bg-white/5 hover:bg-white/10 text-white/60 hover:text-white
-                             font-bold px-6 py-3 rounded-2xl transition-all text-sm
-                             uppercase tracking-wider border border-white/5 hover:border-white/20">
-            ⚙️ Gestionar terminales
-          </button>
-        )}
-      </div>
-
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl
-                        text-sm font-bold shadow-2xl animate-in fade-in slide-in-from-bottom-4
-                        duration-300 z-50
-                        ${toast.type === 'error' ? 'bg-red-600 text-white' :
-                          toast.type === 'success' ? 'bg-green-600 text-white' :
-                          'bg-zinc-800 text-white border border-white/10'}`}>
+        <div style={{
+          position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)',
+          padding: '0.75rem 1.5rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: 700,
+          zIndex: 50, color: '#fff',
+          background: toast.type === 'error' ? '#dc2626' : toast.type === 'success' ? '#16a34a' : '#27272a',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+        }}>
           {toast.msg}
         </div>
       )}
