@@ -35,6 +35,11 @@
   --fondo-panel: 26 26 26;
   --crema-ticket: 253 251 247;
   --peligro: 239 68 68;
+
+  /* Tokens extendidos — mundo madera (secciones Grandeza/pizarrón). */
+  --madera: 222 180 124;
+  --madera-panel: 45 30 19;
+  --madera-veta: 196 154 92;
 }
 
 html,

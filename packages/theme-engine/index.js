@@ -52,6 +52,10 @@ const MAPA_VARIABLES = {
   '--fondo-panel':       'fondoPanel',
   '--crema-ticket':      'cremaTicket',
   '--peligro':           'peligro',
+  // Extendidos (opcionales — solo los temas que los definen los aplican).
+  '--madera':            'fondoMadera',
+  '--madera-panel':      'fondoMaderaPanel',
+  '--madera-veta':       'maderaVeta',
 };
 
 /**

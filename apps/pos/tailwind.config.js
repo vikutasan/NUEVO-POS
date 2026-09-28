@@ -31,6 +31,11 @@ export default {
         'fondo-panel':       'rgb(var(--fondo-panel) / <alpha-value>)',
         'crema-ticket':      'rgb(var(--crema-ticket) / <alpha-value>)',
         peligro:             'rgb(var(--peligro) / <alpha-value>)',
+
+        // Tokens extendidos — mundo madera (secciones Grandeza/pizarrón del POS viejo).
+        madera:              'rgb(var(--madera) / <alpha-value>)',
+        'madera-panel':      'rgb(var(--madera-panel) / <alpha-value>)',
+        'madera-veta':       'rgb(var(--madera-veta) / <alpha-value>)',
       },
       borderRadius: {
         // Radios canónicos (RADIOS_CANONICOS).

@@ -1,33 +1,45 @@
 /**
  * Tema default del módulo POS — apps/pos/src/theme/default.js
  *
- * FASE D — "Madera Natural"
+ * FASE D — "R de Rico Classic"
  *
- * Usa el tono dominante ORIGINAL de la textura wood_bg.jpg del POS viejo:
- * un ámbar/miel cálido (#DEB47C). Como el fondo es CLARO, el texto pasa
- * a ser oscuro (marrón profundo) y el acento se ajusta para contraste.
+ * Réplica exacta de la estética del POS viejo de R de Rico:
  *
- * El dueño aprueba o ajusta (28 Sep 2026).
+ * MUNDO OSCURO (pantalla principal, checkout, gestor de caja):
+ *   - Fondo negro (#0d0d0d), paneles gris (#1a1a1a)
+ *   - Acento verde lima (#c1d72e) — idéntico al viejo
+ *   - Texto blanco/crema, peligro rojo
+ *
+ * MUNDO MADERA (secciones Grandeza, pizarrón, modales específicos):
+ *   - fondoMadera (#DEB47C) — tono dominante de wood_bg.jpg
+ *   - fondoMaderaPanel (#2d1e13) — encabezados madera oscura del header Grandeza
+ *   - Los componentes que tenían wood_bg.jpg usan `bg-madera`
+ *
+ * El dueño aprueba (28 Sep 2026).
  */
 export default {
-  nombre: 'Madera Natural (default)',
+  nombre: 'R de Rico Classic (default)',
 
-  // Los 6 colores (canales RGB).
-  acento:           '51 105 30',    // #33691E — verde bosque (oscuro sobre madera, familia del verde lima)
-  fondoProfundo:    '222 180 124',  // #DEB47C — madera clara (tono dominante de wood_bg.jpg)
-  fondoProfundoAlt: '196 154 92',   // #C49A5C — madera media (vetas del grano)
-  fondoPanel:       '232 200 153',  // #E8C899 — madera clara (paneles sobre el fondo)
-  cremaTicket:      '42 24 16',     // #2A1810 — marrón profundo (texto oscuro sobre fondo claro)
-  peligro:          '231 76 60',    // #E74C3C — rojo coral vivo (brillante, muy distinguible del verde)
+  // ── LOS 6 TOKENS BASE (mundo oscuro) ──
+  acento:           '193 215 46',   // #c1d72e — verde lima (IDÉNTICO al POS viejo)
+  fondoProfundo:    '13 13 13',     // #0d0d0d — negro (como el POS viejo)
+  fondoProfundoAlt: '8 8 8',        // #080808 — negro puro (scrollbar, bordes)
+  fondoPanel:       '26 26 26',     // #1a1a1a — gris oscuro (paneles, tarjetas)
+  cremaTicket:      '253 251 247',  // #fdfbf7 — blanco cálido (texto)
+  peligro:          '239 68 68',    // #ef4444 — rojo (idéntico al viejo)
 
-  // Los 3 radios.
+  // ── TOKENS EXTENDIDOS (mundo madera — secciones Grandeza/pizarrón) ──
+  fondoMadera:      '222 180 124',  // #DEB47C — tono dominante de wood_bg.jpg
+  fondoMaderaPanel: '45 30 19',     // #2d1e13 — encabezado madera oscura del header Grandeza
+  maderaVeta:       '196 154 92',   // #C49A5C — veta del grano (bordes, separadores)
+
+  // Los 3 radios (como el POS viejo: 50px modales, 25px botones).
   radioPequeno: '25px',
   radioMedio:   '35px',
   radioGrande:  '50px',
-
-
 
   // Las 2 tipografías.
   fuenteUI:     'Inter, system-ui, sans-serif',
   fuenteTicket: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 };
+
