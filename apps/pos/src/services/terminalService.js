@@ -16,9 +16,7 @@
  * @see PLAN_MAESTRO_DEFINITIVO_POS.md §7 Fase 1
  */
 
-import { CONFIG } from '../../../shared/config.js';
-
-const API_BASE_URL = CONFIG.API_BASE_URL;
+const API_BASE_URL = 'http://localhost:5101';
 
 /**
  * Obtiene el estado de ocupación de todas las terminales.

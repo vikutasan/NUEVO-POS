@@ -60,7 +60,7 @@ const CARD_STYLES = {
 
 export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   const {
-    terminals, loading, locking,
+    terminals, statuses, loading, locking,
     getCardState, getNetStatus, selectTerminal,
     addTerminal, updateTerminal, removeTerminal, saveConfig,
   } = useTerminals(currentUser);
