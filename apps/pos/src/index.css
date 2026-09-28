@@ -50,7 +50,7 @@ body,
 }
 
 body {
-  background-color: rgb(var(--fondo-profundo));
+  background-color: rgb(var(--madera));
   color: rgb(var(--crema-ticket));
   font-family: Inter, system-ui, -apple-system, sans-serif;
   /* R-02: la tipografía escala con el viewport, no se fija en px. */
