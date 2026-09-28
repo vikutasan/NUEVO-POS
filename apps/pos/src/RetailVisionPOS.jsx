@@ -157,7 +157,7 @@ export default function RetailVisionPOS() {
   );
 
   return (
-    <div className="w-full h-screen flex flex-col bg-fondo-profundo text-crema-ticket">
+    <div className="w-full h-screen flex flex-col bg-madera text-crema-ticket">
       {/* Header (réplica estética del POSHeader viejo) */}
       <header className="w-full flex items-center justify-between px-4 py-3 bg-fondo-profundo-alt border-b border-white/5 z-20">
         {/* IZQUIERDA: Terminal */}
