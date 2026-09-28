@@ -1,34 +1,30 @@
 /**
  * Tema default del módulo POS — apps/pos/src/theme/default.js
  *
- * FASE D — "Madera Oscura Cálida"
+ * FASE D — "Madera Natural"
  *
- * Inspirado en la estética del POS actual de R de Rico:
- * - El acento verde lima (#c1d72e) se mantiene idéntico.
- * - Los fondos negros fríos se reemplazan por marrones oscuros cálidos,
- *   simulando la textura de madera (wood_bg.jpg) con un color sólido.
- * - El texto blanco se reemplaza por crema cálido (#f5efe3).
- * - El rojo frío se reemplaza por rojo arcilla (#c0392b).
- *
- * La sensación es: "tu POS de siempre, pero con el calor de la madera".
+ * Usa el tono dominante ORIGINAL de la textura wood_bg.jpg del POS viejo:
+ * un ámbar/miel cálido (#DEB47C). Como el fondo es CLARO, el texto pasa
+ * a ser oscuro (marrón profundo) y el acento se ajusta para contraste.
  *
  * El dueño aprueba o ajusta (28 Sep 2026).
  */
 export default {
-  nombre: 'Madera Oscura (default)',
+  nombre: 'Madera Natural (default)',
 
   // Los 6 colores (canales RGB).
-  acento:           '193 215 46',   // #c1d72e — verde lima (idéntico al POS viejo)
-  fondoProfundo:    '28 22 19',     // #1c1613 — madera quemada (cálido, no negro frío)
-  fondoProfundoAlt: '20 15 12',     // #140f0c — madera noche (más oscuro, cálido)
-  fondoPanel:       '42 33 28',     // #2a211c — madera panel (como el #2d1e13 del header Grandeza)
-  cremaTicket:      '245 239 227',  // #f5efe3 — crema cálido (no blanco frío)
-  peligro:          '192 57 43',    // #c0392b — rojo arcilla (cálido, no #ef4444)
+  acento:           '51 105 30',    // #33691E — verde bosque (oscuro sobre madera, familia del verde lima)
+  fondoProfundo:    '222 180 124',  // #DEB47C — madera clara (tono dominante de wood_bg.jpg)
+  fondoProfundoAlt: '196 154 92',   // #C49A5C — madera media (vetas del grano)
+  fondoPanel:       '232 200 153',  // #E8C899 — madera clara (paneles sobre el fondo)
+  cremaTicket:      '42 24 16',     // #2A1810 — marrón profundo (texto oscuro sobre fondo claro)
+  peligro:          '231 76 60',    // #E74C3C — rojo coral vivo (brillante, muy distinguible del verde)
 
-  // Los 3 radios (mantenemos los del POS viejo: 50px modales, 25px botones).
+  // Los 3 radios.
   radioPequeno: '25px',
   radioMedio:   '35px',
   radioGrande:  '50px',
+
 
 
   // Las 2 tipografías.
