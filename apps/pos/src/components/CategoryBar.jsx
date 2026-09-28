@@ -1,10 +1,8 @@
 /**
  * `CategoryBar` — interfaz 21 del registro de la superficie (Composición).
  *
- * Contenedor raíz declarado: `w-full flex items-center gap-2 overflow-x-auto`.
- *   - MOSTRADOR: barra de categorías + botón ESCÁNER IA.
- *   - COMPACTO:  barra con scroll horizontal.
- *   - MÓVIL:     barra con scroll horizontal.
+ * Réplica estética del POS viejo: tabs horizontales oscuras con la activa
+ * en verde lima (#c1d72e), texto font-black uppercase tracking-widest.
  *
  * R-01: sin anchos absolutos. R-03: los 3 modos son explícitos. R-04: cada
  * botón respeta el target táctil de 44×44px (vía `min-h-tactil`).
@@ -19,48 +17,37 @@ export default function CategoryBar({ categorias, categoriaActiva, onSeleccionar
       role="tablist"
       aria-label="Categorías de productos"
     >
-      <BotonCategoria
-        etiqueta="Todas"
-        icono="🧺"
-        activa={categoriaActiva === null}
-        onClick={() => onSeleccionar(null)}
-      />
-      {categorias.map((cat) => (
-        <BotonCategoria
-          key={cat.id}
-          etiqueta={cat.name}
-          icono={cat.icon || '📦'}
-          activa={categoriaActiva === cat.id}
-          onClick={() => onSeleccionar(cat.id)}
-        />
-      ))}
+      {/* Botón ESCÁNER IA (como el viejo) */}
       <button
         type="button"
-        className="ml-auto shrink-0 min-h-tactil px-4 rounded-canon35 bg-fondo-panel text-acento border border-acento/40 hover:bg-acento hover:text-fondo-profundo transition-colors text-sm font-semibold"
-        aria-label="Escáner IA"
+        className={`shrink-0 min-h-tactil px-6 py-3 rounded-lg text-[18px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-xl flex items-center gap-2 ${
+          categoriaActiva === null
+            ? 'bg-acento text-fondo-profundo shadow-acento/20'
+            : 'bg-white/5 text-crema-ticket/90 hover:bg-white/10'
+        }`}
+        role="tab"
+        aria-selected={categoriaActiva === null}
+        onClick={() => onSeleccionar(null)}
       >
-        📷 ESCÁNER IA
+        📷 Escáner IA
       </button>
-    </div>
-  );
-}
 
-function BotonCategoria({ etiqueta, icono, activa, onClick }) {
-  const base =
-    'shrink-0 min-h-tactil px-4 rounded-canon35 border transition-colors text-sm font-semibold flex items-center gap-2';
-  const estado = activa
-    ? 'bg-acento text-fondo-profundo border-acento'
-    : 'bg-fondo-panel text-crema-ticket border-white/10 hover:border-acento/60';
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={activa}
-      className={`${base} ${estado}`}
-      onClick={onClick}
-    >
-      <span aria-hidden="true">{icono}</span>
-      {etiqueta}
-    </button>
+      {categorias.map((cat) => (
+        <button
+          key={cat.id}
+          type="button"
+          role="tab"
+          aria-selected={categoriaActiva === cat.id}
+          onClick={() => onSeleccionar(cat.id)}
+          className={`shrink-0 min-h-tactil px-6 py-3 rounded-lg text-[18px] font-black uppercase tracking-widest transition-all whitespace-nowrap drop-shadow-sm ${
+            categoriaActiva === cat.id
+              ? 'bg-acento text-fondo-profundo'
+              : 'bg-white/5 text-crema-ticket/90 hover:bg-white/10'
+          }`}
+        >
+          {cat.name}
+        </button>
+      ))}
+    </div>
   );
 }

@@ -158,24 +158,42 @@ export default function RetailVisionPOS() {
 
   return (
     <div className="w-full h-screen flex flex-col bg-fondo-profundo text-crema-ticket">
-      {/* Header (interfaz 15: POSHeader) */}
-      <header className="w-full flex items-center justify-between px-4 py-3 bg-fondo-profundo-alt border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-bold text-acento">R de Rico</span>
-          <span className="text-xs text-crema-ticket/50">POS Nuevo</span>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="px-3 py-1 rounded-canon35 bg-fondo-panel">
-            {CONFIG.TERMINAL_ID}
+      {/* Header (réplica estética del POSHeader viejo) */}
+      <header className="w-full flex items-center justify-between px-4 py-3 bg-fondo-profundo-alt border-b border-white/5 z-20">
+        {/* IZQUIERDA: Terminal */}
+        <button type="button" className="bg-fondo-profundo border border-white/5 px-6 py-2 rounded-xl flex items-center transition-all group shadow-2xl hover:bg-fondo-panel">
+          <div className="text-left">
+            <p className="text-[18px] font-black uppercase text-crema-ticket tracking-widest leading-none mb-1">
+              {CONFIG.TERMINAL_ID === 'CAJA' ? 'Caja Central' : `Terminal ${CONFIG.TERMINAL_ID}`}
+            </p>
+            <p className="text-[14px] font-black text-acento uppercase tracking-tighter leading-none">
+              Cambiar Estación
+            </p>
+          </div>
+        </button>
+
+        {/* CENTRO: Estado de Transacción */}
+        <div className="bg-fondo-profundo border border-white/10 px-8 py-2 rounded-3xl shadow-2xl flex flex-col items-center">
+          <span className="text-[7px] font-black uppercase text-crema-ticket tracking-[0.5em] mb-0.5">Estado de Transaccion</span>
+          <span className="text-3xl font-black uppercase tracking-tighter italic text-acento drop-shadow-[0_0_12px_rgba(193,215,46,0.4)]">
+            NUEVA VENTA
           </span>
+        </div>
+
+        {/* DERECHA: Sesión + Modo */}
+        <div className="flex items-center gap-2">
           <span
-            className={`px-3 py-1 rounded-canon35 ${
-              sesion ? 'bg-acento text-fondo-profundo' : 'bg-peligro text-crema-ticket'
+            className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+              sesion
+                ? 'bg-acento text-fondo-profundo shadow-lg'
+                : 'bg-peligro text-crema-ticket'
             }`}
           >
             {sesion ? 'Sesión abierta' : 'Sin sesión'}
           </span>
-          <span className="hidden sm:inline text-crema-ticket/50">Modo: {modo}</span>
+          <span className="hidden sm:inline text-[9px] font-black text-crema-ticket/50 uppercase tracking-widest">
+            Modo: {modo}
+          </span>
         </div>
       </header>
 
