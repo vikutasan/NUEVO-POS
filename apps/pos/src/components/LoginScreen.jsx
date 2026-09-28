@@ -5,6 +5,18 @@
  * Estética: fondo madera oscurecido, logo, teclado numérico visual,
  * campo de PIN enmascarado, botón "ENTRAR AL SISTEMA".
  *
+ * ⚠️ NOTA DE MIGRACIÓN:
+ * Esta pantalla existe porque el POS nuevo corre como app SEPARADA
+ * (puerto 5100) y no comparte el routing ni el bundle del ERP viejo.
+ * El endpoint de autenticación ES EL MISMO del ERP: POST /security/employees/validate-pin.
+ *
+ * CUANDO el POS nuevo se integre como módulo del ERP:
+ *   1. Eliminar este archivo (LoginScreen.jsx)
+ *   2. Eliminar services/securityService.js
+ *   3. Eliminar hooks/useAuth.js
+ *   4. Usar el LoginUI.jsx compartido del ERP (apps/auth/LoginUI.jsx)
+ *   5. Recibir currentUser como prop desde el App.jsx del ERP
+ *
  * @see useAuth en hooks/useAuth.js
  * @see Fase 2 del PLAN_MAESTRO_DEFINITIVO_POS.md
  */
