@@ -1,16 +1,21 @@
 /**
- * Punto de entrada del POS nuevo — P2.1 / Fase 2.
+ * Punto de entrada del POS nuevo — Fase 1.
  *
- * Monta la pantalla raíz `RetailVisionPOS` (interfaz 1 del registro de la
- * superficie). El flujo E.1 (venta directa) vive dentro de esa pantalla.
+ * Rutas:
+ *   /           → TerminalSelector (landing)
+ *   /pos        → RetailVisionPOS (pantalla de venta) — Fase 3
+ *   /caja       → GestorDeCaja — Fase 4
  *
- * FASE 2 (28 Sep 2026): al montar, resuelve el tema del módulo POS
- * (default o el elegido por el usuario) y lo aplica como variables CSS.
- * Esto conecta el theme-engine con la UI real.
+ * FASE 1 (28 Sep 2026): monta el TerminalSelector como landing page.
+ * El cajero selecciona su terminal antes de entrar al POS.
+ *
+ * El tema se aplica ANTES de montar React (evita parpadeo).
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import TerminalSelector from './components/TerminalSelector.jsx';
 import RetailVisionPOS from './RetailVisionPOS.jsx';
 import './index.css';
 
@@ -27,13 +32,8 @@ import { TEMA_DEL_MODULO } from './theme/index.js';
  */
 async function inicializarTema() {
   try {
-    // Nivel 1: leer elección del navegador (Fase 4 — persistencia rápida).
     const eleccion = localStorage.getItem('pos_tema') || null;
-
-    // Resolver: contrato del módulo + elección + identidad (null por ahora).
     const tema = await resolverTema(TEMA_DEL_MODULO, eleccion, null);
-
-    // Aplicar: escribe los 6 canales RGB como variables CSS.
     aplicarTema(tema);
   } catch (err) {
     // Si algo falla, el POS sigue funcionando con los valores de index.css.
@@ -44,10 +44,61 @@ async function inicializarTema() {
 // Aplicar tema ANTES de montar React (evita parpadeo).
 inicializarTema();
 
+/**
+ * App root — gestiona el estado global mínimo (usuario, terminal).
+ * El ruteo determina en qué "habitación" del edificio estás.
+ */
+function App() {
+  // TODO(fase2): esto vendrá del login. Por ahora, usuario demo.
+  const [currentUser] = useState({
+    id: 1,
+    name: 'Cajero Demo',
+    role: 'ADMIN',
+    permissions: { access_any_terminal: 'full', access_terminal_manager: 'full' },
+  });
+  const [selectedTerminal, setSelectedTerminal] = useState(null);
+  const navigate = useNavigate();
+
+  function handleTerminalSelected(terminalId) {
+    setSelectedTerminal(terminalId);
+    navigate('/pos');
+  }
+
+  function handleBackToTerminals() {
+    setSelectedTerminal(null);
+    navigate('/');
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={
+        <TerminalSelector
+          currentUser={currentUser}
+          onTerminalSelected={handleTerminalSelected}
+        />
+      } />
+      <Route path="/pos" element={
+        selectedTerminal
+          ? <RetailVisionPOS
+              terminalId={selectedTerminal}
+              currentUser={currentUser}
+              onBackToTerminals={handleBackToTerminals}
+            />
+          : <TerminalSelector
+              currentUser={currentUser}
+              onTerminalSelected={handleTerminalSelected}
+            />
+      } />
+    </Routes>
+  );
+}
+
 const root = document.getElementById('root');
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <RetailVisionPOS />
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </React.StrictMode>
 );
