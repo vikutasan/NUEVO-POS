@@ -1,6 +1,6 @@
-"""Router del POS — P2.7 (cierre de la puerta P2) + FASE 3.2 (atómico).
+"""Router del POS — P2.7 (cierre de la puerta P2) + FASE 3.2 (atómico) + FASE 5.0.
 
-Materializa 8 contratos: 3 de la FASE 2 y 5 atómicos de la FASE 3.2.
+Materializa 9 contratos: 3 de la FASE 2, 5 atómicos de la FASE 3.2 y 1 de F5.0.
 
   Contrato 9  `caja.sesion_activa`      → GET    /pos/session-active?terminal_id=
   Contrato 3  `pos.crear_ticket`        → POST   /pos/tickets
@@ -10,6 +10,7 @@ Materializa 8 contratos: 3 de la FASE 2 y 5 atómicos de la FASE 3.2.
   Contrato 20 `pos.quitar_item`         → DELETE /pos/tickets/{id}/items/{item_id}
   Contrato 21 `pos.leer_ticket`         → GET    /pos/tickets/{id}
   Contrato 22 `pos.verificar_envio`     → POST   /pos/tickets/{id}/verify
+  Contrato 23 `pos.cuentas_abiertas`    → GET    /pos/open-accounts?terminal_id=
 
 Este router es la ÚNICA puerta por la que el frontend escribe. Aplica las
 reglas de negocio de la FASE 3 en el orden correcto y traduce cada
@@ -68,6 +69,8 @@ from schemas import (
     CambiarCantidadEntrada,
     CobrarTicketEntrada,
     CrearTicketEntrada,
+    CuentaAbiertaSalida,
+    CuentasAbiertasSalida,
     LineaAtomicaSalida,
     LineaSalida,
     QuitarItemEntrada,
@@ -562,4 +565,39 @@ async def verificar_envio(
         existe=True,
         item_ids_persistidos=item_ids_persistidos,
         faltantes=faltantes,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Contrato 23 — GET /pos/open-accounts?terminal_id=
+# ---------------------------------------------------------------------------
+
+@router.get("/open-accounts", response_model=CuentasAbiertasSalida)
+async def cuentas_abiertas(
+    terminal_id: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+) -> CuentasAbiertasSalida:
+    """Lista las cuentas OPEN de una terminal (contrato 23, FASE 5.0).
+
+    Es de SOLO LECTURA y devuelve una PROYECCIÓN (O-23): nunca la tabla
+    `tickets`. Respeta la Regla 15 (respuesta ligera): cada cuenta expone
+    EXACTAMENTE 5 campos escalares.
+
+    Solo devuelve cuentas de la terminal pedida (RN-31), ordenadas por
+    `created_at` ascendente (la más antigua primero, como un corcho real).
+    """
+    if not terminal_id or not terminal_id.strip():
+        raise HTTPException(status_code=400, detail="terminal_id es obligatorio")
+
+    filas = (
+        await db.execute(
+            select(Ticket)
+            .where(Ticket.terminal_id == terminal_id)
+            .where(Ticket.status == "OPEN")
+            .order_by(Ticket.created_at.asc())
+        )
+    ).scalars().all()
+
+    return CuentasAbiertasSalida(
+        cuentas=[CuentaAbiertaSalida.model_validate(t) for t in filas]
     )

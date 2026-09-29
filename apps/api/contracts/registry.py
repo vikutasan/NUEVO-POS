@@ -548,9 +548,27 @@ CONTRATOS: tuple[Contrato, ...] = (
         errores=("404 si el ticket no existe.",),
         estado_hoy="FASE 3.2",
     ),
+    # ── FASE 5.0 — Pizarrón de cuentas abiertas ────────────────────────────
+    Contrato(
+        numero=23,
+        nombre="pos.cuentas_abiertas",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="GET /pos/open-accounts",
+        entrada={"terminal_id": "String"},
+        salida={"cuentas": "List[CuentaAbiertaSalida]"},
+        garantias=(
+            "Devuelve una PROYECCIÓN de las cuentas OPEN, no la tabla `tickets` (O-23).",
+            "RESPUESTA LIGERA: cada cuenta expone EXACTAMENTE 5 campos escalares (Regla 15).",
+            "Solo devuelve cuentas de la terminal pedida (RN-31).",
+            "NO devuelve las líneas: leer las líneas es del contrato 21.",
+        ),
+        errores=("400 si `terminal_id` está vacío.",),
+        estado_hoy="FASE 5.0",
+    ),
 )
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 22 contratos del registro."""
+    """Devuelve los 23 contratos del registro."""
     return CONTRATOS

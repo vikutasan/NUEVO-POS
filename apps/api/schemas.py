@@ -359,3 +359,33 @@ class ReporteDiarioSalida(BaseModel):
 
     fecha: str
     reporte: list[LineaReporteDiario] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Cuentas abiertas — Contrato 23 (FASE 5.0)
+# ---------------------------------------------------------------------------
+
+class CuentaAbiertaSalida(BaseModel):
+    """Una cuenta abierta del pizarrón (contrato 23).
+
+    RESPUESTA LIGERA: EXACTAMENTE 5 campos escalares (Regla 15). NO incluye las
+    líneas: leer las líneas es responsabilidad del contrato 21.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    account_num: str
+    status: str
+    total: Decimal
+    version: int
+
+
+class CuentasAbiertasSalida(BaseModel):
+    """Salida del contrato 23: las cuentas OPEN de una terminal (RN-31).
+
+    Solo cuentas de la terminal pedida, ordenadas por `created_at` ascendente
+    (la más antigua primero, como un corcho real).
+    """
+
+    cuentas: list[CuentaAbiertaSalida] = Field(default_factory=list)
