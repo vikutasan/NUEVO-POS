@@ -34,10 +34,11 @@ MODULOS_AJENOS = (
     "stats",
 )
 
-# Los 23 contratos esperados: los 17 del Documento 9 §10 (FASE 2) más los 5
+# Los 25 contratos esperados: los 17 del Documento 9 §10 (FASE 2) más los 5
 # atómicos de la FASE 3.2 (corrigen el defecto D-2: endpoints sin contrato) más
-# el contrato 23 de la FASE 5.0 (pizarrón de cuentas abiertas).
-LOS_23_CONTRATOS = (
+# el contrato 23 de la FASE 5.0 (pizarrón de cuentas abiertas) más los 2 de la
+# FASE 7.0 (capacidades de IA — cierran la brecha de la DT-07).
+LOS_25_CONTRATOS = (
     "catalogo.productos_para_venta",
     "almacenes.consumir_por_venta",
     "almacenes.disponibilidad",
@@ -63,6 +64,9 @@ LOS_23_CONTRATOS = (
     "pos.verificar_envio",
     # ── FASE 5.0 — Pizarrón de cuentas abiertas ────────────────────────────
     "pos.cuentas_abiertas",
+    # ── FASE 7.0 — Capacidades de IA (proveedor: Centro de IA — DT-07) ─────
+    "ia.transcribir_voz",
+    "ia.interpretar_intencion",
 )
 
 
@@ -143,11 +147,11 @@ def test_criterio1_los_contratos_no_importan_modelos():
 # ── Criterio 2: cada contrato tiene su firma ───────────────────────────────
 
 
-def test_criterio2_hay_exactamente_23_contratos():
-    """El registro declara los 23 contratos (17 de F2 + 5 de F3.2 + 1 de F5.0)."""
-    assert len(CONTRATOS) == 23, f"Se esperaban 23 contratos, hay {len(CONTRATOS)}"
+def test_criterio2_hay_exactamente_25_contratos():
+    """El registro declara los 25 contratos (17 F2 + 5 F3.2 + 1 F5.0 + 2 F7.0)."""
+    assert len(CONTRATOS) == 25, f"Se esperaban 25 contratos, hay {len(CONTRATOS)}"
     nombres = tuple(c.nombre for c in CONTRATOS)
-    assert nombres == LOS_23_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
+    assert nombres == LOS_25_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
 
 
 def test_criterio2_cada_contrato_tiene_firma_documentada():
@@ -211,6 +215,6 @@ def test_criterio3_el_pos_es_proveedor_en_sus_contratos():
     ], f"El POS es proveedor en contratos inesperados: {proveedor_pos}"
 
 
-def test_listar_contratos_devuelve_los_23():
-    """La función pública del paquete devuelve los 23 contratos."""
-    assert len(listar_contratos()) == 23
+def test_listar_contratos_devuelve_los_25():
+    """La función pública del paquete devuelve los 25 contratos."""
+    assert len(listar_contratos()) == 25

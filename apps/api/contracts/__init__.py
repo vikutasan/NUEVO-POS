@@ -1,4 +1,4 @@
-"""Los 22 contratos entre módulos — FASE 2 (Frontera) + FASE 3.2 (Atómico).
+"""Los 25 contratos entre módulos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA).
 
 Este paquete es la FRONTERA del POS. Define, con tipos, cómo el POS habla con
 los demás módulos. Regla de Oro #5: el POS no lee ni escribe tablas ajenas;

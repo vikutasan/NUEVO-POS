@@ -1,4 +1,4 @@
-"""Registro de los 22 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico).
+"""Registro de los 25 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA).
 
 Cada contrato se declara aquí con su firma completa (entrada/salida) y su
 proveedor. El registro es la fuente única de verdad: el test de la puerta F2
@@ -38,8 +38,13 @@ Contrato de la FASE 5.0 (pizarrón de cuentas abiertas):
 
   23  pos.cuentas_abiertas                POS                 POS          FASE 5.0
 
+Contratos de la FASE 7.0 (capacidades de IA — cierran la brecha de la DT-07):
+
+  24  ia.transcribir_voz                  POS                 Centro de IA FASE 7.0
+  25  ia.interpretar_intencion            POS                 Centro de IA FASE 7.0
+
 ──────────────────────────────────────────────────────────────────────────────
-NOTA DE FRONTERA — IA (DT-07) — añadida 29 Sep 2026
+NOTA DE FRONTERA — IA (DT-07) — añadida 29 Sep 2026 · CERRADA por F7.0
 ──────────────────────────────────────────────────────────────────────────────
 El proveedor de las capacidades de IA es el **Centro de IA** (módulo paraguas
 del ERP, `apps/ai/`), NO el POS. El POS **consume** la IA por contrato; nunca
@@ -49,15 +54,17 @@ importa el motor (`torch`, `whisper`, `ultralytics`, `tesseract`).
     Centro de IA. Su `proveedor` se declara aquí como "Centro de IA" para que
     no se confunda con un motor interno del POS.
 
-  · FALTAN POR DECLARAR (deuda de la Fase 7 del POS, sub-fase F7.0):
-      - `ia.transcribir_voz`        POS → Centro de IA   (voz, Whisper)
-      - `ia.interpretar_intencion`  POS → Centro de IA   (NLU, Ollama)
+  · DECLARADOS por la F7.0 (antes eran deuda, ahora son contratos):
+      - 24 `ia.transcribir_voz`        POS → Centro de IA   (voz, Whisper)
+      - 25 `ia.interpretar_intencion`  POS → Centro de IA   (NLU, Ollama)
 
-    Mientras no se declaren, el POS hablaría con la IA por convención
-    implícita, lo que viola la Regla Dura A-02. La F7.0 cierra esta brecha.
+    Con esto el POS ya NO habla con la IA por convención implícita: pide por
+    contrato. Se cierra la brecha que violaba la Regla Dura A-02.
 
   · Regla de oro (DT-07): un fallo del motor de IA NUNCA bloquea una venta.
-    El Gateway traduce cualquier fallo a 503 `IA_NO_DISPONIBLE`.
+    El Gateway traduce cualquier fallo a 503 `IA_NO_DISPONIBLE`. Los contratos
+    24 y 25 declaran ese 503 en `errores` para que el POS degrade a modo
+    manual sin bloquear el cobro.
 ──────────────────────────────────────────────────────────────────────────────
 """
 
@@ -592,9 +599,64 @@ CONTRATOS: tuple[Contrato, ...] = (
         errores=("400 si `terminal_id` está vacío.",),
         estado_hoy="FASE 5.0",
     ),
+    # ── §11 IA — Voz (proveedor: Centro de IA — DT-07 / FASE 7.0) ──────────
+    Contrato(
+        numero=24,
+        nombre="ia.transcribir_voz",
+        consumidor="POS",
+        proveedor="Centro de IA",
+        operacion="POST /ai/voice/transcribe",
+        entrada={
+            "audio_base64": "String",
+            "formato": "String = 'webm'",
+            "idioma": "String = 'es-MX'",
+        },
+        salida={
+            "texto": "String",
+            "confianza": "Float(0..1)",
+            "duracion_ms": "Integer",
+        },
+        garantias=(
+            "Transcribe el audio a texto en español. NO interpreta la intención.",
+            "El POS decide qué hacer con el texto: la IA solo transcribe.",
+            "Si el audio es silencio o ininteligible, devuelve `texto` vacío (200), no error.",
+        ),
+        errores=(
+            "400 si `audio_base64` está vacío o excede 10 MB.",
+            "503 `IA_NO_DISPONIBLE` si el motor de voz no está cargado.",
+        ),
+        estado_hoy="FASE 7.0",
+    ),
+    # ── §11 IA — NLU (proveedor: Centro de IA — DT-07 / FASE 7.0) ──────────
+    Contrato(
+        numero=25,
+        nombre="ia.interpretar_intencion",
+        consumidor="POS",
+        proveedor="Centro de IA",
+        operacion="POST /ai/voice/parse-intent",
+        entrada={
+            "texto": "String",
+            "contexto": "Dict = {}",
+        },
+        salida={
+            "intent": "String",
+            "entidades": "Dict",
+            "confianza": "Float(0..1)",
+        },
+        garantias=(
+            "Traduce el texto a una intención estructurada (intent + entidades).",
+            "El POS valida el intent contra su allowlist: la IA PROPONE, el operador CONFIRMA.",
+            "Si no reconoce la intención, devuelve `intent='desconocido'` (200), no error.",
+        ),
+        errores=(
+            "400 si `texto` está vacío.",
+            "503 `IA_NO_DISPONIBLE` si el motor NLU no está cargado.",
+        ),
+        estado_hoy="FASE 7.0",
+    ),
 )
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 23 contratos del registro."""
+    """Devuelve los 25 contratos del registro."""
     return CONTRATOS
