@@ -3,7 +3,7 @@
 > **Fase:** 7 (Voz + Visión IA + Selector de Temas) — Sub-fase **7.2**
 > **Estado:** ✅ CERRADA — puerta en verde
 > **Fecha:** 2026-09-29
-> **Commit:** _(se registra al final de esta ficha)_
+> **Commit:** `19b45ac` — `feat(f7.2): voz por contrato (24/25) — el POS propone, el humano dispone`
 > **Plan de abordaje:** [`PLAN_DE_ABORDAJE_FASE_7_POR_PARTES.md`](../../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/05-plan-de-construccion/PLAN_DE_ABORDAJE_FASE_7_POR_PARTES.md) §7
 > **Entregable:** **B — Voz** (el POS consume el Centro de IA **por contrato**)
 
@@ -199,4 +199,8 @@ las anteriores de componentes sin romper nada.
 
 ## 8. Commit
 
-_(Se completa al ejecutar el commit y el push.)_
+- **Hash:** `19b45ac`
+- **Mensaje:** `feat(f7.2): voz por contrato (24/25) — el POS propone, el humano dispone`
+- **Archivos:** 8 (7 nuevos de código/prueba + esta ficha)
+- **Líneas:** +1978
+- **Push:** `7a01aca..19b45ac` → `origin/main` ✅
