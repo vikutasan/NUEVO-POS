@@ -43,11 +43,18 @@ import { useTicketActions } from './hooks/useTicketActions.js';
 import { useTerminalLocking } from './hooks/useTerminalLocking.js';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner.js';
 import { useNetworkHealth } from './hooks/useNetworkHealth.js';
+// F7.5 — Integración de los entregables de la Fase 7 en la pantalla real.
+import { useTheme } from './hooks/useTheme.js';
+import { useVoiceCart } from './hooks/useVoiceCart.js';
+import { useVision } from './hooks/useVision.js';
 import CategoryBar from './components/CategoryBar.jsx';
 import ProductGrid from './components/ProductGrid.jsx';
 import SalesReceipt from './components/SalesReceipt.jsx';
 import CheckoutScreen from './components/CheckoutScreen.jsx';
 import POSHeader from './components/POSHeader.jsx';
+import ThemeSelector from './components/ThemeSelector.jsx';
+import VoiceCartPanel from './components/VoiceCartPanel.jsx';
+import VisionVisor from './components/VisionVisor.jsx';
 import { OverlayExito, OverlayError } from './components/POSOverlays.jsx';
 
 export default function RetailVisionPOS() {
@@ -64,6 +71,14 @@ export default function RetailVisionPOS() {
   const [checkoutAbierto, setCheckoutAbierto] = useState(false);
   const [ticketAbierto, setTicketAbierto] = useState(false);
   const [banner, setBanner] = useState(null);
+  // F7.5/F7.6 — Visibilidad de los paneles de IA.
+  //   - Tema: overlay nuevo (no existía en el viejo POS).
+  //   - Voz: overlay abierto desde el header, con gate de disponibilidad.
+  //   - Visión: NO es un overlay; es un MODO DE VISTA (`viewMode`) que
+  //     reemplaza el cuerpo (grid ↔ visor), como en el viejo POS (F7.6.2).
+  const [temaAbierto, setTemaAbierto] = useState(false);
+  const [vozAbierta, setVozAbierta] = useState(false);
+  const [viewMode, setViewMode] = useState('GRID'); // 'GRID' | 'CAMERA'
 
   // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
   // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
@@ -82,6 +97,14 @@ export default function RetailVisionPOS() {
     terminalId: CONFIG.TERMINAL_ID,
     usuarioId: sesion?.employee_id || null,
   });
+
+  // ── Hooks de IA (F7.5) ─────────────────────────────────────────────────────
+  // Los tres consumen contratos (17/24/25) y degradan con elegancia: si el
+  // Centro de IA no responde, el POS sigue vendiendo en modo manual (DT-07).
+  // NINGUNO toca el carrito: la IA propone, el operador confirma (H-5).
+  const tema = useTheme();
+  const voz = useVoiceCart(productos);
+  const vision = useVision(productos);
 
   // ── Carga inicial: catálogo + sesión activa ────────────────────────────────
   useEffect(() => {
@@ -260,6 +283,9 @@ export default function RetailVisionPOS() {
         sesionAbierta={Boolean(sesion)}
         enLinea={enLinea}
         modo={modo}
+        onAbrirTema={() => setTemaAbierto(true)}
+        onAbrirVoz={() => setVozAbierta(true)}
+        vozDisponible={voz.disponible}
       />
 
       {error ? (
@@ -273,11 +299,45 @@ export default function RetailVisionPOS() {
             categorias={categorias}
             categoriaActiva={categoriaActiva}
             onSeleccionar={setCategoriaActiva}
+            viewMode={viewMode}
+            onCambiarVista={setViewMode}
           />
           {cargando ? (
             <div className="w-full flex items-center justify-center py-16 text-crema-ticket/50">
               Cargando catálogo…
             </div>
+          ) : viewMode === 'CAMERA' ? (
+            /* F7.6.2 — UX heredada del viejo POS: la visión es un MODO DE VISTA
+               que reemplaza el cuerpo. El visor se monta aquí (no como overlay
+               suelto); su propio `fixed inset-0` lo cubre. */
+            <VisionVisor
+              activo={vision.activo}
+              analizando={vision.analizando}
+              sugerencias={vision.sugerencias}
+              disponible={vision.disponible}
+              error={vision.error}
+              umbral={vision.umbral}
+              videoRef={vision.videoRef}
+              canvasRef={vision.canvasRef}
+              onToggle={vision.alternar}
+              onAgregar={async (s) => {
+                // La IA sugiere; el operador decide. Solo aquí se toca el carrito.
+                if (!s?.resuelto || !s.producto) return;
+                const listo = await asegurarTicket();
+                if (!listo) return;
+                carrito.anadirLinea({
+                  product_id: s.producto.id,
+                  name: s.producto.name,
+                  quantity: 1,
+                  unit_price: Number(s.producto.price),
+                });
+              }}
+              onLimpiar={vision.limpiarSugerencias}
+              onCerrar={() => {
+                vision.detener();
+                setViewMode('GRID');
+              }}
+            />
           ) : (
             <div className="flex-1 min-h-0 overflow-y-auto">
               <ProductGrid productos={productosVisibles} onAgregar={agregarProducto} />
@@ -361,6 +421,87 @@ export default function RetailVisionPOS() {
         mensaje={error}
         onCerrar={() => setError(null)}
       />
+
+      {/* ── Paneles de IA (F7.5) ──────────────────────────────────────────────
+          La IA propone; el operador confirma. Solo el callback explícito del
+          operador (onApply / onAgregar) toca el carrito, y lo hace por el MISMO
+          camino que el grid de productos (`carrito.anadirLinea`), de modo que la
+          persistencia atómica por ítem (contratos 18–20) siga operando igual. */}
+
+      {/* Tema (F7.5.1) */}
+      {temaAbierto ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Selector de tema"
+        >
+          <div className="bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <h2 className="text-xl font-black uppercase tracking-widest text-white">
+              🎨 Tema
+            </h2>
+            <ThemeSelector
+              tema={tema.tema}
+              temas={tema.temas}
+              ofreceSelector={tema.ofreceSelector}
+              onCambiarTema={tema.cambiarTema}
+            />
+            <button
+              type="button"
+              onClick={() => setTemaAbierto(false)}
+              className="w-full min-h-tactil bg-fondo-panel text-crema-ticket rounded-xl"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Voz (F7.5.2) */}
+      {vozAbierta ? (
+        <VoiceCartPanel
+          grabando={voz.grabando}
+          transcribiendo={voz.transcribiendo}
+          texto={voz.texto}
+          propuesta={voz.propuesta}
+          disponible={voz.disponible}
+          error={voz.error}
+          fase={voz.fase}
+          nivel={voz.nivel}
+          productos={productos}
+          onToggleRecording={voz.alternar}
+          onEditLine={voz.editarLinea}
+          onRemoveLine={voz.quitarLinea}
+          onToggleConfirm={voz.alternarConfirmacion}
+          onApply={async () => {
+            // La IA propone; el operador confirma. Solo aquí se toca el carrito.
+            const lineas = voz.propuesta?.lineas || [];
+            const validas = lineas.filter((l) => l.resuelto && l.producto);
+            if (validas.length > 0) {
+              const listo = await asegurarTicket();
+              if (!listo) return;
+              validas.forEach((l) => {
+                carrito.anadirLinea({
+                  product_id: l.producto.id,
+                  name: l.producto.name,
+                  quantity: l.cantidad || 1,
+                  unit_price: Number(l.producto.price),
+                });
+              });
+            }
+            voz.reset();
+            setVozAbierta(false);
+          }}
+          onCancel={() => {
+            voz.reset();
+            setVozAbierta(false);
+          }}
+        />
+      ) : null}
+
+      {/* NOTA (F7.6.2): la visión ya NO se monta aquí como overlay suelto.
+          Es un MODO DE VISTA (`viewMode === 'CAMERA'`) que reemplaza el cuerpo,
+          como en el viejo POS. Ver el bloque del cuerpo más arriba. */}
     </div>
   );
 }

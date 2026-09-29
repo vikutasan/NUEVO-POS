@@ -34,6 +34,15 @@ const ETIQUETAS_ESTADO = Object.freeze({
  * @param {boolean} [props.enLinea=true] - indicador de red.
  * @param {string} [props.modo] - modo de layout (R-03).
  * @param {() => void} [props.onCambiarEstacion] - abre el selector de terminal.
+ * @param {() => void} [props.onAbrirTema] - abre el panel de tema (F7.5).
+ * @param {() => void} [props.onAbrirVoz] - abre el panel de voz (F7.5).
+ * @param {boolean} [props.vozDisponible=true] - ¿está disponible el dictado por
+ *   voz? (F7.6.1). Si es `false`, el botón de voz se deshabilita, igual que en
+ *   el viejo POS (`#btn-dictado-voz` con `disabled={!voiceAvailable}`).
+ *
+ * NOTA (F7.6.1): el botón de VISIÓN se retiró del header. La visión es un MODO
+ * DE VISTA que se conmuta desde la `CategoryBar` (UX heredada del viejo POS),
+ * no un overlay que se abra desde aquí.
  */
 export default function POSHeader({
   terminalId,
@@ -43,6 +52,9 @@ export default function POSHeader({
   enLinea = true,
   modo,
   onCambiarEstacion,
+  onAbrirTema,
+  onAbrirVoz,
+  vozDisponible = true,
 }) {
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
   const nombreTerminal =
@@ -81,8 +93,35 @@ export default function POSHeader({
         ) : null}
       </div>
 
-      {/* DERECHA: Sesión + Red + Modo */}
+      {/* DERECHA: Acciones de IA (F7.5/F7.6) + Sesión + Red + Modo */}
       <div className="flex items-center gap-2">
+        {/* Acciones de IA: tema (overlay nuevo) y voz (overlay con gate).
+            R-04: target ≥44px. La visión NO vive aquí: es un modo de vista
+            que se conmuta desde la CategoryBar (UX heredada del viejo POS). */}
+        <button
+          type="button"
+          onClick={() => onAbrirTema?.()}
+          className="min-h-tactil min-w-tactil bg-fondo-profundo border border-white/5 rounded-xl px-3 flex items-center justify-center hover:bg-fondo-panel transition-all"
+          title="Cambiar tema"
+          aria-label="Cambiar tema"
+        >
+          <span aria-hidden="true">🎨</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onAbrirVoz?.()}
+          disabled={!vozDisponible}
+          className={`min-h-tactil min-w-tactil border border-white/5 rounded-xl px-3 flex items-center justify-center transition-all ${
+            vozDisponible
+              ? 'bg-fondo-profundo hover:bg-fondo-panel'
+              : 'bg-fondo-profundo/40 opacity-40 cursor-not-allowed'
+          }`}
+          title={vozDisponible ? 'Dictado por voz' : 'Dictado por voz no disponible'}
+          aria-label="Dictado por voz"
+        >
+          <span aria-hidden="true">🎤</span>
+        </button>
+
         <span
           className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
             sesionAbierta
