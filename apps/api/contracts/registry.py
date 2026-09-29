@@ -23,7 +23,7 @@ Matriz de contratos (Documento 9 §10):
   14  caja.reporte_diario                 POS / Estadísticas  Caja         Ya existe
   15  pedidos.registrar_desde_ticket      POS                 Pedidos      Deuda
   16  pedidos.pedido_del_ticket           POS                 Pedidos      Deuda
-  17  vision.reconocer_producto           POS                 Visión       Deuda
+  17  vision.reconocer_producto           POS                 Centro de IA Deuda
 
 Contratos atómicos de la FASE 3.2 (corrigen el defecto D-2 de la v1.0 del plan,
 que listaba endpoints sin contrato — regla A-02):
@@ -33,6 +33,32 @@ que listaba endpoints sin contrato — regla A-02):
   20  pos.quitar_item                     POS                 POS          FASE 3.2
   21  pos.leer_ticket                     POS                 POS          FASE 3.2
   22  pos.verificar_envio                 POS                 POS          FASE 3.2
+
+Contrato de la FASE 5.0 (pizarrón de cuentas abiertas):
+
+  23  pos.cuentas_abiertas                POS                 POS          FASE 5.0
+
+──────────────────────────────────────────────────────────────────────────────
+NOTA DE FRONTERA — IA (DT-07) — añadida 29 Sep 2026
+──────────────────────────────────────────────────────────────────────────────
+El proveedor de las capacidades de IA es el **Centro de IA** (módulo paraguas
+del ERP, `apps/ai/`), NO el POS. El POS **consume** la IA por contrato; nunca
+importa el motor (`torch`, `whisper`, `ultralytics`, `tesseract`).
+
+  · El contrato 17 (`vision.reconocer_producto`) tiene como proveedor al
+    Centro de IA. Su `proveedor` se declara aquí como "Centro de IA" para que
+    no se confunda con un motor interno del POS.
+
+  · FALTAN POR DECLARAR (deuda de la Fase 7 del POS, sub-fase F7.0):
+      - `ia.transcribir_voz`        POS → Centro de IA   (voz, Whisper)
+      - `ia.interpretar_intencion`  POS → Centro de IA   (NLU, Ollama)
+
+    Mientras no se declaren, el POS hablaría con la IA por convención
+    implícita, lo que viola la Regla Dura A-02. La F7.0 cierra esta brecha.
+
+  · Regla de oro (DT-07): un fallo del motor de IA NUNCA bloquea una venta.
+    El Gateway traduce cualquier fallo a 503 `IA_NO_DISPONIBLE`.
+──────────────────────────────────────────────────────────────────────────────
 """
 
 from __future__ import annotations
@@ -370,12 +396,12 @@ CONTRATOS: tuple[Contrato, ...] = (
         ),
         errores=("404 si el ticket no existe o no tiene pedido.",),
     ),
-    # ── §9 Visión ──────────────────────────────────────────────────────────
+    # ── §9 Visión (proveedor: Centro de IA — DT-07) ────────────────────────
     Contrato(
         numero=17,
         nombre="vision.reconocer_producto",
         consumidor="POS",
-        proveedor="Visión",
+        proveedor="Centro de IA",
         operacion="POST /vision/predict",
         entrada={"frame_base64": "String", "channel": "String", "top_k": "Integer = 3"},
         salida={
