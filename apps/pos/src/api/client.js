@@ -266,6 +266,23 @@ export function getReporteDiario(fecha) {
   return peticion(`/cash/daily-report/${fecha}`);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FASE 5.1 — Pizarrón de cuentas abiertas (contrato 23)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /pos/open-accounts — las cuentas OPEN de una terminal (contrato 23).
+ *
+ * Devuelve una PROYECCIÓN ligera (5 campos por cuenta), no la tabla `tickets`.
+ * El pizarrón (F5.3) usa esto para descubrir qué cuentas están "en el corcho".
+ *
+ * @param {string} terminalId
+ */
+export function listarCuentasAbiertas(terminalId) {
+  const qs = new URLSearchParams({ terminal_id: terminalId });
+  return peticion(`/pos/open-accounts?${qs.toString()}`);
+}
+
 export default {
   getCatalogo,
   getSesionActiva,
@@ -285,5 +302,6 @@ export default {
   getResumenTurno,
   cerrarTurno,
   getReporteDiario,
+  listarCuentasAbiertas,
   ApiError,
 };
