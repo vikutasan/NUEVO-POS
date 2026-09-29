@@ -3,7 +3,7 @@
 > **Fase:** 7 (Voz + Visión IA + Selector de Temas) — Sub-fase **7.3**
 > **Estado:** ✅ CERRADA — puerta en verde
 > **Fecha:** 2026-09-29
-> **Commit:** `PENDIENTE` — `feat(f7.3): visión cenital por contrato (17) — cero nube, el POS sugiere`
+> **Commit:** `e697ee7` — `feat(f7.3): visión cenital por contrato (17) — cero nube, el POS sugiere`
 > **Plan de abordaje:** [`PLAN_DE_ABORDAJE_FASE_7_POR_PARTES.md`](../../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/05-plan-de-construccion/PLAN_DE_ABORDAJE_FASE_7_POR_PARTES.md) §8
 > **Directriz transversal:** [`DIRECTRICES_TRANSVERSALES_DEL_ERP.md`](../../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/DIRECTRICES_TRANSVERSALES_DEL_ERP.md) §6.7 (**DT-08**)
 > **Entregable:** **C — Visión** (el POS consume el Centro de IA **por contrato 17**)
@@ -249,7 +249,8 @@ las anteriores de componentes sin romper nada.
 
 ## 10. Commit
 
-- **Hash:** `PENDIENTE`
+- **Hash:** `e697ee7`
 - **Mensaje:** `feat(f7.3): visión cenital por contrato (17) — cero nube, el POS sugiere`
 - **Archivos:** 6 (3 nuevos de código + 2 puertas + esta ficha)
-- **Push:** `PENDIENTE` → `origin/main`
+- **Líneas:** +1288
+- **Push:** `cb21a54..e697ee7` → `origin/main` ✅
