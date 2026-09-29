@@ -214,6 +214,58 @@ export function liberarLock(terminalId, usuarioId) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FASE 4.2 — Caja (contratos 9–14)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** GET /cash/active-session — turno de caja abierto (contrato 9). */
+export function getSesionCajaActiva() {
+  return peticion('/cash/active-session');
+}
+
+/**
+ * POST /cash/open-session — abre el turno de caja (contrato 10, RN-49/RN-50).
+ * @param {{terminal_id: string, usuario_id: string, monto_inicial: number|string}} cuerpo
+ */
+export function abrirTurno(cuerpo) {
+  return peticion('/cash/open-session', {
+    method: 'POST',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+/**
+ * POST /cash/movements — registra una entrada o salida (contrato 11, RN-51/RN-55).
+ * @param {{cash_session_id: string, tipo: string, monto: number|string, motivo: string}} cuerpo
+ */
+export function registrarMovimiento(cuerpo) {
+  return peticion('/cash/movements', {
+    method: 'POST',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+/** GET /cash/session-summary/{id} — resumen del turno (contrato 12, RN-53). */
+export function getResumenTurno(cashSessionId) {
+  return peticion(`/cash/session-summary/${cashSessionId}`);
+}
+
+/**
+ * POST /cash/close-session — cierra el turno con los conteos (contrato 13, RN-54/RN-55).
+ * @param {{cash_session_id: string, montos_fisicos: number|string, credito: number|string, debito: number|string}} cuerpo
+ */
+export function cerrarTurno(cuerpo) {
+  return peticion('/cash/close-session', {
+    method: 'POST',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+/** GET /cash/daily-report/{fecha} — reporte del día local (contrato 14, RN-59). */
+export function getReporteDiario(fecha) {
+  return peticion(`/cash/daily-report/${fecha}`);
+}
+
 export default {
   getCatalogo,
   getSesionActiva,
@@ -227,5 +279,11 @@ export default {
   latir,
   tomarLock,
   liberarLock,
+  getSesionCajaActiva,
+  abrirTurno,
+  registrarMovimiento,
+  getResumenTurno,
+  cerrarTurno,
+  getReporteDiario,
   ApiError,
 };
