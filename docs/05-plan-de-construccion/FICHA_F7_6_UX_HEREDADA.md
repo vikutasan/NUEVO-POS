@@ -149,6 +149,14 @@ npm run ci
 **Cero regresiones.** El gate de la Fase 3 (`RetailVisionPOS.f3_cierre.test.jsx`)
 sigue en verde porque las props nuevas de `CategoryBar` son opcionales.
 
+> [!IMPORTANT]
+> **Este gate valida INTEGRACIÓN, no RENDIMIENTO.** Los 13 tests comprueban que el
+> visor reemplaza el cuerpo, que el botón de voz se deshabilita y que el header no
+> tiene botón de visión — es decir, que el **cableado** es correcto. **No** comprueban
+> que la visión cenital capture más rápido que teclear, ni que el umbral 0.35 esté
+> bien calibrado. Eso solo se medirá con el Centro de IA construido y con operación
+> real. Ver §9.
+
 ---
 
 ## 7. Trazabilidad
@@ -176,3 +184,32 @@ sigue en verde porque las props nuevas de `CategoryBar` son opcionales.
 - **Qué produce:** 3 archivos corregidos + 1 gate (11 criterios / 13 tests) + 1 ficha
   + 2 documentos actualizados (F7.6.4).
 - **Cero dependencias nuevas.**
+
+---
+
+## 9. Alcance de la verificación (lo que este gate NO prueba)
+
+Esta sección existe para evitar una lectura equivocada del "13 tests verdes".
+
+**Lo que el gate SÍ prueba (integración / cableado):**
+
+- Que la visión es un **modo de vista** que reemplaza el cuerpo (no un overlay suelto).
+- Que el botón de voz del header respeta el **gate de disponibilidad**.
+- Que el header **no** tiene botón de visión.
+- Que el tema se abre como overlay nuevo.
+- Que visión y voz entran al carrito por el **mismo camino atómico** que la grilla.
+- Que la **degradación elegante** se conserva (el POS sigue vendiendo sin IA).
+
+**Lo que el gate NO prueba (rendimiento / calibración):**
+
+| Pregunta | Por qué no se puede responder todavía |
+|---|---|
+| ¿La visión cenital captura **más rápido** que teclear? | Requiere el Centro de IA construido y una charola real. |
+| ¿El umbral **0.35** es el correcto? | Es un valor de **calibración** que se ajusta con productos reales; hoy es un default. |
+| ¿El operador **prefiere** el modo visor al modo grilla? | Es una pregunta de **operación real**, no de test unitario. |
+| ¿La voz acierta con el acento y el ruido del local? | Depende del motor de transcripción, que aún no existe. |
+
+**Conclusión:** la F7.6 deja el **cableado correcto y verificado**. El **valor real** de
+la IA en el POS solo se podrá medir cuando (a) exista el Centro de IA y (b) haya
+operación real con la cámara cenital instalada. Hasta entonces, "verde" significa
+"bien conectado", **no** "probado en campo".
