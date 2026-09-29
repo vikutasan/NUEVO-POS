@@ -43,7 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.database import get_db
-from models import Product, TerminalSession, Ticket, TicketItem
+from models import CashSession, Product, TerminalSession, Ticket, TicketItem
 from rules import ReglaViolada
 from rules.registry import (
     rn10_formato_de_folio,
@@ -61,6 +61,7 @@ from rules.registry import (
     rn26_version_obsoleta,
     rn27_incrementar_version,
     rn37_umbral_anti_degradacion,
+    rn49_una_sesion_caja_por_terminal,
 )
 from schemas import (
     AnadirItemEntrada,
@@ -99,6 +100,39 @@ async def _sesion_activa_o_404(db: AsyncSession, terminal_id: str) -> TerminalSe
     # RN-24: sin sesión activa no se puede operar. El contrato de error es 400.
     rn24_sesion_activa("OPEN" if sesion is not None else "CLOSED")
     return sesion  # type: ignore[return-value]
+
+
+async def _sesion_caja_activa_o_400(db: AsyncSession, terminal_id: str) -> CashSession:
+    """Devuelve el turno de caja OPEN de la terminal, o lanza 400 (RN-49).
+
+    FASE 4.0 — Prerrequisito del arqueo: un cobro SIN turno de caja abierto
+    dejaría el ticket huérfano y el corte saldría en cero. Por eso el cobro
+    EXIGE un turno abierto y liga el ticket a él (`Ticket.cash_session_id`).
+
+    RN-49: solo puede haber UNA sesión de caja OPEN por terminal. Si hay más
+    de una, la regla lanza `ReglaViolada` (400) — es un estado imposible.
+    """
+    sesiones = (
+        await db.execute(
+            select(CashSession).where(
+                CashSession.terminal_id == terminal_id,
+                CashSession.status == "OPEN",
+            )
+        )
+    ).scalars().all()
+
+    # RN-49: una sola sesión de caja por terminal. Si hay 0, el cobro falla
+    # con un motivo claro (no un 500): "No hay turno de caja abierto".
+    # La regla espera dicts con `terminal_id` y `estado` (no el ORM).
+    rn49_una_sesion_caja_por_terminal(
+        [{"terminal_id": s.terminal_id, "estado": s.status} for s in sesiones],
+        terminal_id,
+    )
+    if not sesiones:
+        raise ReglaViolada(
+            "RN-49", "No hay turno de caja abierto para esta terminal", 400
+        )
+    return sesiones[0]
 
 
 async def _siguiente_folio(db: AsyncSession) -> str:
@@ -277,7 +311,14 @@ async def cobrar_ticket(
     entrada: CobrarTicketEntrada,
     db: AsyncSession = Depends(get_db),
 ) -> TicketSalida:
-    """Cobra un ticket: valida versión, lo pasa a PAID y guarda el pago."""
+    """Cobra un ticket: valida versión, lo pasa a PAID y guarda el pago.
+
+    FASE 4.0 — El cobro EXIGE un turno de caja abierto (RN-49) y liga el
+    ticket a ese turno (`Ticket.cash_session_id`). Sin este vínculo el arqueo
+    del corte saldría en cero: el ticket existiría pero no pertenecería a
+    ninguna caja. Si no hay turno abierto, el cobro falla con un motivo claro
+    (`{outcome:'error', reason:'No hay turno de caja abierto...'}`).
+    """
     ticket = (
         await db.execute(
             select(Ticket).options(selectinload(Ticket.items)).where(Ticket.id == ticket_id)
@@ -291,10 +332,17 @@ async def cobrar_ticket(
     rn23_no_modificar_paid(ticket.status)
     rn25_validar_version(entrada.version, ticket.version)
 
+    # FASE 4.0 / RN-49: el cobro exige un turno de caja abierto en la terminal
+    # del ticket. Si no lo hay, `_sesion_caja_activa_o_400` lanza ReglaViolada
+    # (400) con el motivo "No hay turno de caja abierto para esta terminal".
+    sesion_caja = await _sesion_caja_activa_o_400(db, ticket.terminal_id)
+
     # RN-14: el cobro lleva el ticket a PAID. RN-27: incrementa el version.
     ticket.status = rn14_ciclo_de_vida("PAID")
     ticket.version = rn27_incrementar_version(ticket.version)
     ticket.payment_details = entrada.payment_details
+    # FASE 4.0: liga el ticket a su turno de caja para que el arqueo lo cuente.
+    ticket.cash_session_id = sesion_caja.id
 
     await db.commit()
     await db.refresh(ticket)
