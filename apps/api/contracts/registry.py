@@ -1,4 +1,4 @@
-"""Registro de los 17 contratos — FASE 2 (Frontera).
+"""Registro de los 22 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico).
 
 Cada contrato se declara aquí con su firma completa (entrada/salida) y su
 proveedor. El registro es la fuente única de verdad: el test de la puerta F2
@@ -24,6 +24,15 @@ Matriz de contratos (Documento 9 §10):
   15  pedidos.registrar_desde_ticket      POS                 Pedidos      Deuda
   16  pedidos.pedido_del_ticket           POS                 Pedidos      Deuda
   17  vision.reconocer_producto           POS                 Visión       Deuda
+
+Contratos atómicos de la FASE 3.2 (corrigen el defecto D-2 de la v1.0 del plan,
+que listaba endpoints sin contrato — regla A-02):
+
+  18  pos.añadir_item                     POS                 POS          FASE 3.2
+  19  pos.cambiar_cantidad                POS                 POS          FASE 3.2
+  20  pos.quitar_item                     POS                 POS          FASE 3.2
+  21  pos.leer_ticket                     POS                 POS          FASE 3.2
+  22  pos.verificar_envio                 POS                 POS          FASE 3.2
 """
 
 from __future__ import annotations
@@ -383,9 +392,165 @@ CONTRATOS: tuple[Contrato, ...] = (
             "503 si el modelo no está cargado.",
         ),
     ),
+    # ── §10 POS atómico — FASE 3.2 (corrige el defecto D-2) ────────────────
+    Contrato(
+        numero=18,
+        nombre="pos.añadir_item",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="POST /pos/tickets/{ticket_id}/items",
+        entrada={
+            "ticket_id": "UUID",
+            "item_id": "String",
+            "product_id": "UUID",
+            "quantity": "Integer",
+            "version": "Integer",
+        },
+        salida={
+            "ticket_id": "UUID",
+            "item_id": "String",
+            "version": "Integer",
+            "total": "Numeric(12,2)",
+            "lineas": "List[{item_id, product_id, quantity, unit_price, subtotal}]",
+        },
+        garantias=(
+            "IDEMPOTENTE por `item_id`: repetir el POST con el mismo `item_id` "
+            "deja el ticket en el MISMO estado (no duplica la línea).",
+            "El `unit_price` se congela desde el catálogo (RN-18); el cliente no dicta precio.",
+            "Un producto ya presente incrementa su cantidad, no crea otra línea (RN-17).",
+            "Toda escritura valida el `version` recibido (RN-25) y lo incrementa (RN-27).",
+            "Devuelve una PROYECCIÓN de las líneas, no la tabla `ticket_items` (O-23).",
+        ),
+        errores=(
+            "404 si el producto no existe (RN-21).",
+            "400 si el producto está inactivo (RN-22).",
+            "400 si la cantidad no es un entero positivo (RN-20).",
+            "400 si la sesión de la terminal no está activa (RN-24).",
+            "400 si el ticket está PAID (RN-23).",
+            "409 si el `version` recibido no coincide con el actual (RN-25).",
+        ),
+        estado_hoy="FASE 3.2",
+    ),
+    Contrato(
+        numero=19,
+        nombre="pos.cambiar_cantidad",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="PATCH /pos/tickets/{ticket_id}/items/{item_id}",
+        entrada={
+            "ticket_id": "UUID",
+            "item_id": "String",
+            "quantity": "Integer",
+            "version": "Integer",
+        },
+        salida={
+            "ticket_id": "UUID",
+            "item_id": "String",
+            "version": "Integer",
+            "total": "Numeric(12,2)",
+            "lineas": "List[{item_id, product_id, quantity, unit_price, subtotal}]",
+        },
+        garantias=(
+            "BLOQUEO OPTIMISTA por `version`: si el `version` recibido no coincide, "
+            "responde 409 y NO escribe (RN-25/RN-26).",
+            "El `unit_price` NO se recalcula: la línea conserva el precio congelado (RN-18).",
+            "El subtotal se recalcula como unit_price × quantity (RN-19).",
+            "Cada escritura exitosa incrementa el `version` (RN-27).",
+            "Devuelve una PROYECCIÓN de las líneas, no la tabla `ticket_items` (O-23).",
+        ),
+        errores=(
+            "404 si el ticket o el ítem no existen.",
+            "400 si la cantidad no es un entero positivo (RN-20).",
+            "400 si el ticket está PAID (RN-23).",
+            "409 si el `version` recibido no coincide con el actual (RN-25/RN-26).",
+        ),
+        estado_hoy="FASE 3.2",
+    ),
+    Contrato(
+        numero=20,
+        nombre="pos.quitar_item",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="DELETE /pos/tickets/{ticket_id}/items/{item_id}",
+        entrada={
+            "ticket_id": "UUID",
+            "item_id": "String",
+            "version": "Integer",
+        },
+        salida={
+            "ticket_id": "UUID",
+            "item_id": "String",
+            "version": "Integer",
+            "total": "Numeric(12,2)",
+            "lineas": "List[{item_id, product_id, quantity, unit_price, subtotal}]",
+        },
+        garantias=(
+            "ANTI-DEGRADACIÓN (RN-37): si quitar la línea reduce el total de líneas "
+            "en más del 50%, la operación se RECHAZA con 400.",
+            "El total se recalcula como la suma de los subtotales restantes (RN-16).",
+            "Cada escritura exitosa incrementa el `version` (RN-27).",
+            "Devuelve una PROYECCIÓN de las líneas, no la tabla `ticket_items` (O-23).",
+        ),
+        errores=(
+            "404 si el ticket o el ítem no existen.",
+            "400 si la reducción de líneas supera el 50% (RN-37).",
+            "400 si el ticket está PAID (RN-23).",
+            "409 si el `version` recibido no coincide con el actual (RN-25).",
+        ),
+        estado_hoy="FASE 3.2",
+    ),
+    Contrato(
+        numero=21,
+        nombre="pos.leer_ticket",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="GET /pos/tickets/{ticket_id}",
+        entrada={"ticket_id": "UUID"},
+        salida={
+            "id": "UUID",
+            "account_num": "String",
+            "status": "String",
+            "total": "Numeric(12,2)",
+            "version": "Integer",
+        },
+        garantias=(
+            "RESPUESTA LIGERA: devuelve EXACTAMENTE 5 campos escalares (Regla 15).",
+            "NO devuelve las líneas: leer las líneas es responsabilidad de otro contrato.",
+            "Devuelve una PROYECCIÓN, no la fila completa de `tickets` (O-23).",
+            "`account_num` es el folio (presentación, RN-10); `id` es la identidad (RN-09).",
+        ),
+        errores=("404 si el ticket no existe.",),
+        estado_hoy="FASE 3.2",
+    ),
+    Contrato(
+        numero=22,
+        nombre="pos.verificar_envio",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="POST /pos/tickets/{ticket_id}/verify",
+        entrada={
+            "ticket_id": "UUID",
+            "item_ids": "List[String]",
+        },
+        salida={
+            "existe": "Boolean",
+            "item_ids_persistidos": "List[String]",
+            "faltantes": "List[String]",
+        },
+        garantias=(
+            "VERIFICACIÓN POST-ENVÍO (v6.1 $453): confirma en la BASE DE DATOS que el "
+            "ticket y sus ítems existen ANTES de que el frontend limpie el carrito.",
+            "`existe` es True solo si el ticket está persistido.",
+            "`faltantes` lista los `item_ids` que el cliente cree haber enviado pero "
+            "que NO están en la BD: si no está vacío, el frontend NO debe limpiar.",
+            "Es de SOLO LECTURA: no modifica el ticket ni sus líneas.",
+        ),
+        errores=("404 si el ticket no existe.",),
+        estado_hoy="FASE 3.2",
+    ),
 )
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 17 contratos del registro."""
+    """Devuelve los 22 contratos del registro."""
     return CONTRATOS

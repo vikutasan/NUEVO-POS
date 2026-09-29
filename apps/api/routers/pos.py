@@ -1,10 +1,15 @@
-"""Router del POS — P2.7 (cierre de la puerta P2).
+"""Router del POS — P2.7 (cierre de la puerta P2) + FASE 3.2 (atómico).
 
-Materializa 3 contratos de la FASE 2:
+Materializa 8 contratos: 3 de la FASE 2 y 5 atómicos de la FASE 3.2.
 
-  Contrato 9  `caja.sesion_activa`   → GET  /pos/session-active?terminal_id=
-  Contrato 3  `pos.crear_ticket`     → POST /pos/tickets
-  Contrato 5  `pos.cobrar_ticket`    → POST /pos/tickets/{id}/pay
+  Contrato 9  `caja.sesion_activa`      → GET    /pos/session-active?terminal_id=
+  Contrato 3  `pos.crear_ticket`        → POST   /pos/tickets
+  Contrato 5  `pos.cobrar_ticket`       → POST   /pos/tickets/{id}/pay
+  Contrato 18 `pos.añadir_item`         → POST   /pos/tickets/{id}/items
+  Contrato 19 `pos.cambiar_cantidad`    → PATCH  /pos/tickets/{id}/items/{item_id}
+  Contrato 20 `pos.quitar_item`         → DELETE /pos/tickets/{id}/items/{item_id}
+  Contrato 21 `pos.leer_ticket`         → GET    /pos/tickets/{id}
+  Contrato 22 `pos.verificar_envio`     → POST   /pos/tickets/{id}/verify
 
 Este router es la ÚNICA puerta por la que el frontend escribe. Aplica las
 reglas de negocio de la FASE 3 en el orden correcto y traduce cada
@@ -20,9 +25,11 @@ Reglas aplicadas, en orden:
   - RN-16  el total es la suma de los subtotales.
   - RN-10  el folio visible tiene formato V####.
   - RN-14  el status nace OPEN y solo pasa a PAID por el cobro.
-  - RN-23  un ticket PAID no se puede volver a cobrar.
-  - RN-25  el cobro valida el `version` recibido (concurrencia optimista).
+  - RN-23  un ticket PAID no se puede volver a cobrar ni modificar.
+  - RN-25  toda escritura valida el `version` recibido (concurrencia optimista).
+  - RN-26  un `version` obsoleto responde 409.
   - RN-27  cada escritura exitosa incrementa el `version`.
+  - RN-37  anti-degradación: quitar >50% de las líneas se rechaza.
 """
 
 from __future__ import annotations
@@ -41,6 +48,8 @@ from rules import ReglaViolada
 from rules.registry import (
     rn10_formato_de_folio,
     rn14_ciclo_de_vida,
+    rn16_total_es_suma_de_subtotales,
+    rn17_un_producto_una_vez,
     rn18_unit_price_congelado,
     rn19_subtotal_de_linea,
     rn20_cantidad_entero_positivo,
@@ -49,14 +58,24 @@ from rules.registry import (
     rn23_no_modificar_paid,
     rn24_sesion_activa,
     rn25_validar_version,
+    rn26_version_obsoleta,
     rn27_incrementar_version,
+    rn37_umbral_anti_degradacion,
 )
 from schemas import (
+    AnadirItemEntrada,
+    CambiarCantidadEntrada,
     CobrarTicketEntrada,
     CrearTicketEntrada,
+    LineaAtomicaSalida,
     LineaSalida,
+    QuitarItemEntrada,
     SesionActiva,
+    TicketAtomicoSalida,
+    TicketLigeroSalida,
     TicketSalida,
+    VerificarEnvioEntrada,
+    VerificarEnvioSalida,
 )
 
 router = APIRouter(prefix="/pos", tags=["pos"])
@@ -104,6 +123,56 @@ def _ticket_a_salida(ticket: Ticket) -> TicketSalida:
         terminal_id=ticket.terminal_id,
         channel=ticket.channel,
         items=[LineaSalida.model_validate(i) for i in ticket.items],
+    )
+
+
+def _lineas_atomicas(ticket: Ticket) -> list[LineaAtomicaSalida]:
+    """Proyecta las líneas del ticket a la salida atómica (contratos 18–20).
+
+    `item_id` es la clave de idempotencia que el cliente envió. Como el modelo
+    `TicketItem` no la persiste todavía (deuda D-9), se deriva del `product_id`
+    de forma determinista: así repetir el POST con el mismo `item_id` es
+    idempotente aunque el modelo no guarde el campo.
+    """
+    return [
+        LineaAtomicaSalida(
+            item_id=str(item.product_id),
+            product_id=item.product_id,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            subtotal=item.subtotal,
+        )
+        for item in ticket.items
+    ]
+
+
+def _ticket_atomico(ticket: Ticket, item_id: str) -> TicketAtomicoSalida:
+    """Salida común de los contratos 18, 19 y 20."""
+    return TicketAtomicoSalida(
+        ticket_id=ticket.id,
+        item_id=item_id,
+        version=ticket.version,
+        total=ticket.total,
+        lineas=_lineas_atomicas(ticket),
+    )
+
+
+async def _ticket_con_items_o_404(db: AsyncSession, ticket_id: UUID) -> Ticket:
+    """Carga un ticket con sus líneas, o lanza 404 si no existe."""
+    ticket = (
+        await db.execute(
+            select(Ticket).options(selectinload(Ticket.items)).where(Ticket.id == ticket_id)
+        )
+    ).scalars().first()
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket inexistente")
+    return ticket
+
+
+def _recalcular_total(ticket: Ticket) -> Decimal:
+    """Recalcula el total del ticket como la suma de sus subtotales (RN-16)."""
+    return rn16_total_es_suma_de_subtotales(
+        [{"subtotal": item.subtotal} for item in ticket.items]
     )
 
 
@@ -231,3 +300,218 @@ async def cobrar_ticket(
     await db.refresh(ticket)
 
     return _ticket_a_salida(ticket)
+
+
+# ---------------------------------------------------------------------------
+# Contrato 18 — POST /pos/tickets/{id}/items
+# ---------------------------------------------------------------------------
+
+@router.post("/tickets/{ticket_id}/items", response_model=TicketAtomicoSalida)
+async def anadir_item(
+    ticket_id: UUID,
+    entrada: AnadirItemEntrada,
+    db: AsyncSession = Depends(get_db),
+) -> TicketAtomicoSalida:
+    """Añade un ítem. IDEMPOTENTE por `item_id` (contrato 18).
+
+    Reglas: RN-24 (sesión activa), RN-23 (no PAID), RN-25 (version),
+    RN-20 (cantidad positiva), RN-21/RN-22 (producto existe y activo),
+    RN-18 (precio congelado), RN-19 (subtotal), RN-17 (un producto una vez),
+    RN-27 (incrementa version).
+
+    IDEMPOTENCIA (contrato 18): el `item_id` identifica la INTENCIÓN del
+    cliente. Si el mismo `item_id` se reenvía (reintento de red, doble clic),
+    la operación es un NO-OP y devuelve el estado actual. Los `item_id` ya
+    procesados se registran en `payment_details["_item_ids"]` (JSONB), sin
+    necesidad de migración. Deuda D-9: cuando `ticket_items` tenga su propia
+    columna `item_id`, este ledger se reemplaza por una restricción única.
+    """
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+
+    # RN-24: la sesión de la terminal del ticket debe estar activa.
+    await _sesion_activa_o_404(db, ticket.terminal_id or "")
+    # RN-23: no se modifica un ticket PAID.
+    rn23_no_modificar_paid(ticket.status)
+    # RN-20: cantidad entero positivo.
+    rn20_cantidad_entero_positivo(entrada.quantity)
+
+    # IDEMPOTENCIA por `item_id`: si esta intención ya se procesó, NO-OP.
+    detalles = dict(ticket.payment_details or {})
+    item_ids_procesados: list[str] = list(detalles.get("_item_ids", []))
+    if entrada.item_id in item_ids_procesados:
+        # Reintento del mismo `item_id`: devuelve el estado SIN escribir.
+        return _ticket_atomico(ticket, entrada.item_id)
+
+    # RN-25: concurrencia optimista (solo en la escritura real).
+    rn25_validar_version(entrada.version, ticket.version)
+
+    # RN-17: un producto aparece una sola vez; si ya está, se incrementa.
+    existente = next(
+        (i for i in ticket.items if str(i.product_id) == str(entrada.product_id)), None
+    )
+    if existente is not None:
+        existente.quantity += entrada.quantity
+        existente.subtotal = rn19_subtotal_de_linea(existente.unit_price, existente.quantity)
+    else:
+        producto = (
+            await db.execute(select(Product).where(Product.id == entrada.product_id))
+        ).scalars().first()
+        # RN-21: inexistente → 404. RN-22: inactivo → 400.
+        rn21_producto_inexistente(None if producto is None else {"id": str(producto.id)})
+        rn22_producto_inactivo({"activo": bool(producto.active)})  # type: ignore[union-attr]
+
+        unit_price = rn18_unit_price_congelado(producto.price, None)  # type: ignore[union-attr]
+        ticket.items.append(
+            TicketItem(
+                product_id=entrada.product_id,
+                quantity=entrada.quantity,
+                unit_price=unit_price,
+                subtotal=rn19_subtotal_de_linea(unit_price, entrada.quantity),
+            )
+        )
+
+    # Registra el `item_id` procesado (ledger de idempotencia).
+    item_ids_procesados.append(entrada.item_id)
+    detalles["_item_ids"] = item_ids_procesados
+    ticket.payment_details = detalles
+
+    # RN-16: el total es la suma de los subtotales. RN-27: incrementa version.
+    ticket.total = _recalcular_total(ticket)
+    ticket.version = rn27_incrementar_version(ticket.version)
+
+    await db.commit()
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+    return _ticket_atomico(ticket, entrada.item_id)
+
+
+# ---------------------------------------------------------------------------
+# Contrato 19 — PATCH /pos/tickets/{id}/items/{item_id}
+# ---------------------------------------------------------------------------
+
+@router.patch("/tickets/{ticket_id}/items/{item_id}", response_model=TicketAtomicoSalida)
+async def cambiar_cantidad(
+    ticket_id: UUID,
+    item_id: str,
+    entrada: CambiarCantidadEntrada,
+    db: AsyncSession = Depends(get_db),
+) -> TicketAtomicoSalida:
+    """Cambia la cantidad de una línea. Bloqueo optimista por `version` (contrato 19).
+
+    Reglas: RN-23 (no PAID), RN-25/RN-26 (version), RN-20 (cantidad positiva),
+    RN-18 (precio congelado, no se recalcula), RN-19 (subtotal), RN-27.
+    """
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+
+    rn23_no_modificar_paid(ticket.status)
+    rn25_validar_version(entrada.version, ticket.version)
+    rn26_version_obsoleta(entrada.version, ticket.version)
+    rn20_cantidad_entero_positivo(entrada.quantity)
+
+    linea = next((i for i in ticket.items if str(i.product_id) == item_id), None)
+    if linea is None:
+        raise HTTPException(status_code=404, detail="Ítem inexistente")
+
+    # RN-18: el unit_price NO se recalcula. RN-19: subtotal = unit_price × quantity.
+    linea.quantity = entrada.quantity
+    linea.subtotal = rn19_subtotal_de_linea(linea.unit_price, entrada.quantity)
+
+    ticket.total = _recalcular_total(ticket)
+    ticket.version = rn27_incrementar_version(ticket.version)
+
+    await db.commit()
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+    return _ticket_atomico(ticket, item_id)
+
+
+# ---------------------------------------------------------------------------
+# Contrato 20 — DELETE /pos/tickets/{id}/items/{item_id}
+# ---------------------------------------------------------------------------
+
+@router.delete("/tickets/{ticket_id}/items/{item_id}", response_model=TicketAtomicoSalida)
+async def quitar_item(
+    ticket_id: UUID,
+    item_id: str,
+    entrada: QuitarItemEntrada,
+    db: AsyncSession = Depends(get_db),
+) -> TicketAtomicoSalida:
+    """Quita una línea. Anti-degradación RN-37 (contrato 20).
+
+    Reglas: RN-23 (no PAID), RN-25 (version), RN-37 (no reducir >50%),
+    RN-16 (recalcula total), RN-27 (incrementa version).
+    """
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+
+    rn23_no_modificar_paid(ticket.status)
+    rn25_validar_version(entrada.version, ticket.version)
+
+    linea = next((i for i in ticket.items if str(i.product_id) == item_id), None)
+    if linea is None:
+        raise HTTPException(status_code=404, detail="Ítem inexistente")
+
+    # RN-37: anti-degradación. Si quitar esta línea reduce el total de líneas
+    # en más del 50%, la operación se rechaza.
+    total_actual = len(ticket.items)
+    total_nuevo = total_actual - 1
+    rn37_umbral_anti_degradacion(total_actual, total_nuevo)
+
+    ticket.items.remove(linea)
+    await db.delete(linea)
+
+    ticket.total = _recalcular_total(ticket)
+    ticket.version = rn27_incrementar_version(ticket.version)
+
+    await db.commit()
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+    return _ticket_atomico(ticket, item_id)
+
+
+# ---------------------------------------------------------------------------
+# Contrato 21 — GET /pos/tickets/{id}
+# ---------------------------------------------------------------------------
+
+@router.get("/tickets/{ticket_id}", response_model=TicketLigeroSalida)
+async def leer_ticket(
+    ticket_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> TicketLigeroSalida:
+    """Lee un ticket con RESPUESTA LIGERA: 5 campos escalares (contrato 21).
+
+    Regla 15: la respuesta ligera NO incluye las líneas. Leer las líneas es
+    responsabilidad de otro contrato.
+    """
+    ticket = (
+        await db.execute(select(Ticket).where(Ticket.id == ticket_id))
+    ).scalars().first()
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket inexistente")
+    return TicketLigeroSalida.model_validate(ticket)
+
+
+# ---------------------------------------------------------------------------
+# Contrato 22 — POST /pos/tickets/{id}/verify
+# ---------------------------------------------------------------------------
+
+@router.post("/tickets/{ticket_id}/verify", response_model=VerificarEnvioSalida)
+async def verificar_envio(
+    ticket_id: UUID,
+    entrada: VerificarEnvioEntrada,
+    db: AsyncSession = Depends(get_db),
+) -> VerificarEnvioSalida:
+    """Verificación POST-ENVÍO (contrato 22, cicatriz v6.1 $453).
+
+    Confirma en la BASE DE DATOS que el ticket y sus ítems existen ANTES de que
+    el frontend limpie el carrito. Es de SOLO LECTURA.
+
+    Si `faltantes` no está vacío, el frontend NO debe limpiar el carrito.
+    """
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+
+    persistidos = {str(i.product_id) for i in ticket.items}
+    item_ids_persistidos = [i for i in entrada.item_ids if i in persistidos]
+    faltantes = [i for i in entrada.item_ids if i not in persistidos]
+
+    return VerificarEnvioSalida(
+        existe=True,
+        item_ids_persistidos=item_ids_persistidos,
+        faltantes=faltantes,
+    )

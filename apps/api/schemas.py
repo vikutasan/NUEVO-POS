@@ -150,3 +150,101 @@ class CobrarTicketEntrada(BaseModel):
 
     payment_details: dict[str, Any] = Field(default_factory=dict)
     version: int = Field(ge=0, description="Version esperado (RN-25)")
+
+
+# ---------------------------------------------------------------------------
+# POS atómico — Contratos 18–22 (FASE 3.2)
+# ---------------------------------------------------------------------------
+
+class LineaAtomicaSalida(BaseModel):
+    """Una línea del ticket en la proyección atómica.
+
+    `item_id` es la clave de idempotencia que envía el cliente (contrato 18).
+    El `unit_price` viene congelado (RN-18); el `subtotal` es unit_price ×
+    quantity (RN-19).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    item_id: str
+    product_id: UUID
+    quantity: int
+    unit_price: Decimal
+    subtotal: Decimal
+
+
+class TicketAtomicoSalida(BaseModel):
+    """Salida común de los contratos 18, 19 y 20.
+
+    Devuelve la proyección de las líneas (no la tabla `ticket_items`, O-23) y
+    el `version` nuevo para que el cliente pueda encadenar la siguiente
+    escritura con concurrencia optimista (RN-25/RN-27).
+    """
+
+    ticket_id: UUID
+    item_id: str
+    version: int
+    total: Decimal
+    lineas: list[LineaAtomicaSalida] = Field(default_factory=list)
+
+
+class AnadirItemEntrada(BaseModel):
+    """Entrada del contrato 18: añadir (o incrementar) un ítem.
+
+    `item_id` es la clave de IDEMPOTENCIA: repetir el POST con el mismo
+    `item_id` deja el ticket en el MISMO estado (no duplica la línea).
+    """
+
+    item_id: str = Field(min_length=1, description="Clave de idempotencia")
+    product_id: UUID
+    quantity: int = Field(ge=1, description="Entero positivo (RN-20)")
+    version: int = Field(ge=0, description="Version esperado (RN-25)")
+
+
+class CambiarCantidadEntrada(BaseModel):
+    """Entrada del contrato 19: cambiar la cantidad de una línea."""
+
+    quantity: int = Field(ge=1, description="Entero positivo (RN-20)")
+    version: int = Field(ge=0, description="Version esperado (RN-25)")
+
+
+class QuitarItemEntrada(BaseModel):
+    """Entrada del contrato 20: quitar una línea del ticket."""
+
+    version: int = Field(ge=0, description="Version esperado (RN-25)")
+
+
+class TicketLigeroSalida(BaseModel):
+    """Salida del contrato 21: EXACTAMENTE 5 campos escalares (Regla 15).
+
+    NO incluye las líneas: leer las líneas es responsabilidad de otro contrato.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    account_num: str
+    status: str
+    total: Decimal
+    version: int
+
+
+class VerificarEnvioEntrada(BaseModel):
+    """Entrada del contrato 22: verificar que el ticket y sus ítems existen.
+
+    `item_ids` es lo que el cliente CREE haber enviado. El servidor responde
+    qué de eso está realmente persistido.
+    """
+
+    item_ids: list[str] = Field(default_factory=list)
+
+
+class VerificarEnvioSalida(BaseModel):
+    """Salida del contrato 22: verificación post-envío (v6.1 $453).
+
+    Si `faltantes` no está vacío, el frontend NO debe limpiar el carrito.
+    """
+
+    existe: bool
+    item_ids_persistidos: list[str] = Field(default_factory=list)
+    faltantes: list[str] = Field(default_factory=list)

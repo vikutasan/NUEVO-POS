@@ -34,8 +34,9 @@ MODULOS_AJENOS = (
     "stats",
 )
 
-# Los 17 contratos esperados (Documento 9 §10).
-LOS_17_CONTRATOS = (
+# Los 22 contratos esperados: los 17 del Documento 9 §10 (FASE 2) más los 5
+# atómicos de la FASE 3.2 (corrigen el defecto D-2: endpoints sin contrato).
+LOS_22_CONTRATOS = (
     "catalogo.productos_para_venta",
     "almacenes.consumir_por_venta",
     "almacenes.disponibilidad",
@@ -53,6 +54,12 @@ LOS_17_CONTRATOS = (
     "pedidos.registrar_desde_ticket",
     "pedidos.pedido_del_ticket",
     "vision.reconocer_producto",
+    # ── FASE 3.2 — POS atómico ─────────────────────────────────────────────
+    "pos.añadir_item",
+    "pos.cambiar_cantidad",
+    "pos.quitar_item",
+    "pos.leer_ticket",
+    "pos.verificar_envio",
 )
 
 
@@ -133,11 +140,11 @@ def test_criterio1_los_contratos_no_importan_modelos():
 # ── Criterio 2: cada contrato tiene su firma ───────────────────────────────
 
 
-def test_criterio2_hay_exactamente_17_contratos():
-    """El registro declara los 17 contratos del Documento 9 §10."""
-    assert len(CONTRATOS) == 17, f"Se esperaban 17 contratos, hay {len(CONTRATOS)}"
+def test_criterio2_hay_exactamente_22_contratos():
+    """El registro declara los 22 contratos (17 de F2 + 5 atómicos de F3.2)."""
+    assert len(CONTRATOS) == 22, f"Se esperaban 22 contratos, hay {len(CONTRATOS)}"
     nombres = tuple(c.nombre for c in CONTRATOS)
-    assert nombres == LOS_17_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
+    assert nombres == LOS_22_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
 
 
 def test_criterio2_cada_contrato_tiene_firma_documentada():
@@ -180,14 +187,24 @@ def test_criterio3_ninguna_salida_es_select_estrella():
             assert tipo != "Row", f"{contrato.nombre}.{campo} expone una fila completa"
 
 
-def test_criterio3_el_pos_solo_es_proveedor_en_dos_contratos():
-    """El POS solo es proveedor en auditoría y estadísticas (Documento 9 §12)."""
+def test_criterio3_el_pos_es_proveedor_en_sus_contratos():
+    """El POS es proveedor en auditoría, estadísticas y sus 5 contratos atómicos.
+
+    Documento 9 §12 fijaba 2 (auditoría y estadísticas). La FASE 3.2 añade 5
+    contratos atómicos cuyo proveedor es el propio POS (endpoints de ticket).
+    """
     proveedor_pos = [c.nombre for c in CONTRATOS if c.proveedor == "POS"]
-    assert proveedor_pos == ["pos.eventos_auditables", "pos.resumen_de_venta"], (
-        f"El POS es proveedor en contratos inesperados: {proveedor_pos}"
-    )
+    assert proveedor_pos == [
+        "pos.eventos_auditables",
+        "pos.resumen_de_venta",
+        "pos.añadir_item",
+        "pos.cambiar_cantidad",
+        "pos.quitar_item",
+        "pos.leer_ticket",
+        "pos.verificar_envio",
+    ], f"El POS es proveedor en contratos inesperados: {proveedor_pos}"
 
 
-def test_listar_contratos_devuelve_los_17():
-    """La función pública del paquete devuelve los 17 contratos."""
-    assert len(listar_contratos()) == 17
+def test_listar_contratos_devuelve_los_22():
+    """La función pública del paquete devuelve los 22 contratos."""
+    assert len(listar_contratos()) == 22
