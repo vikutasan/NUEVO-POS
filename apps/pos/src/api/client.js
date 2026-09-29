@@ -1,5 +1,5 @@
 /**
- * Cliente del API del POS nuevo — P2.5.
+ * Cliente del API del POS nuevo — P2.5 + FASE 3.4 (atómico + locking).
  *
  * Habla con el API PROPIO del POS nuevo (`CONFIG.API_BASE_URL`), nunca con el
  * del ERP. Expone las operaciones del flujo E.1 (venta directa):
@@ -8,6 +8,18 @@
  *   - `getSesionActiva()`  → GET  /pos/session-active          (contrato 9)
  *   - `crearVenta()`       → POST /pos/tickets                 (RN-14..RN-27)
  *   - `cobrarTicket()`     → POST /pos/tickets/{id}/pay        (RN-23, RN-62/63)
+ *
+ * FASE 3.4 añade las operaciones ATÓMICAS por ítem (contratos 18–22) y las de
+ * candado de terminal (heartbeat OMEGA), que consumen los hooks de la Fase 3.3:
+ *
+ *   - `anadirItem()`       → POST   /pos/tickets/{id}/items          (contrato 18)
+ *   - `cambiarCantidad()`  → PATCH  /pos/tickets/{id}/items/{item}   (contrato 19)
+ *   - `quitarItem()`       → DELETE /pos/tickets/{id}/items/{item}   (contrato 20)
+ *   - `leerTicket()`       → GET    /pos/tickets/{id}                (contrato 21)
+ *   - `verificarEnvio()`   → POST   /pos/tickets/{id}/verify         (contrato 22)
+ *   - `latir()`            → POST   /pos/terminals/{id}/heartbeat    (OMEGA)
+ *   - `tomarLock()`        → POST   /pos/terminals/{id}/lock         (RN-03)
+ *   - `liberarLock()`      → POST   /pos/terminals/{id}/unlock       (RN-05)
  *
  * Todas las respuestas se normalizan a `{ ok, data, error }` para que la UI no
  * tenga que envolver cada llamada en try/catch.
@@ -101,10 +113,119 @@ export function cobrarTicket(ticketId, cuerpo) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FASE 3.4 — Operaciones ATÓMICAS por ítem (contratos 18–22)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /pos/tickets/{id}/items — añade un ítem (contrato 18, IDEMPOTENTE).
+ * Reenviar el mismo `item_id` es un NO-OP en el servidor.
+ * @param {string} ticketId
+ * @param {{item_id: string, product_id: string, quantity: number, version: number}} cuerpo
+ */
+export function anadirItem(ticketId, cuerpo) {
+  return peticion(`/pos/tickets/${ticketId}/items`, {
+    method: 'POST',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+/**
+ * PATCH /pos/tickets/{id}/items/{item_id} — cambia la cantidad (contrato 19).
+ * @param {string} ticketId
+ * @param {string} itemId
+ * @param {{quantity: number, version: number}} cuerpo
+ */
+export function cambiarCantidad(ticketId, itemId, cuerpo) {
+  return peticion(`/pos/tickets/${ticketId}/items/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+/**
+ * DELETE /pos/tickets/{id}/items/{item_id} — quita un ítem (contrato 20).
+ * @param {string} ticketId
+ * @param {string} itemId
+ * @param {{version: number}} cuerpo
+ */
+export function quitarItem(ticketId, itemId, cuerpo) {
+  return peticion(`/pos/tickets/${ticketId}/items/${itemId}`, {
+    method: 'DELETE',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+/** GET /pos/tickets/{id} — lectura ligera del ticket (contrato 21, 5 campos). */
+export function leerTicket(ticketId) {
+  return peticion(`/pos/tickets/${ticketId}`);
+}
+
+/**
+ * POST /pos/tickets/{id}/verify — verificación post-envío (contrato 22).
+ * Confirma en BD que el ticket y sus ítems existen antes de limpiar el carrito.
+ * @param {string} ticketId
+ * @param {{item_ids: string[]}} cuerpo
+ */
+export function verificarEnvio(ticketId, cuerpo) {
+  return peticion(`/pos/tickets/${ticketId}/verify`, {
+    method: 'POST',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FASE 3.4 — Candado de terminal + heartbeat (OMEGA)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /pos/terminals/{id}/heartbeat — late mientras la pestaña vive (OMEGA).
+ * @param {string} terminalId
+ * @param {string} usuarioId
+ */
+export function latir(terminalId, usuarioId) {
+  return peticion(`/pos/terminals/${terminalId}/heartbeat`, {
+    method: 'POST',
+    body: JSON.stringify({ usuario_id: usuarioId }),
+  });
+}
+
+/**
+ * POST /pos/terminals/{id}/lock — toma el candado exclusivo (RN-03).
+ * @param {string} terminalId
+ * @param {string} usuarioId
+ */
+export function tomarLock(terminalId, usuarioId) {
+  return peticion(`/pos/terminals/${terminalId}/lock`, {
+    method: 'POST',
+    body: JSON.stringify({ usuario_id: usuarioId }),
+  });
+}
+
+/**
+ * POST /pos/terminals/{id}/unlock — libera el candado (RN-05).
+ * @param {string} terminalId
+ * @param {string} usuarioId
+ */
+export function liberarLock(terminalId, usuarioId) {
+  return peticion(`/pos/terminals/${terminalId}/unlock`, {
+    method: 'POST',
+    body: JSON.stringify({ usuario_id: usuarioId }),
+  });
+}
+
 export default {
   getCatalogo,
   getSesionActiva,
   crearVenta,
   cobrarTicket,
+  anadirItem,
+  cambiarCantidad,
+  quitarItem,
+  leerTicket,
+  verificarEnvio,
+  latir,
+  tomarLock,
+  liberarLock,
   ApiError,
 };

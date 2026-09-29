@@ -9,6 +9,11 @@
  *   - Ticket vacío: "★ El ticket esta vacio ★" con borde dashed.
  *   - Footer con total + botón COBRAR verde.
  *
+ * FASE 3.4 añade:
+ *   - EDICIÓN DE CANTIDAD: botones − / + por línea (target táctil ≥44px).
+ *   - BANNER DE ESTADO: aviso persistente (fijo, no auto-ocultable) cuando hay
+ *     un error de persistencia o ítems no verificados (Regla 19 / prohibición #2).
+ *
  * R-01: `w-full max-w-[420px]` es fluido. R-04: botones ≥ 44px.
  */
 
@@ -34,6 +39,7 @@ export default function SalesReceipt({
   onCobrar,
   cobrando,
   terminalId,
+  banner,
 }) {
   const total = calcularTotal(lineas);
   const vacio = lineas.length === 0;
@@ -47,6 +53,20 @@ export default function SalesReceipt({
           <path d="M0,14 L10,0 L20,14 L30,0 L40,14 L50,0 L60,14 L70,0 L80,14 L90,0 L100,14 L110,0 L120,14 L130,0 L140,14 L150,0 L160,14 L170,0 L180,14 L190,0 L200,14 L210,0 L220,14 L230,0 L240,14 L250,0 L260,14 L270,0 L280,14 L290,0 L300,14 L310,0 L320,14 L330,0 L340,14 L350,0 L360,14 L370,0 L380,14 L390,0 L400,14 L410,0 L420,14 Z" fill="rgb(var(--crema-ticket))" />
         </svg>
       </div>
+
+      {/* BANNER DE ESTADO: persistente, no se auto-oculta (Regla 19) */}
+      {banner ? (
+        <div
+          role="alert"
+          className={`px-6 py-2 text-[11px] font-black uppercase tracking-wider border-b-2 ${
+            banner.tipo === 'error'
+              ? 'bg-peligro/15 text-peligro border-peligro/40'
+              : 'bg-acento/20 text-fondo-profundo border-acento/50'
+          }`}
+        >
+          {banner.mensaje}
+        </div>
+      ) : null}
 
       {/* Encabezado: R DE RICO — Ticket de Venta */}
       <header className="px-6 pt-6 pb-3 border-b-[1.5px] border-dashed border-fondo-profundo/30 flex justify-between items-start -mt-0">
@@ -80,10 +100,29 @@ export default function SalesReceipt({
         ) : (
           <ul className="flex flex-col gap-3">
             {lineas.map((linea) => (
-              <li key={linea.product_id} className="flex justify-between items-start group">
+              <li key={linea.item_id || linea.product_id} className="flex justify-between items-start group">
                 <div className="flex gap-3 w-3/4">
-                  <div className="font-black min-w-[40px] text-right text-3xl leading-none cursor-pointer hover:text-acento hover:scale-110 active:scale-95 transition-all">
-                    {linea.quantity}x
+                  {/* EDICIÓN DE CANTIDAD: − cantidad + (target táctil ≥44px) */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label={`Quitar una unidad de ${linea.name}`}
+                      onClick={() => onDecrementar(linea)}
+                      className="min-h-tactil min-w-tactil flex items-center justify-center rounded-full bg-fondo-profundo/10 text-fondo-profundo font-black text-xl leading-none hover:bg-fondo-profundo/20 active:scale-95 transition-all"
+                    >
+                      −
+                    </button>
+                    <div className="font-black min-w-[40px] text-center text-3xl leading-none">
+                      {linea.quantity}x
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Añadir una unidad de ${linea.name}`}
+                      onClick={() => onIncrementar(linea)}
+                      className="min-h-tactil min-w-tactil flex items-center justify-center rounded-full bg-fondo-profundo/10 text-fondo-profundo font-black text-xl leading-none hover:bg-fondo-profundo/20 active:scale-95 transition-all"
+                    >
+                      +
+                    </button>
                   </div>
                   <div>
                     <p className="font-black text-lg uppercase leading-tight text-fondo-profundo/90">{linea.name}</p>

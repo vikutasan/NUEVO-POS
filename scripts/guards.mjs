@@ -31,6 +31,14 @@ const SCAN_DIRS = ['apps', 'packages'];
 // Extensiones de código que se escanean.
 const CODE_EXT = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py']);
 
+// Carpetas que NUNCA se escanean: artefactos de build y dependencias.
+// (D-7) `dist/` es un artefacto generado por Vite; no es código fuente.
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.vite']);
+
+// (D-7) Los archivos de test son HERRAMIENTAS, no la obra: sus reporteros
+// usan `console.log` legítimamente para imprimir el resultado de la puerta.
+const TEST_FILE_RE = /\.test\.(js|jsx|ts|tsx|mjs|cjs)$/;
+
 /**
  * Recorre un directorio recursivamente y devuelve las rutas de archivos de código.
  */
@@ -44,7 +52,7 @@ function walk(dir, acc = []) {
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'node_modules' || entry.name === '.git') continue;
+      if (SKIP_DIRS.has(entry.name)) continue;
       walk(full, acc);
     } else if (entry.isFile()) {
       const dot = entry.name.lastIndexOf('.');
@@ -91,16 +99,20 @@ const GREPS = [
     test: (line) => /except[^\n]*:\s*pass\b/.test(line) || /except\s+.*:\s*pass\b/.test(line),
   },
   {
+    // (D-7) Los archivos de test son herramientas: sus reporteros imprimen el
+    // resultado de la puerta con `console.log`. Se excluyen del grep.
     id: 'E-15',
     label: 'Logs olvidados (console.log)',
     onlyModels: false,
+    skipTests: true,
     test: (line) => /console\.log\s*\(/.test(line),
   },
   {
+    // (D-7) Un TODO está "declarado" si usa `TODO:` o `TODO(scope)`.
     id: 'E-15',
-    label: 'TODOs sin formato declarado (TODO sin "TODO:")',
+    label: 'TODOs sin formato declarado (TODO sin "TODO:" ni "TODO(...)")',
     onlyModels: false,
-    test: (line) => /\bTODO\b/.test(line) && !/\bTODO:/.test(line),
+    test: (line) => /\bTODO\b/.test(line) && !/\bTODO[:(]/.test(line),
   },
   {
     // R-01 (F5): la superficie NO puede tener anchos absolutos en píxeles.
@@ -133,6 +145,7 @@ function runGrep(grep, files) {
   const hits = [];
   for (const file of files) {
     if (grep.onlyModels && !file.endsWith('models.py')) continue;
+    if (grep.skipTests && TEST_FILE_RE.test(file)) continue;
     if (grep.onlyPath && !relative(ROOT, file).replace(/\\/g, '/').includes(grep.onlyPath)) continue;
     let content;
     try {

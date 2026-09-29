@@ -7,38 +7,67 @@
  *   - MÓVIL (<768px): el ticket se convierte en panel inferior deslizable; el
  *     grid a 2 columnas.
  *
- * Esta pantalla orquesta el flujo E.1 (venta directa):
- *   1. Carga el catálogo (contrato 1) y la sesión activa (contrato 9).
- *   2. El cajero agrega productos (RN-17: un producto una vez, incrementa).
- *   3. Cobra (RN-16: total = suma de subtotales; RN-23: no modificar PAID).
- *   4. El ticket queda PAID en la BD `nuevo_pos`.
+ * FASE 3.4 — REFACTOR: de monolito a ORQUESTADOR DE HOOKS.
+ *   Antes, esta pantalla tenía toda la lógica (estado del carrito, cobro,
+ *   fetch) inline. Ahora delega en los hooks de la Fase 3.3:
+ *
+ *     - `useCart`            → carrito + persistencia atómica por ítem.
+ *     - `useTicketActions`   → crear ticket / cobrar con `{outcome, reason}`.
+ *     - `useTerminalLocking` → heartbeat + candado de terminal (OMEGA).
+ *     - `useBarcodeScanner`  → lector de código de barras.
+ *     - `useNetworkHealth`   → indicador de red (Fase 3.1).
+ *     - `useModo`            → los 3 modos de layout (R-03).
+ *
+ * La pantalla solo ORQUESTA: carga catálogo/sesión, conecta los hooks y pinta
+ * los componentes (`POSHeader`, `CategoryBar`, `ProductGrid`, `SalesReceipt`,
+ * `CheckoutScreen`, `POSOverlays`).
  *
  * R-01: `w-full` en el contenedor raíz. R-03: los 3 modos son explícitos.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CONFIG } from '../../shared/config.js';
 import * as api from './api/client.js';
 import { useModo } from './hooks/useModo.js';
+import { useCart } from './hooks/useCart.js';
+import { useTicketActions } from './hooks/useTicketActions.js';
+import { useTerminalLocking } from './hooks/useTerminalLocking.js';
+import { useBarcodeScanner } from './hooks/useBarcodeScanner.js';
+import { useNetworkHealth } from './hooks/useNetworkHealth.js';
 import CategoryBar from './components/CategoryBar.jsx';
 import ProductGrid from './components/ProductGrid.jsx';
 import SalesReceipt from './components/SalesReceipt.jsx';
 import CheckoutScreen from './components/CheckoutScreen.jsx';
+import POSHeader from './components/POSHeader.jsx';
+import { OverlayExito, OverlayError } from './components/POSOverlays.jsx';
 
 export default function RetailVisionPOS() {
   const { modo, esMovil } = useModo();
+  const { enLinea } = useNetworkHealth();
 
+  // ── Estado de la pantalla (solo lo que NO vive en un hook) ─────────────────
   const [categorias, setCategorias] = useState([]);
   const [productos, setProductos] = useState([]);
   const [categoriaActiva, setCategoriaActiva] = useState(null);
   const [sesion, setSesion] = useState(null);
-  const [lineas, setLineas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [checkoutAbierto, setCheckoutAbierto] = useState(false);
-  const [cobrando, setCobrando] = useState(false);
-  const [ticketPagado, setTicketPagado] = useState(null);
   const [ticketAbierto, setTicketAbierto] = useState(false);
+  const [banner, setBanner] = useState(null);
+
+  // ── Hooks del POS (Fase 3.3) ───────────────────────────────────────────────
+  const carrito = useCart({ api, ticketId: null, version: 0 });
+  const acciones = useTicketActions({
+    api,
+    terminalId: CONFIG.TERMINAL_ID,
+    channel: CONFIG.CANAL,
+  });
+  const locking = useTerminalLocking({
+    api,
+    terminalId: CONFIG.TERMINAL_ID,
+    usuarioId: sesion?.employee_id || null,
+  });
 
   // ── Carga inicial: catálogo + sesión activa ────────────────────────────────
   useEffect(() => {
@@ -73,129 +102,120 @@ export default function RetailVisionPOS() {
   }, [productos, categoriaActiva]);
 
   // ── RN-17: un producto aparece una sola vez; agregarlo incrementa ──────────
-  const agregarProducto = useCallback((producto) => {
-    setLineas((previas) => {
-      const existente = previas.find((l) => l.product_id === producto.id);
-      if (existente) {
-        return previas.map((l) =>
-          l.product_id === producto.id ? { ...l, quantity: l.quantity + 1 } : l
-        );
+  const agregarProducto = useCallback(
+    (producto) => {
+      carrito.anadirLinea({
+        product_id: producto.id,
+        quantity: 1,
+        unit_price: Number(producto.price),
+      });
+    },
+    [carrito]
+  );
+
+  const incrementar = useCallback(
+    (linea) => {
+      carrito.cambiarCantidad(linea.item_id, linea.quantity + 1);
+    },
+    [carrito]
+  );
+
+  const decrementar = useCallback(
+    (linea) => {
+      if (linea.quantity <= 1) {
+        carrito.quitarLinea(linea.item_id);
+        return;
       }
-      return [
-        ...previas,
-        {
-          product_id: producto.id,
-          name: producto.name,
-          unit_price: Number(producto.price),
-          quantity: 1,
-        },
-      ];
-    });
-  }, []);
+      carrito.cambiarCantidad(linea.item_id, linea.quantity - 1);
+    },
+    [carrito]
+  );
 
-  const incrementar = useCallback((linea) => {
-    setLineas((previas) =>
-      previas.map((l) =>
-        l.product_id === linea.product_id ? { ...l, quantity: l.quantity + 1 } : l
-      )
-    );
-  }, []);
+  const quitar = useCallback(
+    (linea) => {
+      carrito.quitarLinea(linea.item_id);
+    },
+    [carrito]
+  );
 
-  const decrementar = useCallback((linea) => {
-    setLineas((previas) =>
-      previas
-        .map((l) =>
-          l.product_id === linea.product_id ? { ...l, quantity: l.quantity - 1 } : l
-        )
-        .filter((l) => l.quantity > 0)
-    );
-  }, []);
+  // ── Lector de código de barras: busca el producto y lo agrega ──────────────
+  const productosRef = useRef(productos);
+  productosRef.current = productos;
 
-  const quitar = useCallback((linea) => {
-    setLineas((previas) => previas.filter((l) => l.product_id !== linea.product_id));
-  }, []);
+  const alEscanear = useCallback(
+    (codigo) => {
+      const producto = productosRef.current.find(
+        (p) => p.sku === codigo || p.barcode === codigo
+      );
+      if (!producto) {
+        setBanner({ tipo: 'error', mensaje: `Código no encontrado: ${codigo}` });
+        return;
+      }
+      setBanner(null);
+      carrito.anadirLinea({
+        product_id: producto.id,
+        quantity: 1,
+        unit_price: Number(producto.price),
+      });
+    },
+    [carrito]
+  );
+
+  useBarcodeScanner({ alEscanear });
 
   // ── Cobro: crea el ticket y lo paga (RN-14..RN-27, RN-62/63) ───────────────
   const confirmarCobro = useCallback(
     async (pago) => {
-      setCobrando(true);
       setError(null);
-      try {
-        const creado = await api.crearVenta({
-          terminal_id: CONFIG.TERMINAL_ID,
-          channel: CONFIG.CANAL,
-          items: lineas.map((l) => ({
-            product_id: l.product_id,
-            quantity: l.quantity,
-          })),
-        });
+      setBanner(null);
 
-        const pagado = await api.cobrarTicket(creado.id, {
-          payment_details: {
-            metodo: pago.metodo,
-            recibido: pago.recibido,
-            cambio: pago.cambio,
-          },
-          version: creado.version,
-        });
+      const items = carrito.lineas.map((l) => ({
+        product_id: l.product_id,
+        quantity: l.quantity,
+      }));
 
-        setTicketPagado(pagado);
-        setCheckoutAbierto(false);
-        setLineas([]);
-      } catch (causa) {
-        setError(causa.message || 'Error al cobrar el ticket');
-      } finally {
-        setCobrando(false);
+      const creado = await acciones.crearTicket(items);
+      if (creado.outcome !== 'ok') {
+        setError(creado.reason || 'Error al crear el ticket');
+        return;
       }
+
+      const pagado = await acciones.cobrar({
+        metodo: pago.metodo,
+        recibido: pago.recibido,
+        cambio: pago.cambio,
+      });
+      if (pagado.outcome !== 'ok') {
+        setError(pagado.reason || 'Error al cobrar el ticket');
+        return;
+      }
+
+      // Cobro verificado: limpieza del carrito (prohibición #2).
+      await carrito.clearCart();
+      setCheckoutAbierto(false);
     },
-    [lineas]
+    [acciones, carrito]
   );
 
-  const total = useMemo(
-    () => lineas.reduce((acc, l) => acc + l.unit_price * l.quantity, 0),
-    [lineas]
-  );
+  const total = carrito.total;
+  const estadoCuenta = acciones.ticket
+    ? acciones.ticket.status === 'PAID'
+      ? 'PAGADA'
+      : 'NUEVA_VENTA'
+    : acciones.enviando
+      ? 'COBRANDO'
+      : 'NUEVA_VENTA';
 
   return (
     <div className="w-full h-screen flex flex-col text-crema-ticket" style={{ backgroundColor: 'rgb(var(--madera))' }}>
-      {/* Header (réplica estética del POSHeader viejo) */}
-      <header className="w-full flex items-center justify-between px-4 py-3 bg-fondo-profundo-alt border-b border-white/5 z-20">
-        {/* IZQUIERDA: Terminal */}
-        <button type="button" className="bg-fondo-profundo border border-white/5 px-6 py-2 rounded-xl flex items-center transition-all group shadow-2xl hover:bg-fondo-panel">
-          <div className="text-left">
-            <p className="text-[18px] font-black uppercase text-crema-ticket tracking-widest leading-none mb-1">
-              {CONFIG.TERMINAL_ID === 'CAJA' ? 'Caja Central' : `Terminal ${CONFIG.TERMINAL_ID}`}
-            </p>
-            <p className="text-[14px] font-black text-acento uppercase tracking-tighter leading-none">
-              Cambiar Estación
-            </p>
-          </div>
-        </button>
-
-        {/* CENTRO: Estado de Transacción */}
-        <div className="bg-fondo-profundo border border-white/10 px-8 py-2 rounded-3xl shadow-2xl flex flex-col items-center">
-          <span className="text-[7px] font-black uppercase text-crema-ticket tracking-[0.5em] mb-0.5">Estado de Transaccion</span>
-          <span className="text-3xl font-black uppercase tracking-tighter italic text-acento drop-shadow-[0_0_12px_rgba(193,215,46,0.4)]">
-            NUEVA VENTA
-          </span>
-        </div>
-
-        {/* DERECHA: Sesión + Modo */}
-        <div className="flex items-center gap-2">
-          <span
-            className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
-              sesion
-                ? 'bg-acento text-fondo-profundo shadow-lg'
-                : 'bg-peligro text-crema-ticket'
-            }`}
-          >
-            {sesion ? 'Sesión abierta' : 'Sin sesión'}
-          </span>
-          <span className="hidden sm:inline text-[9px] font-black text-crema-ticket/50 uppercase tracking-widest">
-            Modo: {modo}
-          </span>
-        </div>
-      </header>
+      <POSHeader
+        terminalId={CONFIG.TERMINAL_ID}
+        estado={estadoCuenta}
+        tipoVenta={CONFIG.CANAL}
+        sesionAbierta={Boolean(sesion)}
+        enLinea={enLinea}
+        modo={modo}
+      />
 
       {error ? (
         <div className="w-full bg-peligro/20 text-peligro px-4 py-2 text-sm">{error}</div>
@@ -223,13 +243,14 @@ export default function RetailVisionPOS() {
         {/* Ticket: panel lateral en MOSTRADOR/COMPACTO, panel inferior en MÓVIL */}
         <div className="hidden lg:flex lg:flex-shrink-0">
           <SalesReceipt
-            lineas={lineas}
+            lineas={carrito.lineas}
             onIncrementar={incrementar}
             onDecrementar={decrementar}
             onQuitar={quitar}
             onCobrar={() => setCheckoutAbierto(true)}
-            cobrando={cobrando}
+            cobrando={acciones.enviando}
             terminalId={CONFIG.TERMINAL_ID}
+            banner={banner}
           />
         </div>
       </main>
@@ -241,7 +262,7 @@ export default function RetailVisionPOS() {
           onClick={() => setTicketAbierto(true)}
           className="w-full min-h-tactil bg-acento text-fondo-profundo font-bold flex items-center justify-between px-4"
         >
-          <span>Ver ticket ({lineas.length})</span>
+          <span>Ver ticket ({carrito.lineas.length})</span>
           <span>${total.toFixed(2)}</span>
         </button>
       ) : null}
@@ -250,7 +271,7 @@ export default function RetailVisionPOS() {
         <div className="fixed inset-0 z-40 bg-fondo-profundo/80 flex items-end">
           <div className="w-full max-h-[85vh] overflow-y-auto">
             <SalesReceipt
-              lineas={lineas}
+              lineas={carrito.lineas}
               onIncrementar={incrementar}
               onDecrementar={decrementar}
               onQuitar={quitar}
@@ -258,8 +279,9 @@ export default function RetailVisionPOS() {
                 setTicketAbierto(false);
                 setCheckoutAbierto(true);
               }}
-              cobrando={cobrando}
+              cobrando={acciones.enviando}
               terminalId={CONFIG.TERMINAL_ID}
+              banner={banner}
             />
             <button
               type="button"
@@ -277,33 +299,23 @@ export default function RetailVisionPOS() {
           total={total}
           onConfirmar={confirmarCobro}
           onCancelar={() => setCheckoutAbierto(false)}
-          procesando={cobrando}
+          procesando={acciones.enviando}
+          error={error}
         />
       ) : null}
 
-      {ticketPagado ? (
-        <div className="fixed inset-0 z-50 bg-fondo-profundo/80 flex items-center justify-center p-4">
-          <div className="w-full max-w-[420px] bg-crema-ticket text-fondo-profundo rounded-canon40 p-6 flex flex-col gap-4 text-center">
-            <h2 className="text-2xl font-bold">✅ Venta cobrada</h2>
-            <p className="text-sm">
-              Folio <strong>{ticketPagado.account_num}</strong>
-            </p>
-            <p className="text-3xl font-bold text-acento">
-              ${Number(ticketPagado.total).toFixed(2)}
-            </p>
-            <p className="text-xs text-fondo-profundo/60">
-              Estado: {ticketPagado.status}
-            </p>
-            <button
-              type="button"
-              onClick={() => setTicketPagado(null)}
-              className="w-full min-h-tactil rounded-canon35 bg-acento text-fondo-profundo font-bold"
-            >
-              Nueva venta
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <OverlayExito
+        ticket={acciones.ticket && acciones.ticket.status === 'PAID' ? acciones.ticket : null}
+        onNuevaVenta={() => {
+          setError(null);
+          setBanner(null);
+        }}
+      />
+
+      <OverlayError
+        mensaje={null}
+        onCerrar={() => setError(null)}
+      />
     </div>
   );
 }
