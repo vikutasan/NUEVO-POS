@@ -1,5 +1,5 @@
 /**
- * `CorteTicketTemplate` — interfaz 15 del registro de la superficie (Plantilla).
+ * `CorteTicketTemplate` — interfaz 24 del registro de la superficie (Impresión).
  *
  * Plantilla de impresión del CORTE DE CAJA (flujo E.5). Réplica estética del
  * ticket de corte del POS viejo:
@@ -12,14 +12,21 @@
  *   - Bloque de movimientos (entradas / salidas) del turno.
  *   - Footer con firma y leyenda.
  *
- * DECISIÓN DE DISEÑO (Plan de Fase 4 §8.4.2):
- *   Esta plantilla SOLO RENDERIZA el corte. NO imprime. La impresión física
- *   real es Fase 6 (Impresión + PDF). Sigue el patrón de `SalesReceipt.jsx`.
+ * DECISIÓN DE DISEÑO (Plan de Fase 4 §8.4.2 + Fase 6 §7.2):
+ *   Esta plantilla SOLO RENDERIZA el corte. NO imprime. El disparador de
+ *   impresión (`iframe.contentWindow.print()`, compatible con
+ *   `--kiosk-printing`) es F6.2, que consume `generarCorteHTML()` de
+ *   `ticketGenerator.js` (F6.0). Sigue el patrón de `SalesReceipt.jsx`.
+ *
+ * CONTRATO DE SUPERFICIE (interfaz 24, H-1):
+ *   contenedor_raiz = "w-[80mm] font-mono" · paleta = ("#fdfbf7",) ·
+ *   exenta_responsiva = True.
  *
  * R-01: `w-full max-w-[420px]` es fluido (no ancho fijo). Exenta de R-04 por
  * ser plantilla de impresión (no interactiva).
  *
  * @see PLAN_DE_ABORDAJE_FASE_4_POR_PARTES.md §8 (Sub-fase 4.4)
+ * @see PLAN_DE_ABORDAJE_FASE_6_POR_PARTES.md §7 (Sub-fase 6.1)
  * @see SalesReceipt.jsx (patrón estético)
  */
 
