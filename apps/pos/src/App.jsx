@@ -15,6 +15,7 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import TerminalSelector from './components/TerminalSelector.jsx';
+import { useTheme } from './hooks/useTheme.js';
 
 const RetailVisionPOS = lazy(() => import('./RetailVisionPOS.jsx').catch(() => ({
   default: () => (
@@ -29,6 +30,10 @@ const RetailVisionPOS = lazy(() => import('./RetailVisionPOS.jsx').catch(() => (
 })));
 
 export default function App() {
+  // F7.1 — cablea el motor de temas: resuelve y aplica el tema al montar.
+  // El hook escribe las CSS vars en el contenedor raíz del POS (no en :root).
+  useTheme();
+
   // TODO(integración): recibir como prop del ERP en vez de hardcodear.
   const [currentUser] = useState({
     id: 1,
