@@ -100,6 +100,7 @@ export function useCart(opciones = {}) {
         {
           item_id: itemId,
           product_id: linea.product_id,
+          name: linea.name ?? null,
           quantity: cantidad,
           unit_price: Number(linea.unit_price ?? 0),
         },

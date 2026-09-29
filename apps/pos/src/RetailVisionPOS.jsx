@@ -22,6 +22,15 @@
  * los componentes (`POSHeader`, `CategoryBar`, `ProductGrid`, `SalesReceipt`,
  * `CheckoutScreen`, `POSOverlays`).
  *
+ * CIERRE FASE 3 (D-12) — PERSISTENCIA ATÓMICA END-TO-END:
+ *   Antes, `useCart` recibía `ticketId: null` clavado, así que cada ítem se
+ *   persistía SOLO en memoria y el cobro reenviaba TODOS los ítems de golpe
+ *   (el patrón "BLOB completo" que la cicatriz v6.0 quiso eliminar).
+ *   Ahora el ticket OPEN nace al agregar el PRIMER ítem y su `id` se cablea a
+ *   `useCart`, de modo que los contratos 18–20 (añadir/cambiar/quitar por
+ *   `item_id`) se ejercen de verdad en la pantalla real. El cobro ya NO
+ *   reenvía los ítems: solo paga el ticket que ya existe.
+ *
  * R-01: `w-full` en el contenedor raíz. R-03: los 3 modos son explícitos.
  */
 
@@ -56,8 +65,13 @@ export default function RetailVisionPOS() {
   const [ticketAbierto, setTicketAbierto] = useState(false);
   const [banner, setBanner] = useState(null);
 
+  // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
+  // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
+  // de verdad en la pantalla real (contratos 18–20).
+  const [ticketId, setTicketId] = useState(null);
+
   // ── Hooks del POS (Fase 3.3) ───────────────────────────────────────────────
-  const carrito = useCart({ api, ticketId: null, version: 0 });
+  const carrito = useCart({ api, ticketId, version: 0 });
   const acciones = useTicketActions({
     api,
     terminalId: CONFIG.TERMINAL_ID,
@@ -101,16 +115,38 @@ export default function RetailVisionPOS() {
     return productos.filter((p) => p.category_id === categoriaActiva);
   }, [productos, categoriaActiva]);
 
+  // ── (D-12) Asegura que exista un ticket OPEN antes de persistir un ítem ────
+  // El ticket nace al agregar el PRIMER ítem. Devuelve `true` si hay ticket
+  // (creado ahora o ya existente) y `false` si la creación falló.
+  const ticketIdRef = useRef(ticketId);
+  ticketIdRef.current = ticketId;
+
+  const asegurarTicket = useCallback(async () => {
+    if (ticketIdRef.current) return true;
+
+    const creado = await acciones.crearTicket([]);
+    if (creado.outcome !== 'ok' || !creado.data?.id) {
+      setError(creado.reason || 'No se pudo abrir el ticket');
+      return false;
+    }
+    setTicketId(creado.data.id);
+    ticketIdRef.current = creado.data.id;
+    return true;
+  }, [acciones]);
+
   // ── RN-17: un producto aparece una sola vez; agregarlo incrementa ──────────
   const agregarProducto = useCallback(
-    (producto) => {
+    async (producto) => {
+      const listo = await asegurarTicket();
+      if (!listo) return;
       carrito.anadirLinea({
         product_id: producto.id,
+        name: producto.name,
         quantity: 1,
         unit_price: Number(producto.price),
       });
     },
-    [carrito]
+    [asegurarTicket, carrito]
   );
 
   const incrementar = useCallback(
@@ -143,7 +179,7 @@ export default function RetailVisionPOS() {
   productosRef.current = productos;
 
   const alEscanear = useCallback(
-    (codigo) => {
+    async (codigo) => {
       const producto = productosRef.current.find(
         (p) => p.sku === codigo || p.barcode === codigo
       );
@@ -152,32 +188,41 @@ export default function RetailVisionPOS() {
         return;
       }
       setBanner(null);
+      const listo = await asegurarTicket();
+      if (!listo) return;
       carrito.anadirLinea({
         product_id: producto.id,
+        name: producto.name,
         quantity: 1,
         unit_price: Number(producto.price),
       });
     },
-    [carrito]
+    [asegurarTicket, carrito]
   );
 
   useBarcodeScanner({ alEscanear });
 
-  // ── Cobro: crea el ticket y lo paga (RN-14..RN-27, RN-62/63) ───────────────
+  // ── Cobro: paga el ticket OPEN ya existente (RN-14..RN-27, RN-62/63) ───────
+  // (D-12) El ticket nace al primer ítem y sus líneas ya están persistidas por
+  // los contratos 18–20. El cobro NO reenvía los ítems: solo paga. Si por
+  // alguna razón no hay ticket (defensivo), se crea con las líneas actuales.
   const confirmarCobro = useCallback(
     async (pago) => {
       setError(null);
       setBanner(null);
 
-      const items = carrito.lineas.map((l) => ({
-        product_id: l.product_id,
-        quantity: l.quantity,
-      }));
-
-      const creado = await acciones.crearTicket(items);
-      if (creado.outcome !== 'ok') {
-        setError(creado.reason || 'Error al crear el ticket');
-        return;
+      if (!ticketIdRef.current) {
+        const items = carrito.lineas.map((l) => ({
+          product_id: l.product_id,
+          quantity: l.quantity,
+        }));
+        const creado = await acciones.crearTicket(items);
+        if (creado.outcome !== 'ok' || !creado.data?.id) {
+          setError(creado.reason || 'Error al crear el ticket');
+          return;
+        }
+        setTicketId(creado.data.id);
+        ticketIdRef.current = creado.data.id;
       }
 
       const pagado = await acciones.cobrar({
@@ -313,7 +358,7 @@ export default function RetailVisionPOS() {
       />
 
       <OverlayError
-        mensaje={null}
+        mensaje={error}
         onCerrar={() => setError(null)}
       />
     </div>
