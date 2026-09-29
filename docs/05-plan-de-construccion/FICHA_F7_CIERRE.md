@@ -241,7 +241,8 @@ exista. **La venta nunca se bloquea** por un fallo de IA.
 
 ## 12. Commit
 
-- **Hash:** `PENDIENTE`
+- **Hash:** `dfde439`
 - **Mensaje:** `docs(f7.4): cierre de la Fase 7 — voz, visión y temas por contrato`
 - **Archivos:** 1 (esta ficha)
-- **Push:** `PENDIENTE` → `origin/main`
+- **Líneas:** +247
+- **Push:** `aac3aa7..dfde439` → `origin/main` ✅
