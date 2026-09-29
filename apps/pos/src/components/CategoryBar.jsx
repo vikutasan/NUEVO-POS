@@ -10,7 +10,12 @@
 
 import React from 'react';
 
-export default function CategoryBar({ categorias, categoriaActiva, onSeleccionar }) {
+export default function CategoryBar({
+  categorias,
+  categoriaActiva,
+  onSeleccionar,
+  onExportarPDF = null,
+}) {
   return (
     <div
       className="w-full flex items-center gap-2 overflow-x-auto pb-1"
@@ -48,6 +53,18 @@ export default function CategoryBar({ categorias, categoriaActiva, onSeleccionar
           {cat.name}
         </button>
       ))}
+
+      {/* Botón EXPORTAR PDF (F6.3): abre el selector de categorías de la carta. */}
+      {onExportarPDF && (
+        <button
+          type="button"
+          onClick={onExportarPDF}
+          className="shrink-0 min-h-tactil px-6 py-3 rounded-lg text-[18px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-xl flex items-center gap-2 bg-white/5 text-crema-ticket/90 hover:bg-white/10"
+          aria-label="Exportar carta a PDF"
+        >
+          📄 Exportar PDF
+        </button>
+      )}
     </div>
   );
 }
