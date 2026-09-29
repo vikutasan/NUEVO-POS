@@ -19,6 +19,7 @@ Reglas duras que respetan:
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -248,3 +249,113 @@ class VerificarEnvioSalida(BaseModel):
     existe: bool
     item_ids_persistidos: list[str] = Field(default_factory=list)
     faltantes: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Caja — Contratos 9–14 (FASE 4.1)
+# ---------------------------------------------------------------------------
+
+class SesionCajaActiva(BaseModel):
+    """Salida del contrato 9: la sesión de caja abierta de una terminal.
+
+    El POS NO lee la tabla `cash_sessions`: pregunta por este contrato. Si no
+    hay turno abierto, `cash_session_id` es `None` (no es un error).
+    """
+
+    cash_session_id: UUID | None = None
+    abierta_en: datetime | None = None
+
+
+class AbrirTurnoEntrada(BaseModel):
+    """Entrada del contrato 10: abrir un turno de caja.
+
+    `monto_inicial` es el fondo con el que arranca el cajero (RN-50: no puede
+    ser negativo). `usuario_id` es el empleado que abre el turno.
+    """
+
+    terminal_id: str
+    usuario_id: UUID
+    monto_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
+
+
+class AbrirTurnoSalida(BaseModel):
+    """Salida del contrato 10: el turno recién abierto."""
+
+    cash_session_id: UUID
+    abierta_en: datetime
+
+
+class MovimientoEntrada(BaseModel):
+    """Entrada del contrato 11: registrar una entrada o salida de efectivo.
+
+    `tipo` es ENTRADA o SALIDA (RN-51). `motivo` es el concepto (obligatorio).
+    """
+
+    cash_session_id: UUID
+    tipo: str
+    monto: Decimal
+    motivo: str
+
+
+class MovimientoSalida(BaseModel):
+    """Salida del contrato 11: el movimiento persistido."""
+
+    movement_id: UUID
+
+
+class MovimientoResumen(BaseModel):
+    """Un movimiento dentro del resumen del turno (contrato 12)."""
+
+    tipo: str
+    monto: Decimal
+
+
+class ResumenTurnoSalida(BaseModel):
+    """Salida del contrato 12: la PROYECCIÓN del turno, no la tabla.
+
+    `esperado` es el efectivo que debería haber en la caja (RN-53):
+    fondo + entradas − salidas + ventas en efectivo.
+    """
+
+    esperado: Decimal
+    movimientos: list[MovimientoResumen] = Field(default_factory=list)
+
+
+class CerrarTurnoEntrada(BaseModel):
+    """Entrada del contrato 13: cerrar el turno con el conteo físico.
+
+    `montos_fisicos` es el efectivo contado; `credito` y `debito` son los
+    vouchers contados (RN-54).
+    """
+
+    cash_session_id: UUID
+    montos_fisicos: Decimal
+    credito: Decimal = Field(default=Decimal("0.00"))
+    debito: Decimal = Field(default=Decimal("0.00"))
+
+
+class CerrarTurnoSalida(BaseModel):
+    """Salida del contrato 13: el arqueo con su descuadre.
+
+    `diferencia` = capturado − esperado. Positivo = sobrante; negativo = faltante.
+    """
+
+    esperado: Decimal
+    capturado: Decimal
+    diferencia: Decimal
+
+
+class LineaReporteDiario(BaseModel):
+    """Una línea del reporte diario (contrato 14), agrupada por canal/cajero."""
+
+    canal: str
+    cajero: str
+    terminal: str
+    total: Decimal
+
+
+class ReporteDiarioSalida(BaseModel):
+    """Salida del contrato 14: el reporte del día local (RN-59)."""
+
+    fecha: str
+    reporte: list[LineaReporteDiario] = Field(default_factory=list)
