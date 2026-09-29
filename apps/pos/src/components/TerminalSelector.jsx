@@ -142,6 +142,7 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
     terminals, statuses, loading, locking,
     getCardState, getNetStatus, selectTerminal,
     addTerminal, updateTerminal, removeTerminal, saveConfig,
+    ordenTerminales, terminalesDesplegadas, invertirOrden,
   } = useTerminals(currentUser);
 
   const [showManager, setShowManager] = useState(false);
@@ -221,8 +222,43 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
           </h2>
         </div>
 
+        {/* Selector de orden de despliegue (F6.5) */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      gap: '0.5rem', marginBottom: '1.5rem' }}>
+          <span style={{ fontSize: '0.6rem', fontWeight: 900, textTransform: 'uppercase',
+                         letterSpacing: '0.2em', opacity: 0.4, color: '#fff' }}>
+            Orden de terminales
+          </span>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              data-testid="orden-izq-der"
+              onClick={() => { if (ordenTerminales !== 'izq-der') invertirOrden(); }}
+              style={{
+                background: ordenTerminales === 'izq-der' ? '#ea580c' : 'rgba(255,255,255,0.05)',
+                color: '#fff', border: 'none', borderRadius: '1rem',
+                padding: '0.5rem 1.25rem', fontWeight: 800, fontSize: '0.7rem',
+                textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer',
+                opacity: ordenTerminales === 'izq-der' ? 1 : 0.5,
+              }}>
+              ➡️ Izquierda a derecha
+            </button>
+            <button
+              data-testid="orden-der-izq"
+              onClick={() => { if (ordenTerminales !== 'der-izq') invertirOrden(); }}
+              style={{
+                background: ordenTerminales === 'der-izq' ? '#ea580c' : 'rgba(255,255,255,0.05)',
+                color: '#fff', border: 'none', borderRadius: '1rem',
+                padding: '0.5rem 1.25rem', fontWeight: 800, fontSize: '0.7rem',
+                textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer',
+                opacity: ordenTerminales === 'der-izq' ? 1 : 0.5,
+              }}>
+              ⬅️ Derecha a izquierda
+            </button>
+          </div>
+        </div>
+
         <div style={styles.grid}>
-          {terminals.map(t => {
+          {terminalesDesplegadas.map(t => {
             const isEditing = editingId === t.id;
             return (
               <div key={t.id} style={{
@@ -371,7 +407,7 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
 
       {/* Grid de terminales */}
       <div style={styles.grid}>
-        {terminals.map(t => {
+        {terminalesDesplegadas.map(t => {
           const state = getCardState(t.id);
           const net = getNetStatus(t.id);
           const badge = getBadge(state);

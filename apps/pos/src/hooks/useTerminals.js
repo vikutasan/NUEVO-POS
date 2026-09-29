@@ -13,7 +13,7 @@
  * @see resolveCardState en utils/terminalCardState.js
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   fetchTerminalStatuses,
   lockTerminal,
@@ -24,6 +24,28 @@ import {
 import { resolveCardState, resolveNetStatus } from '../utils/terminalCardState.js';
 
 const POLL_INTERVAL_MS = 15_000;
+
+/** Clave de `localStorage` donde se persiste la preferencia de orden visual. */
+export const CLAVE_ORDEN_TERMINALES = 'pos.ordenTerminales';
+
+/** Orden por defecto: de izquierda a derecha (el orden canónico del array). */
+export const ORDEN_IZQ_DER = 'izq-der';
+
+/** Orden invertido: de derecha a izquierda (solo afecta al despliegue visual). */
+export const ORDEN_DER_IZQ = 'der-izq';
+
+/**
+ * Lee la preferencia de orden desde `localStorage`.
+ * Devuelve `ORDEN_IZQ_DER` si el valor falta, es inválido o el acceso falla.
+ */
+export function leerOrdenGuardado() {
+  try {
+    const valor = localStorage.getItem(CLAVE_ORDEN_TERMINALES);
+    return valor === ORDEN_DER_IZQ ? ORDEN_DER_IZQ : ORDEN_IZQ_DER;
+  } catch {
+    return ORDEN_IZQ_DER;
+  }
+}
 
 const DEFAULT_TERMINALS = [
   { id: 'T1', name: 'Terminal 1', icon: '🖥️' },
@@ -44,7 +66,28 @@ export function useTerminals(currentUser) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [locking, setLocking] = useState(false);
+  const [ordenTerminales, setOrdenTerminales] = useState(leerOrdenGuardado);
   const pollRef = useRef(null);
+
+  // Orden de despliegue derivado. NUNCA muta `terminals`: trabaja sobre una copia.
+  const terminalesDesplegadas = useMemo(
+    () => (ordenTerminales === ORDEN_DER_IZQ ? [...terminals].reverse() : terminals),
+    [terminals, ordenTerminales]
+  );
+
+  // Persistir la preferencia de orden (best effort: nunca rompe la UI).
+  useEffect(() => {
+    try {
+      localStorage.setItem(CLAVE_ORDEN_TERMINALES, ordenTerminales);
+    } catch {
+      // Silencioso: si localStorage no está disponible, la preferencia es de sesión.
+    }
+  }, [ordenTerminales]);
+
+  // Alternar el orden de despliegue (izq-der <-> der-izq).
+  const invertirOrden = useCallback(() => {
+    setOrdenTerminales(prev => (prev === ORDEN_IZQ_DER ? ORDEN_DER_IZQ : ORDEN_IZQ_DER));
+  }, []);
 
   // Cargar configuración y estado al montar
   useEffect(() => {
@@ -172,6 +215,10 @@ export function useTerminals(currentUser) {
     loading,
     error,
     locking,
+    // Orden de despliegue (F6.5)
+    ordenTerminales,
+    terminalesDesplegadas,
+    invertirOrden,
     // Resolución
     getCardState,
     getNetStatus,
