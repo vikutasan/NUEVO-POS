@@ -260,4 +260,4 @@ desmontaba el árbol completo (sin error boundary) → pantalla en blanco.
 CI: lint 0 errores · Node 3/3 · Vitest 338 tests · pytest verde · guards 7/7.
 ```
 
-**Hash:** _(se registra en el commit de cierre)_
+**Hash:** `cedf16d`
