@@ -4,6 +4,7 @@
 > **Estado:** ✅ CERRADA
 > **Fecha:** 2026-09-29
 > **Repositorio:** `NUEVO-POS`
+> **Commit:** `adbab29` — *F7.7d: unificar el vocabulario de ids de terminal y cablear el prop terminalId*
 > **Predecesoras:** [`FICHA_F7_7_ROUTER_TERMINALES.md`](./FICHA_F7_7_ROUTER_TERMINALES.md),
 > [`FICHA_F7_7b_IDENTIDAD_OCUPANTE.md`](./FICHA_F7_7b_IDENTIDAD_OCUPANTE.md),
 > [`FICHA_F7_7c_TIPO_DE_ID_EN_LA_FRONTERA.md`](./FICHA_F7_7c_TIPO_DE_ID_EN_LA_FRONTERA.md)
