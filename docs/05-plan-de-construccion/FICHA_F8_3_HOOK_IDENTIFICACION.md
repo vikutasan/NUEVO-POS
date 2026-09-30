@@ -3,7 +3,7 @@
 **Sub-fase:** F8.3 — `useCustomerIdentification.js`
 **Fecha:** 30 de septiembre de 2026
 **Estado:** ✅ CERRADA
-**Commit de esta sub-fase:** _(pendiente — se registra tras el commit)_
+**Commit de esta sub-fase:** `e20a9a2`
 
 ---
 
