@@ -184,7 +184,8 @@ GUARDIANES         → E-05, A-04, E-15, R-01, E-09, E-10 → 0 coincidencias
 | Sub-fase | Commit |
 |----------|--------|
 | F9.1.3 (UI) | `9069134` |
-| F9.1.4 (impresión + cierre) | _(se registra en el commit de seguimiento)_ |
+| F9.1.4 (impresión + cierre) | `0eeae2a` |
+| Plan Maestro v2.2 (PLANOS) | `eef9059` |
 
 ---
 
