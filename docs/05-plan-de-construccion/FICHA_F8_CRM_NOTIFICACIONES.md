@@ -5,7 +5,8 @@
 **Plan que la gobierna:** `PLAN_DE_ABORDAJE_FASE_8_POR_PARTES.md` §3.8 (v2.0)
 **Regla que gobierna la ejecución:** REGLA DURA 2 — *"Verificar, no asumir"*
 **Estado:** ✅ **CERRADA**
-**Commit de cierre:** _(pendiente — se registra en el commit de seguimiento)_
+**Commit de cierre:** `9a21267` — *"F8.7: cierre de la Fase 8 — ficha de cierre CRM + Notificaciones (9 criterios, CI verde)"*
+**Commit del Plan Maestro:** `5bebefa` (repo PLANOS-ARQUITECTONICOS) — *"docs(f8.7): Fase 8 marcada CERRADA en el Plan Maestro (v1.9)"*
 
 ---
 
