@@ -369,6 +369,8 @@ async def resumen_del_turno(
                 movement_id=m.id,
                 tipo=m.movement_type,
                 monto=Decimal(str(m.amount)),
+                motivo=m.concept,
+                creado_en=m.created_at,
             )
             for m in movimientos
         ],

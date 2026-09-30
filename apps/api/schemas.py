@@ -370,11 +370,19 @@ class MovimientoResumen(BaseModel):
     pueda ofrecer el botón ✕ de eliminar sobre cada movimiento (contrato 29).
     Sin el id, el cajero veía la lista pero no podía corregir un error de
     captura — la operación existía en el viejo POS y aquí faltaba.
+
+    FASE 10.6.3 — PARIDAD DE OPERACIÓN. Se añaden `creado_en` (la hora del
+    movimiento) y `motivo` (el concepto). El viejo POS mostraba, por cada
+    movimiento, su concepto y su hora; el nuevo POS solo mostraba tipo y monto,
+    así que el cajero no podía saber POR QUÉ se movió el dinero ni ubicarlo en
+    el tiempo. La hora viaja en UTC (RN-78) y el POS la formatea a hora local.
     """
 
     movement_id: UUID
     tipo: str
     monto: Decimal
+    motivo: str
+    creado_en: datetime
 
 
 class ResumenTurnoSalida(BaseModel):

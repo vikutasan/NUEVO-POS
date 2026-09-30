@@ -53,6 +53,21 @@ function formatearPrecio(valor) {
   });
 }
 
+/**
+ * FASE 10.6.3 — PARIDAD DE OPERACIÓN. Formatea la hora de un movimiento.
+ *
+ * El viejo POS mostraba la hora de cada movimiento en la lista; el nuevo POS
+ * solo mostraba tipo y monto, así que el cajero no podía ubicar un movimiento
+ * en el tiempo ni distinguir dos movimientos idénticos. La hora viaja en UTC
+ * (RN-78) y aquí se formatea a hora local del negocio.
+ */
+function formatearHora(iso) {
+  if (!iso) return '';
+  const fecha = new Date(iso);
+  if (Number.isNaN(fecha.getTime())) return '';
+  return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+}
+
 /** Traduce un `reason` del servicio a un mensaje humano. */
 const MENSAJES = Object.freeze({
   sin_conexion: 'No hay conexión con el servidor de caja.',
@@ -505,6 +520,13 @@ export default function GestorDeCaja({
                   <li key={m.movement_id || `${m.tipo}-${i}`} className="flex items-center justify-between gap-2">
                     <span className="flex-1">
                       {m.tipo === 'ENTRADA' ? '↑' : '↓'} {m.motivo || m.tipo}
+                    </span>
+                    {/* FASE 10.6.3 — la hora del movimiento (paridad con el viejo POS). */}
+                    <span
+                      className="text-crema-ticket/60 tabular-nums"
+                      data-testid={`hora-movimiento-${i}`}
+                    >
+                      {formatearHora(m.creado_en)}
                     </span>
                     <span className="font-semibold">{formatearPrecio(m.monto)}</span>
                     {/* FASE 10.6.2 — eliminar un movimiento mal capturado (RN-52). */}
