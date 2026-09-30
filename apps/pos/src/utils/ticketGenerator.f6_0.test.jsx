@@ -23,7 +23,7 @@ function ticketEjemplo(extra = {}) {
   return {
     account_num: 'A-0042',
     total: 125.5,
-    terminal_id: 'T2',
+    terminal_id: 'TERM-02',
     created_at: '2026-09-29T18:30:00.000Z',
     lineas: [
       { nombre: 'Concha', cantidad: 3, precio_unitario: 12.5 },
@@ -36,7 +36,7 @@ function ticketEjemplo(extra = {}) {
 /** Corte de ejemplo con movimientos. */
 function corteEjemplo(extra = {}) {
   return {
-    terminalId: 'T2',
+    terminalId: 'TERM-02',
     cajero: 'Ana',
     abiertaEn: '2026-09-29T08:00:00.000Z',
     cerradaEn: '2026-09-29T18:00:00.000Z',

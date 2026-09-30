@@ -68,8 +68,21 @@ router = APIRouter(prefix="/pos/terminals", tags=["terminales"])
 _RUTA_CONFIG = Path(__file__).resolve().parent.parent / "terminal_config.json"
 
 # Configuración por defecto: 6 terminales con el icono de monitor.
+#
+# F7.7d — UNIFICACIÓN DE LOS DOS ESPACIOS DE ID.
+#   Antes, la configuración emitía `T1..T6` mientras las sesiones, los tickets y
+#   los candados vivían en `TERM-01..TERM-06` (el vocabulario de `seed_demo.py`).
+#   Eran DOS vocabularios para la MISMA terminal física, y eso rompía:
+#     - RN-49 (una sesión de caja por terminal): la regla compara `terminal_id`,
+#       pero el candado y la sesión nunca compartían clave.
+#     - RN-59 (reporte diario por terminal): la misma terminal aparecía dos veces.
+#   La corrección es alinear la CONFIGURACIÓN al vocabulario de la semilla.
+#   NO es un renombrado de terminales existentes: RN-12 prohíbe mutar el id de
+#   una terminal que ya tiene datos, y aquí no se muta nada — se elige la
+#   convención de nombres ANTES de que existan datos. Ver FICHA_F7_7d.
 CONFIG_POR_DEFECTO: list[dict[str, str]] = [
-    {"id": f"T{n}", "name": f"Terminal {n}", "icon": "🖥️"} for n in range(1, 7)
+    {"id": f"TERM-{n:02d}", "name": f"Terminal {n}", "icon": "🖥️"}
+    for n in range(1, 7)
 ]
 
 # TTL del candado en minutos (RN-04). Un candado más viejo se considera libre.
@@ -236,7 +249,7 @@ async def _candado_de(db: AsyncSession, terminal_id: str) -> TerminalLock | None
 async def estado_terminales(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
     """Estado de ocupación de TODAS las terminales configuradas.
 
-    Devuelve un mapa `{ "T1": {occupier_id, occupier_name, locked_at,
+    Devuelve un mapa `{ "TERM-01": {occupier_id, occupier_name, locked_at,
     stale_session}, ... }`. Una terminal sin candado vigente aparece libre.
     """
     ahora = _ahora()

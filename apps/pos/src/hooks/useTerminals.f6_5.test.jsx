@@ -29,10 +29,11 @@ vi.mock('../services/terminalService.js', () => ({
   fetchTerminalStatuses: vi.fn(async () => ({})),
   lockTerminal: vi.fn(async () => ({ success: true })),
   unlockTerminal: vi.fn(async () => ({ success: true })),
+  // F7.7d — El vocabulario de ids es `TERM-0N` (el mismo del API y la semilla).
   fetchTerminalConfig: vi.fn(async () => [
-    { id: 'T1', name: 'Terminal 1', icon: '🖥️' },
-    { id: 'T2', name: 'Terminal 2', icon: '🖥️' },
-    { id: 'T3', name: 'Terminal 3', icon: '🖥️' },
+    { id: 'TERM-01', name: 'Terminal 1', icon: '🖥️' },
+    { id: 'TERM-02', name: 'Terminal 2', icon: '🖥️' },
+    { id: 'TERM-03', name: 'Terminal 3', icon: '🖥️' },
   ]),
   saveTerminalConfig: vi.fn(async () => ({ success: true })),
 }));

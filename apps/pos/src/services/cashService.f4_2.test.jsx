@@ -80,7 +80,7 @@ describe('cashService — éxito', () => {
   it('abrirTurno pasa el cuerpo tal cual al cliente', async () => {
     apiSimulada.abrirTurno.mockResolvedValue({ cash_session_id: 'caja-2' });
 
-    const cuerpo = { terminal_id: 'T1', usuario_id: 'u-1', monto_inicial: 100 };
+    const cuerpo = { terminal_id: 'TERM-01', usuario_id: 'u-1', monto_inicial: 100 };
     const r = await caja.abrirTurno(cuerpo);
 
     expect(r.outcome).toBe('ok');
@@ -168,7 +168,7 @@ describe('cashService — fallo (nunca lanza)', () => {
     );
 
     const r = await caja.abrirTurno({
-      terminal_id: 'T1',
+      terminal_id: 'TERM-01',
       usuario_id: 'u-1',
       monto_inicial: 100,
     });

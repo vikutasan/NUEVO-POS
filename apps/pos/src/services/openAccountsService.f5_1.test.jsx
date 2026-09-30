@@ -52,9 +52,9 @@ describe('openAccountsService — superficie', () => {
   it('pasa el terminal_id al cliente', async () => {
     apiSimulada.listarCuentasAbiertas.mockResolvedValue({ cuentas: [] });
 
-    await cuentas.listarCuentasAbiertas('T1');
+    await cuentas.listarCuentasAbiertas('TERM-01');
 
-    expect(apiSimulada.listarCuentasAbiertas).toHaveBeenCalledWith('T1');
+    expect(apiSimulada.listarCuentasAbiertas).toHaveBeenCalledWith('TERM-01');
   });
 });
 
@@ -71,7 +71,7 @@ describe('openAccountsService — éxito', () => {
       ],
     });
 
-    const r = await cuentas.listarCuentasAbiertas('T1');
+    const r = await cuentas.listarCuentasAbiertas('TERM-01');
 
     expect(r.outcome).toBe('ok');
     expect(r.reason).toBeNull();
@@ -82,7 +82,7 @@ describe('openAccountsService — éxito', () => {
   it('una terminal sin cuentas devuelve ok con lista vacía', async () => {
     apiSimulada.listarCuentasAbiertas.mockResolvedValue({ cuentas: [] });
 
-    const r = await cuentas.listarCuentasAbiertas('T2');
+    const r = await cuentas.listarCuentasAbiertas('TERM-02');
 
     expect(r.outcome).toBe('ok');
     expect(r.data.cuentas).toEqual([]);
@@ -91,9 +91,9 @@ describe('openAccountsService — éxito', () => {
   it('recorta espacios del terminal_id antes de llamar', async () => {
     apiSimulada.listarCuentasAbiertas.mockResolvedValue({ cuentas: [] });
 
-    await cuentas.listarCuentasAbiertas('  T1  ');
+    await cuentas.listarCuentasAbiertas('  TERM-01  ');
 
-    expect(apiSimulada.listarCuentasAbiertas).toHaveBeenCalledWith('T1');
+    expect(apiSimulada.listarCuentasAbiertas).toHaveBeenCalledWith('TERM-01');
   });
 });
 
@@ -107,7 +107,7 @@ describe('openAccountsService — fallo (nunca lanza)', () => {
       new apiSimulada.ApiError('No se pudo contactar el API', 0)
     );
 
-    const r = await cuentas.listarCuentasAbiertas('T1');
+    const r = await cuentas.listarCuentasAbiertas('TERM-01');
 
     expect(r.outcome).toBe('error');
     expect(r.reason).toBe('sin_conexion');
@@ -119,7 +119,7 @@ describe('openAccountsService — fallo (nunca lanza)', () => {
       new apiSimulada.ApiError('terminal_id vacío', 400)
     );
 
-    const r = await cuentas.listarCuentasAbiertas('T1');
+    const r = await cuentas.listarCuentasAbiertas('TERM-01');
 
     expect(r.outcome).toBe('error');
     expect(r.reason).toBe('terminal_invalida');
@@ -130,7 +130,7 @@ describe('openAccountsService — fallo (nunca lanza)', () => {
       new apiSimulada.ApiError('Datos inválidos', 422)
     );
 
-    const r = await cuentas.listarCuentasAbiertas('T1');
+    const r = await cuentas.listarCuentasAbiertas('TERM-01');
 
     expect(r.outcome).toBe('error');
     expect(r.reason).toBe('datos_invalidos');
@@ -139,7 +139,7 @@ describe('openAccountsService — fallo (nunca lanza)', () => {
   it('un error no-ApiError se traduce a su mensaje', async () => {
     apiSimulada.listarCuentasAbiertas.mockRejectedValue(new Error('boom'));
 
-    const r = await cuentas.listarCuentasAbiertas('T1');
+    const r = await cuentas.listarCuentasAbiertas('TERM-01');
 
     expect(r.outcome).toBe('error');
     expect(r.reason).toBe('boom');
@@ -158,7 +158,7 @@ describe('openAccountsService — reintentos', () => {
       .mockRejectedValueOnce(new apiSimulada.ApiError('parpadeo', 0))
       .mockResolvedValueOnce({ cuentas: [{ id: 'a-1' }] });
 
-    const r = await cuentas.listarCuentasAbiertas('T1');
+    const r = await cuentas.listarCuentasAbiertas('TERM-01');
 
     expect(r.outcome).toBe('ok');
     expect(r.data.cuentas).toHaveLength(1);
@@ -170,7 +170,7 @@ describe('openAccountsService — reintentos', () => {
       new apiSimulada.ApiError('caído', 0)
     );
 
-    const r = await cuentas.listarCuentasAbiertas('T1');
+    const r = await cuentas.listarCuentasAbiertas('TERM-01');
 
     expect(r.outcome).toBe('error');
     expect(r.reason).toBe('sin_conexion');

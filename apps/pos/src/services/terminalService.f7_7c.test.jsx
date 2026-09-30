@@ -51,32 +51,32 @@ describe('terminalService — el id de usuario viaja SIEMPRE como string (F7.7c)
 
   it('lockTerminal coerciona un id numérico a string (el caso que daba 422)', async () => {
     const llamadas = interceptarFetch();
-    await lockTerminal('T1', 1);
+    await lockTerminal('TERM-01', 1);
 
     expect(llamadas).toHaveLength(1);
-    expect(llamadas[0].cuerpo).toEqual({ terminal_id: 'T1', user_id: '1' });
+    expect(llamadas[0].cuerpo).toEqual({ terminal_id: 'TERM-01', user_id: '1' });
     // El tipo importa: un número aquí es exactamente lo que Pydantic rechaza.
     expect(typeof llamadas[0].cuerpo.user_id).toBe('string');
   });
 
   it('lockTerminal conserva un id que ya es string', async () => {
     const llamadas = interceptarFetch();
-    await lockTerminal('T2', 'cajero-1');
+    await lockTerminal('TERM-02', 'cajero-1');
 
-    expect(llamadas[0].cuerpo).toEqual({ terminal_id: 'T2', user_id: 'cajero-1' });
+    expect(llamadas[0].cuerpo).toEqual({ terminal_id: 'TERM-02', user_id: 'cajero-1' });
   });
 
   it('unlockTerminal coerciona el id numérico a string', async () => {
     const llamadas = interceptarFetch();
-    await unlockTerminal('T3', 7);
+    await unlockTerminal('TERM-03', 7);
 
-    expect(llamadas[0].cuerpo).toEqual({ terminal_id: 'T3', user_id: '7' });
+    expect(llamadas[0].cuerpo).toEqual({ terminal_id: 'TERM-03', user_id: '7' });
     expect(typeof llamadas[0].cuerpo.user_id).toBe('string');
   });
 
   it('el cuerpo serializado NO contiene un número sin comillas para user_id', async () => {
     const llamadas = interceptarFetch();
-    await lockTerminal('T4', 42);
+    await lockTerminal('TERM-04', 42);
 
     // La prueba directa del bug: el JSON crudo debe traer "42", no 42.
     expect(llamadas[0].opciones.body).toContain('"user_id":"42"');
@@ -85,10 +85,10 @@ describe('terminalService — el id de usuario viaja SIEMPRE como string (F7.7c)
 
   it('un id nulo o indefinido se normaliza a cadena vacía (no rompe la serialización)', async () => {
     const llamadas = interceptarFetch();
-    await lockTerminal('T5', null);
+    await lockTerminal('TERM-05', null);
     expect(llamadas[0].cuerpo.user_id).toBe('');
 
-    await lockTerminal('T6', undefined);
+    await lockTerminal('TERM-06', undefined);
     expect(llamadas[1].cuerpo.user_id).toBe('');
   });
 
@@ -104,7 +104,7 @@ describe('terminalService — el id de usuario viaja SIEMPRE como string (F7.7c)
 
   it('saveTerminalConfig envía la lista tal cual (sin coerción de ids de terminal)', async () => {
     const llamadas = interceptarFetch();
-    const terminales = [{ id: 'T1', name: 'Caja 1', icon: '🖥️' }];
+    const terminales = [{ id: 'TERM-01', name: 'Caja 1', icon: '🖥️' }];
     await saveTerminalConfig(terminales);
 
     expect(llamadas[0].cuerpo).toEqual({ terminals: terminales });

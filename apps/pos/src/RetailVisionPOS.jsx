@@ -57,7 +57,33 @@ import VoiceCartPanel from './components/VoiceCartPanel.jsx';
 import VisionVisor from './components/VisionVisor.jsx';
 import { OverlayExito, OverlayError } from './components/POSOverlays.jsx';
 
-export default function RetailVisionPOS() {
+/**
+ * F7.7d — LA TERMINAL ES UN PROP, NO UNA CONSTANTE.
+ *
+ * HALLAZGO 4: esta pantalla declaraba `function RetailVisionPOS()` — SIN props.
+ * `App.jsx` le pasaba `terminalId={selectedTerminal}`, pero el prop se
+ * descartaba en silencio y la pantalla caía al `CONFIG.TERMINAL_ID` hardcodeado
+ * (`'TERM-01'`). Resultado: entrabas a la Terminal 3 y la pantalla operaba
+ * contra la Terminal 1 — o contra ninguna, si la sesión vivía en otra terminal.
+ *
+ * Ahora la pantalla RECIBE la terminal elegida en el selector y la usa en todo
+ * su cableado (sesión, ticket, candado, header, ticket impreso). El
+ * `CONFIG.TERMINAL_ID` queda solo como último recurso para los tests que montan
+ * la pantalla sin props.
+ *
+ * @param {object} props
+ * @param {string} [props.terminalId] - Terminal elegida en el selector (F7.7d).
+ * @param {object} [props.currentUser] - Usuario del ERP (identidad + permisos).
+ * @param {Function} [props.onBackToTerminals] - Volver al selector de terminales.
+ */
+export default function RetailVisionPOS({
+  terminalId,
+  currentUser,
+  onBackToTerminals,
+}) {
+  // F7.7d — La terminal efectiva: el prop manda; el CONFIG es solo el fallback
+  // de los tests que montan la pantalla sin props.
+  const terminalEfectiva = terminalId || CONFIG.TERMINAL_ID;
   const { modo, esMovil } = useModo();
   const { enLinea } = useNetworkHealth();
 
@@ -89,12 +115,12 @@ export default function RetailVisionPOS() {
   const carrito = useCart({ api, ticketId, version: 0 });
   const acciones = useTicketActions({
     api,
-    terminalId: CONFIG.TERMINAL_ID,
+    terminalId: terminalEfectiva,
     channel: CONFIG.CANAL,
   });
   const locking = useTerminalLocking({
     api,
-    terminalId: CONFIG.TERMINAL_ID,
+    terminalId: terminalEfectiva,
     usuarioId: sesion?.employee_id || null,
   });
 
@@ -115,7 +141,7 @@ export default function RetailVisionPOS() {
       try {
         const [catalogo, sesionActiva] = await Promise.all([
           api.getCatalogo(CONFIG.CANAL),
-          api.getSesionActiva(CONFIG.TERMINAL_ID),
+          api.getSesionActiva(terminalEfectiva),
         ]);
         if (!activo) return;
         setCategorias(catalogo.categorias || []);
@@ -277,7 +303,7 @@ export default function RetailVisionPOS() {
   return (
     <div className="w-full h-screen flex flex-col text-crema-ticket" style={{ backgroundColor: 'rgb(var(--madera))' }}>
       <POSHeader
-        terminalId={CONFIG.TERMINAL_ID}
+        terminalId={terminalEfectiva}
         estado={estadoCuenta}
         tipoVenta={CONFIG.CANAL}
         sesionAbierta={Boolean(sesion)}
@@ -354,7 +380,7 @@ export default function RetailVisionPOS() {
             onQuitar={quitar}
             onCobrar={() => setCheckoutAbierto(true)}
             cobrando={acciones.enviando}
-            terminalId={CONFIG.TERMINAL_ID}
+            terminalId={terminalEfectiva}
             banner={banner}
           />
         </div>
@@ -385,7 +411,7 @@ export default function RetailVisionPOS() {
                 setCheckoutAbierto(true);
               }}
               cobrando={acciones.enviando}
-              terminalId={CONFIG.TERMINAL_ID}
+              terminalId={terminalEfectiva}
               banner={banner}
             />
             <button

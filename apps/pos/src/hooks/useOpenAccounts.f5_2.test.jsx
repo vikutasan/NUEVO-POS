@@ -52,7 +52,7 @@ beforeEach(() => {
 describe('F5.2 — superficie del hook', () => {
   it('expone cuentas, cargando, error, refrescar y recuperarCuenta', async () => {
     const { result } = renderHook(() =>
-      useOpenAccounts({ terminalId: 'T1', servicioCuentas: servicioOk(), clienteApi: clienteOk() })
+      useOpenAccounts({ terminalId: 'TERM-01', servicioCuentas: servicioOk(), clienteApi: clienteOk() })
     );
     // Esperamos a que la carga inicial asiente (evita el warning de act).
     await waitFor(() => expect(result.current.cargando).toBe(false));
@@ -71,11 +71,11 @@ describe('F5.2 — criterio 1: carga inicial', () => {
       cuentaEjemplo({ id: 'b', account_num: 'T-0002' }),
     ]);
     const { result } = renderHook(() =>
-      useOpenAccounts({ terminalId: 'T1', servicioCuentas, clienteApi: clienteOk() })
+      useOpenAccounts({ terminalId: 'TERM-01', servicioCuentas, clienteApi: clienteOk() })
     );
 
     await waitFor(() => expect(result.current.cargando).toBe(false));
-    expect(servicioCuentas.listarCuentasAbiertas).toHaveBeenCalledWith('T1');
+    expect(servicioCuentas.listarCuentasAbiertas).toHaveBeenCalledWith('TERM-01');
     expect(result.current.cuentas).toHaveLength(2);
     expect(result.current.error).toBeNull();
   });
@@ -96,7 +96,7 @@ describe('F5.2 — criterio 2: refrescar', () => {
   it('refrescar() vuelve a llamar al servicio', async () => {
     const servicioCuentas = servicioOk();
     const { result } = renderHook(() =>
-      useOpenAccounts({ terminalId: 'T1', servicioCuentas, clienteApi: clienteOk() })
+      useOpenAccounts({ terminalId: 'TERM-01', servicioCuentas, clienteApi: clienteOk() })
     );
 
     await waitFor(() => expect(result.current.cargando).toBe(false));
@@ -114,7 +114,7 @@ describe('F5.2 — criterio 3: recuperarCuenta (lección v6.0)', () => {
   it('llama al contrato 21 (leerTicket) y devuelve la versión fresca', async () => {
     const clienteApi = clienteOk({ id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', version: 9 });
     const { result } = renderHook(() =>
-      useOpenAccounts({ terminalId: 'T1', servicioCuentas: servicioOk(), clienteApi })
+      useOpenAccounts({ terminalId: 'TERM-01', servicioCuentas: servicioOk(), clienteApi })
     );
 
     await waitFor(() => expect(result.current.cargando).toBe(false));
@@ -132,7 +132,7 @@ describe('F5.2 — criterio 3: recuperarCuenta (lección v6.0)', () => {
   it('NO usa la copia del pizarrón: siempre pide al servidor', async () => {
     const clienteApi = clienteOk({ id: 'x', version: 42 });
     const { result } = renderHook(() =>
-      useOpenAccounts({ terminalId: 'T1', servicioCuentas: servicioOk(), clienteApi })
+      useOpenAccounts({ terminalId: 'TERM-01', servicioCuentas: servicioOk(), clienteApi })
     );
 
     await waitFor(() => expect(result.current.cargando).toBe(false));
@@ -148,7 +148,7 @@ describe('F5.2 — criterio 3: recuperarCuenta (lección v6.0)', () => {
   it('un ticketId vacío devuelve error local sin llamar al cliente', async () => {
     const clienteApi = clienteOk();
     const { result } = renderHook(() =>
-      useOpenAccounts({ terminalId: 'T1', servicioCuentas: servicioOk(), clienteApi })
+      useOpenAccounts({ terminalId: 'TERM-01', servicioCuentas: servicioOk(), clienteApi })
     );
 
     await waitFor(() => expect(result.current.cargando).toBe(false));
@@ -174,7 +174,7 @@ describe('F5.2 — criterio 4: error del servicio', () => {
       })),
     };
     const { result } = renderHook(() =>
-      useOpenAccounts({ terminalId: 'T1', servicioCuentas, clienteApi: clienteOk() })
+      useOpenAccounts({ terminalId: 'TERM-01', servicioCuentas, clienteApi: clienteOk() })
     );
 
     await waitFor(() => expect(result.current.cargando).toBe(false));
@@ -194,7 +194,7 @@ describe('F5.2 — criterio 5: cleanup', () => {
     };
 
     const { result, unmount } = renderHook(() =>
-      useOpenAccounts({ terminalId: 'T1', servicioCuentas, clienteApi: clienteOk() })
+      useOpenAccounts({ terminalId: 'TERM-01', servicioCuentas, clienteApi: clienteOk() })
     );
 
     expect(result.current.cargando).toBe(true);

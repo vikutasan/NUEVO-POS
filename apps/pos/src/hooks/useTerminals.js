@@ -47,13 +47,17 @@ export function leerOrdenGuardado() {
   }
 }
 
+// F7.7d — UNIFICACIÓN DE LOS DOS ESPACIOS DE ID.
+//   El fallback del frontend debe hablar el MISMO vocabulario que el API y que
+//   la semilla (`TERM-01..TERM-06`). Antes decía `T1..T6`, así que si el API no
+//   respondía, el selector emitía un id que ninguna sesión/ticket reconocía.
 const DEFAULT_TERMINALS = [
-  { id: 'T1', name: 'Terminal 1', icon: '🖥️' },
-  { id: 'T2', name: 'Terminal 2', icon: '🖥️' },
-  { id: 'T3', name: 'Terminal 3', icon: '🖥️' },
-  { id: 'T4', name: 'Terminal 4', icon: '🖥️' },
-  { id: 'T5', name: 'Terminal 5', icon: '🖥️' },
-  { id: 'T6', name: 'Terminal 6', icon: '🖥️' },
+  { id: 'TERM-01', name: 'Terminal 1', icon: '🖥️' },
+  { id: 'TERM-02', name: 'Terminal 2', icon: '🖥️' },
+  { id: 'TERM-03', name: 'Terminal 3', icon: '🖥️' },
+  { id: 'TERM-04', name: 'Terminal 4', icon: '🖥️' },
+  { id: 'TERM-05', name: 'Terminal 5', icon: '🖥️' },
+  { id: 'TERM-06', name: 'Terminal 6', icon: '🖥️' },
 ];
 
 /**

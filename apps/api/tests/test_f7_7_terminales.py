@@ -151,22 +151,22 @@ async def test_criterio2_status_libre_tiene_occupier_none(entorno):
     async with _cliente() as cliente:
         r = await cliente.get("/pos/terminals/status")
     estado = r.json()
-    assert "T1" in estado
-    assert estado["T1"]["occupier_id"] is None
-    assert estado["T1"]["stale_session"] is False
+    assert "TERM-01" in estado
+    assert estado["TERM-01"]["occupier_id"] is None
+    assert estado["TERM-01"]["stale_session"] is False
 
 
 @pytest.mark.asyncio
 async def test_criterio2_status_ocupada_expone_occupier(entorno):
     """Una terminal con candado vigente expone occupier_id y locked_at."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T2", "7")
+    await _sembrar_candado(entorno, "TERM-02", "7")
     async with _cliente() as cliente:
         r = await cliente.get("/pos/terminals/status")
     estado = r.json()
-    assert estado["T2"]["occupier_id"] is not None
-    assert estado["T2"]["occupier_name"] == "7"
-    assert estado["T2"]["locked_at"] is not None
+    assert estado["TERM-02"]["occupier_id"] is not None
+    assert estado["TERM-02"]["occupier_name"] == "7"
+    assert estado["TERM-02"]["locked_at"] is not None
 
 
 @pytest.mark.asyncio
@@ -179,14 +179,14 @@ async def test_criterio2_status_expone_occupier_ref_original(entorno):
     pinta como "ocupada por otro" — impidiendo entrar.
     """
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T3", "1")
+    await _sembrar_candado(entorno, "TERM-03", "1")
     async with _cliente() as cliente:
         r = await cliente.get("/pos/terminals/status")
     estado = r.json()
     # El UUID canónico sigue presente (C-01)...
-    assert estado["T3"]["occupier_id"] != "1"
+    assert estado["TERM-03"]["occupier_id"] != "1"
     # ...pero además se expone el id original para que el frontend compare.
-    assert estado["T3"]["occupier_ref"] == "1"
+    assert estado["TERM-03"]["occupier_ref"] == "1"
 
 
 @pytest.mark.asyncio
@@ -196,7 +196,7 @@ async def test_criterio2_occupier_ref_es_none_si_libre(entorno):
     async with _cliente() as cliente:
         r = await cliente.get("/pos/terminals/status")
     estado = r.json()
-    assert estado["T1"]["occupier_ref"] is None
+    assert estado["TERM-01"]["occupier_ref"] is None
 
 
 @pytest.mark.asyncio
@@ -205,12 +205,12 @@ async def test_criterio2_occupier_ref_sobrevive_al_lock(entorno):
     await _limpiar(entorno)
     async with _cliente() as cliente:
         await cliente.post(
-            "/pos/terminals/lock", json={"terminal_id": "T4", "user_id": "1"}
+            "/pos/terminals/lock", json={"terminal_id": "TERM-04", "user_id": "1"}
         )
         r = await cliente.get("/pos/terminals/status")
     estado = r.json()
-    assert estado["T4"]["occupier_ref"] == "1"
-    assert estado["T4"]["occupier_id"] != "1"
+    assert estado["TERM-04"]["occupier_ref"] == "1"
+    assert estado["TERM-04"]["occupier_id"] != "1"
 
 
 # ---------------------------------------------------------------------------
@@ -222,10 +222,10 @@ async def test_criterio2_occupier_ref_sobrevive_al_lock(entorno):
 async def test_criterio3_lock_ocupada_por_otro_da_409(entorno):
     """Tomar una terminal ocupada por otro responde 409 (RN-03)."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T1", "7")
+    await _sembrar_candado(entorno, "TERM-01", "7")
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/lock", json={"terminal_id": "T1", "user_id": "9"}
+            "/pos/terminals/lock", json={"terminal_id": "TERM-01", "user_id": "9"}
         )
     assert r.status_code == 409, r.text
     assert r.json().get("regla") == "RN-03"
@@ -237,13 +237,13 @@ async def test_criterio3_lock_libre_da_200(entorno):
     await _limpiar(entorno)
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/lock", json={"terminal_id": "T3", "user_id": "7"}
+            "/pos/terminals/lock", json={"terminal_id": "TERM-03", "user_id": "7"}
         )
     assert r.status_code == 200, r.text
     assert r.json()["success"] is True
     async with _cliente() as cliente:
         estado = (await cliente.get("/pos/terminals/status")).json()
-    assert estado["T3"]["occupier_name"] == "7"
+    assert estado["TERM-03"]["occupier_name"] == "7"
 
 
 # ---------------------------------------------------------------------------
@@ -255,25 +255,25 @@ async def test_criterio3_lock_libre_da_200(entorno):
 async def test_criterio4_candado_vencido_se_reporta_libre(entorno):
     """Un candado más viejo que el TTL se reporta como libre (RN-04)."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T4", "7", edad_minutos=60)
+    await _sembrar_candado(entorno, "TERM-04", "7", edad_minutos=60)
     async with _cliente() as cliente:
         estado = (await cliente.get("/pos/terminals/status")).json()
-    assert estado["T4"]["occupier_id"] is None
+    assert estado["TERM-04"]["occupier_id"] is None
 
 
 @pytest.mark.asyncio
 async def test_criterio4_candado_vencido_lo_toma_otro(entorno):
     """Un candado vencido puede ser tomado por otro usuario (RN-04)."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T5", "7", edad_minutos=60)
+    await _sembrar_candado(entorno, "TERM-05", "7", edad_minutos=60)
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/lock", json={"terminal_id": "T5", "user_id": "9"}
+            "/pos/terminals/lock", json={"terminal_id": "TERM-05", "user_id": "9"}
         )
     assert r.status_code == 200, r.text
     async with _cliente() as cliente:
         estado = (await cliente.get("/pos/terminals/status")).json()
-    assert estado["T5"]["occupier_name"] == "9"
+    assert estado["TERM-05"]["occupier_name"] == "9"
 
 
 # ---------------------------------------------------------------------------
@@ -285,10 +285,10 @@ async def test_criterio4_candado_vencido_lo_toma_otro(entorno):
 async def test_criterio5_no_dueno_no_libera_403(entorno):
     """Un usuario que no es dueño no puede liberar (RN-05, 403)."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T1", "7")
+    await _sembrar_candado(entorno, "TERM-01", "7")
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/unlock", json={"terminal_id": "T1", "user_id": "9"}
+            "/pos/terminals/unlock", json={"terminal_id": "TERM-01", "user_id": "9"}
         )
     assert r.status_code == 403, r.text
     assert r.json().get("regla") == "RN-05"
@@ -298,25 +298,25 @@ async def test_criterio5_no_dueno_no_libera_403(entorno):
 async def test_criterio5_dueno_libera_200(entorno):
     """El dueño del candado lo libera con 200 (RN-05)."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T1", "7")
+    await _sembrar_candado(entorno, "TERM-01", "7")
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/unlock", json={"terminal_id": "T1", "user_id": "7"}
+            "/pos/terminals/unlock", json={"terminal_id": "TERM-01", "user_id": "7"}
         )
     assert r.status_code == 200, r.text
     async with _cliente() as cliente:
         estado = (await cliente.get("/pos/terminals/status")).json()
-    assert estado["T1"]["occupier_id"] is None
+    assert estado["TERM-01"]["occupier_id"] is None
 
 
 @pytest.mark.asyncio
 async def test_criterio5_admin_fuerza_desbloqueo(entorno):
     """Un administrador puede forzar el desbloqueo (RN-06)."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T1", "7")
+    await _sembrar_candado(entorno, "TERM-01", "7")
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/unlock", json={"terminal_id": "T1", "user_id": "admin1"}
+            "/pos/terminals/unlock", json={"terminal_id": "TERM-01", "user_id": "admin1"}
         )
     assert r.status_code == 200, r.text
 
@@ -330,10 +330,10 @@ async def test_criterio5_admin_fuerza_desbloqueo(entorno):
 async def test_criterio6_heartbeat_del_dueno_renueva(entorno):
     """El dueño renueva su candado con el heartbeat (RN-07, 200)."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T1", "7", edad_minutos=10)
+    await _sembrar_candado(entorno, "TERM-01", "7", edad_minutos=10)
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/T1/heartbeat", json={"usuario_id": "7"}
+            "/pos/terminals/TERM-01/heartbeat", json={"usuario_id": "7"}
         )
     assert r.status_code == 200, r.text
     assert r.json()["success"] is True
@@ -343,10 +343,10 @@ async def test_criterio6_heartbeat_del_dueno_renueva(entorno):
 async def test_criterio6_heartbeat_ajeno_da_409(entorno):
     """El latido de un usuario que no es dueño no resucita el candado (RN-07)."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T1", "7")
+    await _sembrar_candado(entorno, "TERM-01", "7")
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/T1/heartbeat", json={"usuario_id": "9"}
+            "/pos/terminals/TERM-01/heartbeat", json={"usuario_id": "9"}
         )
     assert r.status_code == 409, r.text
     assert r.json().get("regla") == "RN-07"
@@ -358,7 +358,7 @@ async def test_criterio6_heartbeat_sin_candado_da_409(entorno):
     await _limpiar(entorno)
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/T6/heartbeat", json={"usuario_id": "7"}
+            "/pos/terminals/TERM-06/heartbeat", json={"usuario_id": "7"}
         )
     assert r.status_code == 409, r.text
 
@@ -373,24 +373,24 @@ async def test_criterio7_lock_por_id_equivale_al_de_fase1(entorno):
     """`POST /{id}/lock` (Fase 3.4) crea el mismo candado que el de Fase 1."""
     await _limpiar(entorno)
     async with _cliente() as cliente:
-        r = await cliente.post("/pos/terminals/T2/lock", json={"usuario_id": "7"})
+        r = await cliente.post("/pos/terminals/TERM-02/lock", json={"usuario_id": "7"})
     assert r.status_code == 200, r.text
     async with _cliente() as cliente:
         estado = (await cliente.get("/pos/terminals/status")).json()
-    assert estado["T2"]["occupier_name"] == "7"
+    assert estado["TERM-02"]["occupier_name"] == "7"
 
 
 @pytest.mark.asyncio
 async def test_criterio7_unlock_por_id_libera(entorno):
     """`POST /{id}/unlock` (Fase 3.4) libera el candado del dueño."""
     await _limpiar(entorno)
-    await _sembrar_candado(entorno, "T2", "7")
+    await _sembrar_candado(entorno, "TERM-02", "7")
     async with _cliente() as cliente:
-        r = await cliente.post("/pos/terminals/T2/unlock", json={"usuario_id": "7"})
+        r = await cliente.post("/pos/terminals/TERM-02/unlock", json={"usuario_id": "7"})
     assert r.status_code == 200, r.text
     async with _cliente() as cliente:
         estado = (await cliente.get("/pos/terminals/status")).json()
-    assert estado["T2"]["occupier_id"] is None
+    assert estado["TERM-02"]["occupier_id"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +417,7 @@ async def test_criterio8_guardar_y_releer_config(entorno):
             "/pos/terminals/config",
             json={
                 "terminals": [
-                    {"id": f"T{n}", "name": f"Terminal {n}", "icon": "🖥️"}
+                    {"id": f"TERM-{n:02d}", "name": f"Terminal {n}", "icon": "🖥️"}
                     for n in range(1, 7)
                 ]
             },
@@ -445,7 +445,7 @@ async def test_criterio9_usuario_id_vacio_es_rechazado(entorno):
     """Un `usuario_id` vacío es rechazado con 422."""
     await _limpiar(entorno)
     async with _cliente() as cliente:
-        r = await cliente.post("/pos/terminals/T1/lock", json={"usuario_id": ""})
+        r = await cliente.post("/pos/terminals/TERM-01/lock", json={"usuario_id": ""})
     assert r.status_code == 422, r.text
 
 
@@ -462,7 +462,7 @@ async def test_criterio10_user_id_numerico_es_rechazado_422(entorno):
     await _limpiar(entorno)
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/lock", json={"terminal_id": "T1", "user_id": 1}
+            "/pos/terminals/lock", json={"terminal_id": "TERM-01", "user_id": 1}
         )
     assert r.status_code == 422, r.text
     assert "string" in r.text.lower()
@@ -474,7 +474,7 @@ async def test_criterio10_user_id_texto_es_aceptado(entorno):
     await _limpiar(entorno)
     async with _cliente() as cliente:
         r = await cliente.post(
-            "/pos/terminals/lock", json={"terminal_id": "T1", "user_id": "1"}
+            "/pos/terminals/lock", json={"terminal_id": "TERM-01", "user_id": "1"}
         )
     assert r.status_code == 200, r.text
     assert r.json()["success"] is True

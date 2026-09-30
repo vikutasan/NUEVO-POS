@@ -4,7 +4,7 @@
  * Verifica los 3 criterios del plan F6.5 §5.2:
  *  1. El selector de orden solo se renderiza en modo gestor (canManage === true).
  *  2. Al pulsar "Derecha a izquierda", el orden visual de las tarjetas se invierte.
- *  3. Los id de las tarjetas (T1, T2…) NO cambian al invertir el orden.
+ *  3. Los id de las tarjetas (TERM-01, TERM-02…) NO cambian al invertir el orden.
  *
  * @see PLAN_DE_ABORDAJE_FASE_6_5_ORDEN_TERMINALES.md §5.2
  */
@@ -18,10 +18,11 @@ vi.mock('../services/terminalService.js', () => ({
   fetchTerminalStatuses: vi.fn(async () => ({})),
   lockTerminal: vi.fn(async () => ({ success: true })),
   unlockTerminal: vi.fn(async () => ({ success: true })),
+  // F7.7d — El vocabulario de ids es `TERM-0N` (el mismo del API y la semilla).
   fetchTerminalConfig: vi.fn(async () => [
-    { id: 'T1', name: 'Terminal 1', icon: '🖥️' },
-    { id: 'T2', name: 'Terminal 2', icon: '🖥️' },
-    { id: 'T3', name: 'Terminal 3', icon: '🖥️' },
+    { id: 'TERM-01', name: 'Terminal 1', icon: '🖥️' },
+    { id: 'TERM-02', name: 'Terminal 2', icon: '🖥️' },
+    { id: 'TERM-03', name: 'Terminal 3', icon: '🖥️' },
   ]),
   saveTerminalConfig: vi.fn(async () => ({ success: true })),
 }));
@@ -64,15 +65,15 @@ describe('F6.5.1 — Orden de terminales (UI)', () => {
     await montar(ADMIN);
     await abrirGestor();
 
-    // Orden canónico: T1, T2, T3.
-    const idsAntes = screen.getAllByText(/^T\d$/).map(n => n.textContent);
-    expect(idsAntes).toEqual(['T1', 'T2', 'T3']);
+    // Orden canónico: TERM-01, TERM-02, TERM-03.
+    const idsAntes = screen.getAllByText(/^TERM-\d\d$/).map(n => n.textContent);
+    expect(idsAntes).toEqual(['TERM-01', 'TERM-02', 'TERM-03']);
 
     fireEvent.click(screen.getByTestId('orden-der-izq'));
 
     await waitFor(() => {
-      const idsDespues = screen.getAllByText(/^T\d$/).map(n => n.textContent);
-      expect(idsDespues).toEqual(['T3', 'T2', 'T1']);
+      const idsDespues = screen.getAllByText(/^TERM-\d\d$/).map(n => n.textContent);
+      expect(idsDespues).toEqual(['TERM-03', 'TERM-02', 'TERM-01']);
     });
   });
 
@@ -80,12 +81,12 @@ describe('F6.5.1 — Orden de terminales (UI)', () => {
     await montar(ADMIN);
     await abrirGestor();
 
-    const idsAntes = screen.getAllByText(/^T\d$/).map(n => n.textContent).sort();
+    const idsAntes = screen.getAllByText(/^TERM-\d\d$/).map(n => n.textContent).sort();
 
     fireEvent.click(screen.getByTestId('orden-der-izq'));
 
     await waitFor(() => {
-      const idsDespues = screen.getAllByText(/^T\d$/).map(n => n.textContent).sort();
+      const idsDespues = screen.getAllByText(/^TERM-\d\d$/).map(n => n.textContent).sort();
       // El CONJUNTO de ids es idéntico: solo cambió el orden, no la identidad.
       expect(idsDespues).toEqual(idsAntes);
     });
