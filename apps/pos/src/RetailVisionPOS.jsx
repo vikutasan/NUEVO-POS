@@ -59,7 +59,9 @@ import OrderProgrammingModal from './components/OrderProgrammingModal.jsx';
 // F8.6 — Integración con CRM y Notificaciones (lado POS).
 import CustomerIdentificationPanel from './components/CustomerIdentificationPanel.jsx';
 import TicketDeliveryPanel from './components/TicketDeliveryPanel.jsx';
-import { OverlayExito, OverlayError } from './components/POSOverlays.jsx';
+import { OverlayExito, OverlayError, OfflineBanner } from './components/POSOverlays.jsx';
+// F9.0.1 — Salvaguarda de salida con cuenta abierta (UX heredada del viejo POS).
+import ExitAccountModal from './components/ExitAccountModal.jsx';
 
 /**
  * F7.7d — LA TERMINAL ES UN PROP, NO UNA CONSTANTE.
@@ -122,6 +124,9 @@ export default function RetailVisionPOS({
   const [clienteAbierto, setClienteAbierto] = useState(false);
   const [cliente, setCliente] = useState(null);
   const [entregaAbierta, setEntregaAbierta] = useState(false);
+  // F9.0.1 — Salvaguarda de salida: si el operador intenta salir con una cuenta
+  // abierta, se muestra `ExitAccountModal` en vez de salir en silencio.
+  const [salidaAbierta, setSalidaAbierta] = useState(false);
 
   // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
   // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
@@ -342,6 +347,37 @@ export default function RetailVisionPOS({
     [asegurarTicket]
   );
 
+  // ── F9.0.1 — Salvaguarda de salida con cuenta abierta ──────────────────────
+  // UX heredada del viejo POS (§6.8): si hay ítems en la cuenta, salir NO es
+  // silencioso. Se intercepta el intento y se ofrece el modal de 3 caminos.
+  // Con la cuenta vacía, se sale directo (sin fricción innecesaria).
+  const intentarSalir = useCallback(() => {
+    if (carrito.lineas.length > 0) {
+      setSalidaAbierta(true);
+      return;
+    }
+    onBackToTerminals?.();
+  }, [carrito.lineas.length, onBackToTerminals]);
+
+  // "Enviar al Pizarrón y salir": la cuenta YA está persistida por la
+  // persistencia atómica por ítem (contratos 18–20). Solo se sale; NO se borra.
+  const salirEnviandoAlPizarron = useCallback(() => {
+    setSalidaAbierta(false);
+    onBackToTerminals?.();
+  }, [onBackToTerminals]);
+
+  // "Salir sin enviar — perder cuenta": acción destructiva. Se descarta la
+  // cuenta (clearCart) y se sale.
+  const salirSinEnviar = useCallback(async () => {
+    setSalidaAbierta(false);
+    try {
+      await carrito.clearCart();
+    } catch {
+      // Si el descarte falla, se sale igual: la intención del operador es salir.
+    }
+    onBackToTerminals?.();
+  }, [carrito, onBackToTerminals]);
+
   const total = carrito.total;
   const estadoCuenta = acciones.ticket
     ? acciones.ticket.status === 'PAID'
@@ -360,6 +396,7 @@ export default function RetailVisionPOS({
         sesionAbierta={Boolean(sesion)}
         enLinea={enLinea}
         modo={modo}
+        onCambiarEstacion={intentarSalir}
         onAbrirTema={() => setTemaAbierto(true)}
         onAbrirVoz={() => setVozAbierta(true)}
         vozDisponible={voz.disponible}
@@ -491,6 +528,10 @@ export default function RetailVisionPOS({
         />
       ) : null}
 
+      {/* F9.0.3 — Aviso fijo de red caída (cicatriz v6.1 $453). Solo estado de
+          red: el nuevo POS no tiene cola local, así que no hay conteo. */}
+      <OfflineBanner visible={!enLinea} />
+
       <OverlayExito
         ticket={acciones.ticket && acciones.ticket.status === 'PAID' ? acciones.ticket : null}
         onNuevaVenta={() => {
@@ -502,6 +543,15 @@ export default function RetailVisionPOS({
       <OverlayError
         mensaje={error}
         onCerrar={() => setError(null)}
+      />
+
+      {/* F9.0.1 — Salvaguarda de salida con cuenta abierta (UX heredada §6.8). */}
+      <ExitAccountModal
+        visible={salidaAbierta}
+        cantidadItems={carrito.lineas.length}
+        onEnviarYSalir={salirEnviandoAlPizarron}
+        onSalirSinEnviar={salirSinEnviar}
+        onCancelar={() => setSalidaAbierta(false)}
       />
 
       {/* ── Paneles de IA (F7.5) ──────────────────────────────────────────────

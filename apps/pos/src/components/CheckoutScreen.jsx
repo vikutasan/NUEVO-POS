@@ -23,6 +23,8 @@
 
 import React, { useMemo, useState } from 'react';
 
+import TecladoNumerico from './TecladoNumerico.jsx';
+
 /** Formatea un precio numérico como moneda mexicana. */
 function formatearPrecio(valor) {
   const numero = Number(valor);
@@ -125,6 +127,13 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
                   </button>
                 ))}
               </div>
+
+              {/* Teclado numérico táctil (F9.0.2) — alternativa al input nativo */}
+              <TecladoNumerico
+                valor={recibido}
+                onCambiar={setRecibido}
+                deshabilitado={procesando}
+              />
 
               {mensajeValidacion ? (
                 <p className="text-sm text-peligro font-semibold">{mensajeValidacion}</p>

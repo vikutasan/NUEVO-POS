@@ -1,5 +1,5 @@
 /**
- * `POSOverlays` — modales de confirmación del POS (FASE 3.4).
+ * `POSOverlays` — modales de confirmación del POS (FASE 3.4) + banner de red (F9.0.3).
  *
  * Agrupa los overlays que la pantalla raíz necesita, para que `RetailVisionPOS`
  * sea un orquestador y no un monolito de JSX:
@@ -7,9 +7,17 @@
  *   - `OverlayExito`   — venta cobrada (folio + total + "Nueva venta").
  *   - `OverlayError`   — fallo persistente (motivo + "Reintentar" / "Cerrar").
  *   - `OverlayConfirmar` — confirmación genérica (título + mensaje + 2 acciones).
+ *   - `OfflineBanner`  — aviso fijo de red caída (F9.0.3, cicatriz v6.1 $453).
  *
  * Todos usan `role="dialog"` + `aria-modal="true"` y respetan el target táctil
  * de 44×44px (R-04). El contenedor raíz es `fixed inset-0` (fluido, R-01).
+ *
+ * DECISIÓN ARQUITECTÓNICA (F9.0, v1.1): el `OfflineBanner` del nuevo POS NO
+ * muestra un conteo de pendientes. El nuevo POS no tiene cola local: cada
+ * acción va directo al servidor (el servidor es la única fuente de verdad).
+ * Por eso el banner solo comunica el ESTADO de red y que el cobro está
+ * bloqueado. Si algún día se construye un modo offline-first, será una fase
+ * dedicada (p. ej. "F10 — Modo offline-first"), no un parche de UX.
  */
 
 import React from 'react';
@@ -130,4 +138,34 @@ export function OverlayConfirmar({
   );
 }
 
-export default { OverlayExito, OverlayError, OverlayConfirmar };
+/**
+ * Banner fijo de red caída (F9.0.3).
+ *
+ * Rescate de UX del viejo POS: el viejo POS avisaba con un banner persistente
+ * cuando no había red. Aquí se conserva el aviso, pero SIN conteo de
+ * pendientes (el nuevo POS no tiene cola local — ver la nota de arriba).
+ *
+ * Es persistente: NO se auto-oculta. Solo desaparece cuando `visible` pasa a
+ * `false` (es decir, cuando la red vuelve). Usa `role="alert"` para que los
+ * lectores de pantalla lo anuncien de inmediato.
+ *
+ * @param {object} props
+ * @param {boolean} props.visible - `true` cuando no hay red.
+ */
+export function OfflineBanner({ visible = false }) {
+  if (!visible) return null;
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className="fixed top-0 inset-x-0 z-[60] bg-peligro text-crema-ticket px-4 py-3 flex items-center justify-center gap-2 text-center font-semibold shadow-lg"
+    >
+      <span aria-hidden="true">📡</span>
+      <span>
+        Sin conexión con el servidor. El cobro está bloqueado hasta que vuelva la red.
+      </span>
+    </div>
+  );
+}
+
+export default { OverlayExito, OverlayError, OverlayConfirmar, OfflineBanner };
