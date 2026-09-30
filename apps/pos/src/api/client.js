@@ -260,6 +260,19 @@ export function registrarMovimiento(cuerpo) {
   });
 }
 
+/**
+ * DELETE /cash/movements/{id} — elimina un movimiento del turno (contrato 29, RN-52).
+ *
+ * FASE 10.6.2 — paridad de operación. El viejo POS permitía borrar un
+ * movimiento mal capturado mientras la caja estuviera abierta; el nuevo POS lo
+ * había omitido. Solo funciona con la sesión ABIERTA (RN-52).
+ *
+ * @param {string} movementId
+ */
+export function eliminarMovimiento(movementId) {
+  return peticion(`/cash/movements/${movementId}`, { method: 'DELETE' });
+}
+
 /** GET /cash/session-summary/{id} — resumen del turno (contrato 12, RN-53). */
 export function getResumenTurno(cashSessionId) {
   return peticion(`/cash/session-summary/${cashSessionId}`);

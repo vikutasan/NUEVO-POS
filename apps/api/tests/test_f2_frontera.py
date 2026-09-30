@@ -34,13 +34,15 @@ MODULOS_AJENOS = (
     "stats",
 )
 
-# Los 28 contratos esperados: los 17 del Documento 9 §10 (FASE 2) más los 5
+# Los 29 contratos esperados: los 17 del Documento 9 §10 (FASE 2) más los 5
 # atómicos de la FASE 3.2 (corrigen el defecto D-2: endpoints sin contrato) más
 # el contrato 23 de la FASE 5.0 (pizarrón de cuentas abiertas) más los 2 de la
 # FASE 7.0 (capacidades de IA — cierran la brecha de la DT-07) más los 2 de la
 # FASE 8.0 (CRM y Notificaciones — lado POS) más el contrato 28 de la FASE 10.4
-# (contexto diario post-corte — cierra la brecha B-02).
-LOS_28_CONTRATOS = (
+# (contexto diario post-corte — cierra la brecha B-02) más el contrato 29 de la
+# FASE 10.6.2 (eliminar movimiento de caja — cierra la brecha de paridad de
+# operación del Gestor de Caja).
+LOS_29_CONTRATOS = (
     "catalogo.productos_para_venta",
     "almacenes.consumir_por_venta",
     "almacenes.disponibilidad",
@@ -72,6 +74,8 @@ LOS_28_CONTRATOS = (
     # ── FASE 8.0 — CRM y Notificaciones (lado POS) ─────────────────────────
     "clientes.beneficios_para_ticket",
     "notificaciones.encolar_ticket",
+    # ── FASE 10.6.2 — Eliminar movimiento de caja (proveedor: Caja) ────────
+    "caja.eliminar_movimiento",
     # ── FASE 10.4 — Contexto diario post-corte (proveedor: POS) ────────────
     "pos.contexto_diario",
 )
@@ -154,11 +158,11 @@ def test_criterio1_los_contratos_no_importan_modelos():
 # ── Criterio 2: cada contrato tiene su firma ───────────────────────────────
 
 
-def test_criterio2_hay_exactamente_28_contratos():
-    """El registro declara los 28 contratos (17 F2 + 5 F3.2 + 1 F5.0 + 2 F7.0 + 2 F8.0 + 1 F10.4)."""
-    assert len(CONTRATOS) == 28, f"Se esperaban 28 contratos, hay {len(CONTRATOS)}"
+def test_criterio2_hay_exactamente_29_contratos():
+    """El registro declara los 29 contratos (17 F2 + 5 F3.2 + 1 F5.0 + 2 F7.0 + 2 F8.0 + 1 F10.4 + 1 F10.6.2)."""
+    assert len(CONTRATOS) == 29, f"Se esperaban 29 contratos, hay {len(CONTRATOS)}"
     nombres = tuple(c.nombre for c in CONTRATOS)
-    assert nombres == LOS_28_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
+    assert nombres == LOS_29_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
 
 
 def test_criterio2_cada_contrato_tiene_firma_documentada():
@@ -223,6 +227,6 @@ def test_criterio3_el_pos_es_proveedor_en_sus_contratos():
     ], f"El POS es proveedor en contratos inesperados: {proveedor_pos}"
 
 
-def test_listar_contratos_devuelve_los_28():
-    """La función pública del paquete devuelve los 28 contratos."""
-    assert len(listar_contratos()) == 28
+def test_listar_contratos_devuelve_los_29():
+    """La función pública del paquete devuelve los 29 contratos."""
+    assert len(listar_contratos()) == 29

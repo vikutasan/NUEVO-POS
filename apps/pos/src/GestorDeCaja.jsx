@@ -35,11 +35,12 @@
  * @see PLAN_DE_ABORDAJE_F10_4_CONTEXTO_DIARIO.md
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as caja from './services/cashService.js';
 import * as contexto from './services/dailyContextService.js';
 import { esOk } from './utils/outcome.js';
 import DailyContextModal from './components/DailyContextModal.jsx';
+import TecladoTactil from './components/TecladoTactil.jsx';
 
 /** Formatea un valor como moneda mexicana. */
 function formatearPrecio(valor) {
@@ -105,6 +106,85 @@ export default function GestorDeCaja({
   const [conteoCredito, setConteoCredito] = useState('');
   const [conteoDebito, setConteoDebito] = useState('');
   const [diferencia, setDiferencia] = useState(null);
+
+  // FASE 10.6.1 — máquina de foco del teclado táctil. `campoActivo` es el nombre
+  // del campo que el teclado está editando (null = ninguno). El teclado solo
+  // emite teclas; aquí se decide qué campo recibe cada una.
+  const [campoActivo, setCampoActivo] = useState(null);
+
+  // Espejo de los valores en un ref: PROHIBICIÓN #3 — los callbacks leen del
+  // ref, nunca de un cierre sobre el estado de React (evita el bug del $453).
+  const valoresRef = useRef({});
+  valoresRef.current = {
+    fondoInicial,
+    montoMov,
+    conteoEfectivo,
+    conteoCredito,
+    conteoDebito,
+  };
+
+  /** Los campos que el teclado táctil puede editar, en orden de tabulación. */
+  const CAMPOS = useMemo(
+    () => ({
+      fondoInicial: { etiqueta: 'Fondo inicial', set: setFondoInicial },
+      montoMov: { etiqueta: 'Monto del movimiento', set: setMontoMov },
+      conteoEfectivo: { etiqueta: 'Efectivo contado', set: setConteoEfectivo },
+      conteoCredito: { etiqueta: 'Crédito contado', set: setConteoCredito },
+      conteoDebito: { etiqueta: 'Débito contado', set: setConteoDebito },
+    }),
+    [],
+  );
+
+  /** Orden de tabulación por estado (ENTER avanza al siguiente campo). */
+  const ORDEN_POR_ESTADO = useMemo(
+    () => ({
+      [ESTADOS.SIN_TURNO]: ['fondoInicial'],
+      [ESTADOS.ABIERTO]: ['montoMov'],
+      [ESTADOS.CIERRE]: ['conteoEfectivo', 'conteoCredito', 'conteoDebito'],
+    }),
+    [],
+  );
+
+  /**
+   * Aplica una tecla al campo activo respetando las reglas de captura de dinero:
+   * un solo punto decimal, máximo dos decimales, sin ceros a la izquierda.
+   * Devuelve el nuevo texto del campo.
+   */
+  const aplicarTecla = useCallback((actual, tecla) => {
+    const texto = String(actual ?? '');
+    if (tecla === 'C') return '';
+    if (tecla === '←') return texto.slice(0, -1);
+    if (tecla === '.') {
+      if (texto.includes('.')) return texto; // un solo punto
+      return texto === '' ? '0.' : `${texto}.`;
+    }
+    // Dígito.
+    const punto = texto.indexOf('.');
+    if (punto >= 0 && texto.length - punto > 2) return texto; // máximo 2 decimales
+    if (texto === '0') return tecla; // sin ceros a la izquierda
+    return `${texto}${tecla}`;
+  }, []);
+
+  /** Maneja una tecla del teclado táctil (máquina de foco). */
+  const alPulsarTecla = useCallback(
+    (tecla) => {
+      if (!campoActivo) return;
+      const campo = CAMPOS[campoActivo];
+      if (!campo) return;
+
+      if (tecla === 'ENTER') {
+        const orden = ORDEN_POR_ESTADO[estado] || [];
+        const i = orden.indexOf(campoActivo);
+        const siguiente = orden[i + 1] || null;
+        setCampoActivo(siguiente);
+        return;
+      }
+
+      const actual = valoresRef.current[campoActivo];
+      campo.set(aplicarTecla(actual, tecla));
+    },
+    [campoActivo, CAMPOS, ORDEN_POR_ESTADO, estado, aplicarTecla],
+  );
 
   /** Carga el turno activo al montar (una sola vez, sin timers). */
   useEffect(() => {
@@ -191,6 +271,30 @@ export default function GestorDeCaja({
     await refrescarResumen();
   }, [servicio, turno, tipoMov, montoMov, motivoMov, refrescarResumen]);
 
+  /**
+   * Elimina un movimiento mal capturado (RN-52, contrato 29).
+   *
+   * FASE 10.6.2 — paridad de operación. El viejo POS permitía borrar un
+   * movimiento mientras la caja estuviera abierta; el nuevo POS no ofrecía
+   * forma de corregir un error de captura. Solo se permite con la caja
+   * ABIERTA (RN-52): si el API responde 400, se muestra el motivo.
+   */
+  const alEliminarMovimiento = useCallback(
+    async (movementId) => {
+      setError(null);
+      setOcupado(true);
+      const r = await servicio.eliminarMovimiento(movementId);
+      setOcupado(false);
+
+      if (!esOk(r)) {
+        setError(mensajeDe(r.reason));
+        return;
+      }
+      await refrescarResumen();
+    },
+    [servicio, refrescarResumen],
+  );
+
   /** Cierra el turno con los conteos físicos (RN-54, RN-55). */
   const alCerrarTurno = useCallback(async () => {
     setError(null);
@@ -276,13 +380,16 @@ export default function GestorDeCaja({
           <label className="flex flex-col gap-2 text-sm text-crema-ticket">
             Fondo inicial
             <input
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={fondoInicial}
               onChange={(e) => setFondoInicial(e.target.value)}
+              onFocus={() => setCampoActivo('fondoInicial')}
               aria-label="Fondo inicial"
-              className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 px-4"
+              data-testid="campo-fondoInicial"
+              className={`min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border px-4 ${
+                campoActivo === 'fondoInicial' ? 'border-acento' : 'border-white/10'
+              }`}
             />
           </label>
           <button
@@ -395,11 +502,22 @@ export default function GestorDeCaja({
                 <li className="text-crema-ticket/50">Sin movimientos.</li>
               ) : (
                 movimientos.map((m, i) => (
-                  <li key={`${m.tipo}-${i}`} className="flex justify-between">
-                    <span>
+                  <li key={m.movement_id || `${m.tipo}-${i}`} className="flex items-center justify-between gap-2">
+                    <span className="flex-1">
                       {m.tipo === 'ENTRADA' ? '↑' : '↓'} {m.motivo || m.tipo}
                     </span>
                     <span className="font-semibold">{formatearPrecio(m.monto)}</span>
+                    {/* FASE 10.6.2 — eliminar un movimiento mal capturado (RN-52). */}
+                    <button
+                      type="button"
+                      onClick={() => alEliminarMovimiento(m.movement_id)}
+                      disabled={ocupado || !m.movement_id}
+                      aria-label={`Eliminar movimiento ${m.motivo || m.tipo}`}
+                      data-testid={`eliminar-movimiento-${i}`}
+                      className="min-h-tactil min-w-tactil rounded-canon35 bg-peligro/20 text-peligro border border-peligro/40 font-bold disabled:opacity-40"
+                    >
+                      ✕
+                    </button>
                   </li>
                 ))
               )}
@@ -431,14 +549,17 @@ export default function GestorDeCaja({
                 </button>
               </div>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={montoMov}
                 onChange={(e) => setMontoMov(e.target.value)}
+                onFocus={() => setCampoActivo('montoMov')}
                 aria-label="Monto del movimiento"
                 placeholder="Monto"
-                className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 px-4"
+                data-testid="campo-montoMov"
+                className={`min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border px-4 ${
+                  campoActivo === 'montoMov' ? 'border-acento' : 'border-white/10'
+                }`}
               />
               <input
                 type="text"
@@ -473,37 +594,46 @@ export default function GestorDeCaja({
             <label className="flex flex-col gap-2 text-sm text-crema-ticket">
               Efectivo contado
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={conteoEfectivo}
                 onChange={(e) => setConteoEfectivo(e.target.value)}
+                onFocus={() => setCampoActivo('conteoEfectivo')}
                 aria-label="Efectivo contado"
-                className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 px-4"
+                data-testid="campo-conteoEfectivo"
+                className={`min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border px-4 ${
+                  campoActivo === 'conteoEfectivo' ? 'border-acento' : 'border-white/10'
+                }`}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-crema-ticket">
               Crédito
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={conteoCredito}
                 onChange={(e) => setConteoCredito(e.target.value)}
+                onFocus={() => setCampoActivo('conteoCredito')}
                 aria-label="Crédito contado"
-                className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 px-4"
+                data-testid="campo-conteoCredito"
+                className={`min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border px-4 ${
+                  campoActivo === 'conteoCredito' ? 'border-acento' : 'border-white/10'
+                }`}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-crema-ticket">
               Débito
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={conteoDebito}
                 onChange={(e) => setConteoDebito(e.target.value)}
+                onFocus={() => setCampoActivo('conteoDebito')}
                 aria-label="Débito contado"
-                className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 px-4"
+                data-testid="campo-conteoDebito"
+                className={`min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border px-4 ${
+                  campoActivo === 'conteoDebito' ? 'border-acento' : 'border-white/10'
+                }`}
               />
             </label>
           </div>
@@ -568,6 +698,18 @@ export default function GestorDeCaja({
             </button>
           </div>
         </section>
+      ) : null}
+
+      {/* FASE 10.6.1 — teclado táctil (paridad de operación del viejo POS).
+          Solo se muestra cuando hay un campo enfocado: el cajero toca el campo
+          y luego teclea. El teclado es puro; la máquina de foco vive arriba. */}
+      {campoActivo ? (
+        <TecladoTactil
+          valor={valoresRef.current[campoActivo] ?? ''}
+          onTecla={alPulsarTecla}
+          activo
+          etiqueta={CAMPOS[campoActivo]?.etiqueta || ''}
+        />
       ) : null}
 
       {/* FASE 10.4 — modal de contexto diario (se abre al cerrar el turno). */}

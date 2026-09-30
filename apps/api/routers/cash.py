@@ -47,6 +47,7 @@ from rules.registry import (
     rn49_una_sesion_caja_por_terminal,
     rn50_opening_float,
     rn51_movimiento_entrada_o_salida,
+    rn52_movimiento_eliminable_si_abierta,
     rn53_efectivo_esperado,
     rn54_cierre_registra_conteos,
     rn55_sesion_cerrada_inmutable,
@@ -59,6 +60,7 @@ from schemas import (
     AbrirTurnoSalida,
     CerrarTurnoEntrada,
     CerrarTurnoSalida,
+    EliminarMovimientoSalida,
     LineaReporteDiario,
     MovimientoEntrada,
     MovimientoResumen,
@@ -288,6 +290,43 @@ async def registrar_movimiento(
 
 
 # ---------------------------------------------------------------------------
+# Contrato 29 — DELETE /cash/movements/{movement_id}  (FASE 10.6.2)
+# ---------------------------------------------------------------------------
+
+@router.delete("/movements/{movement_id}", response_model=EliminarMovimientoSalida)
+async def eliminar_movimiento(
+    movement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> EliminarMovimientoSalida:
+    """Elimina un movimiento de efectivo del turno (RN-52).
+
+    PARIDAD DE OPERACIÓN (F10.6.2). El viejo POS permitía borrar un movimiento
+    mal capturado mientras la caja estuviera abierta
+    (`DELETE /cash/sessions/{id}/movements/{mid}`). El nuevo POS lo había
+    OMITIDO: el cajero no podía corregir un error de captura. Este endpoint
+    restaura esa operación, con la misma regla de negocio (RN-52) que ya
+    existía en el registro de reglas pero que ningún endpoint usaba.
+
+    RN-52: solo se elimina si la sesión está ABIERTA. Una sesión CLOSED es
+    inmutable (RN-55) → 400.
+    """
+    movimiento = (
+        await db.execute(select(CashMovement).where(CashMovement.id == movement_id))
+    ).scalars().first()
+    if movimiento is None:
+        raise HTTPException(status_code=404, detail="Movimiento no encontrado")
+
+    # RN-52: la sesión del movimiento debe estar abierta para poder borrarlo.
+    sesion = await _sesion_o_404(db, movimiento.cash_session_id)
+    rn52_movimiento_eliminable_si_abierta(sesion.status)
+
+    await db.delete(movimiento)
+    await db.commit()
+
+    return EliminarMovimientoSalida(eliminado=True)
+
+
+# ---------------------------------------------------------------------------
 # Contrato 12 — GET /cash/session-summary/{cash_session_id}
 # ---------------------------------------------------------------------------
 
@@ -326,7 +365,11 @@ async def resumen_del_turno(
     return ResumenTurnoSalida(
         esperado=esperado,
         movimientos=[
-            MovimientoResumen(tipo=m.movement_type, monto=Decimal(str(m.amount)))
+            MovimientoResumen(
+                movement_id=m.id,
+                tipo=m.movement_type,
+                monto=Decimal(str(m.amount)),
+            )
             for m in movimientos
         ],
         fondo_inicial=Decimal(str(sesion.opening_float)),

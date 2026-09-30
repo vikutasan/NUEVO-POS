@@ -68,6 +68,19 @@ export function registrarMovimiento(datos) {
 }
 
 /**
+ * DELETE /cash/movements/{id} — elimina un movimiento mal capturado (RN-52).
+ *
+ * FASE 10.6.2 — paridad de operación. Solo se permite con la caja ABIERTA;
+ * si la sesión está cerrada, el API responde 400 y aquí se traduce a
+ * `{ outcome: 'error', reason: 'datos_invalidos' }`.
+ *
+ * @param {string} movementId
+ */
+export function eliminarMovimiento(movementId) {
+  return aOutcome(() => cliente.eliminarMovimiento(movementId), motivo);
+}
+
+/**
  * GET /cash/session-summary/{id} — el esperado en caja del turno (RN-53).
  * @param {string} cashSessionId
  */
@@ -95,6 +108,7 @@ export default {
   obtenerTurnoActivo,
   abrirTurno,
   registrarMovimiento,
+  eliminarMovimiento,
   obtenerResumen,
   cerrarTurno,
   obtenerReporteDiario,

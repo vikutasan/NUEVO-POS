@@ -747,6 +747,27 @@ CONTRATOS: tuple[Contrato, ...] = (
         ),
         estado_hoy="FASE 8.0",
     ),
+    # ── §15 Caja — Eliminar movimiento (proveedor: Caja — FASE 10.6.2) ─────
+    Contrato(
+        numero=29,
+        nombre="caja.eliminar_movimiento",
+        consumidor="POS",
+        proveedor="Caja",
+        operacion="DELETE /cash/movements/{movement_id}",
+        entrada={"movement_id": "UUID"},
+        salida={"eliminado": "Boolean"},
+        garantias=(
+            "Solo se elimina un movimiento si la sesión está ABIERTA (RN-52).",
+            "Una sesión CLOSED es inmutable: no se elimina nada (400).",
+            "El viejo POS ya tenía esta operación (DELETE /cash/sessions/{id}/movements/{mid}); "
+            "el nuevo POS la había OMITIDO. F10.6.2 restaura la paridad de operación.",
+        ),
+        errores=(
+            "404 si el movimiento no existe.",
+            "400 si la sesión del movimiento está cerrada (RN-52).",
+        ),
+        estado_hoy="FASE 10.6.2",
+    ),
     # ── §14 Estadísticas — Contexto diario (proveedor: POS — FASE 10.4) ─────
     Contrato(
         numero=28,
@@ -782,5 +803,5 @@ CONTRATOS: tuple[Contrato, ...] = (
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 28 contratos del registro."""
+    """Devuelve los 29 contratos del registro."""
     return CONTRATOS

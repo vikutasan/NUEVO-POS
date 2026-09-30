@@ -352,9 +352,27 @@ class MovimientoSalida(BaseModel):
     movement_id: UUID
 
 
-class MovimientoResumen(BaseModel):
-    """Un movimiento dentro del resumen del turno (contrato 12)."""
+class EliminarMovimientoSalida(BaseModel):
+    """Salida del contrato 29: el movimiento eliminado (FASE 10.6.2).
 
+    El viejo POS ya permitía borrar un movimiento mientras la caja estuviera
+    abierta (RN-52); el nuevo POS lo había OMITIDO. Esta salida confirma el
+    borrado para que el POS refresque el resumen sin adivinar.
+    """
+
+    eliminado: bool = True
+
+
+class MovimientoResumen(BaseModel):
+    """Un movimiento dentro del resumen del turno (contrato 12).
+
+    FASE 10.6.2 — PARIDAD DE OPERACIÓN. Se añade `movement_id` para que el POS
+    pueda ofrecer el botón ✕ de eliminar sobre cada movimiento (contrato 29).
+    Sin el id, el cajero veía la lista pero no podía corregir un error de
+    captura — la operación existía en el viejo POS y aquí faltaba.
+    """
+
+    movement_id: UUID
     tipo: str
     monto: Decimal
 
