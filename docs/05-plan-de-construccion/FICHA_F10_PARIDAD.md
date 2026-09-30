@@ -288,5 +288,5 @@ existir, pasar su test, estar integrado y recibir los datos correctos — y aun 
 | `NUEVO-POS` | `2903500` | F10.6.1 (teclado táctil) + F10.6.2 (eliminar movimiento, contrato 29) + tests |
 | `NUEVO-POS` | `0158afa` | F10.6.3 (hora y concepto del movimiento) + tests |
 | `NUEVO-POS` | `ac28ea3` | F10.6.4 (cablear impresión del corte) + test 5/5 |
-| `NUEVO-POS` | _(pendiente F10.6.5)_ | `FICHA_F10_6_PARIDAD_DE_OPERACION_DE_CAJA.md` + esta ficha actualizada |
-| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | _(pendiente F10.6.5)_ | Plan Maestro §10.6.5 + §7 (Fase 10) |
+| `NUEVO-POS` | `b44ed17` | F10.6.5 — `FICHA_F10_6_PARIDAD_DE_OPERACION_DE_CAJA.md` + esta ficha actualizada |
+| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | `2e8eb21` | F10.6.5 — Plan Maestro §10.6.5 + §7 (Fase 10) + `PLAN_DE_ABORDAJE_F10_6_PARIDAD_DE_OPERACION_DE_CAJA.md` |
