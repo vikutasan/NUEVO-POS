@@ -108,7 +108,11 @@ export function useCart(opciones = {}) {
     });
 
     const cliente = apiRef.current;
-    const idTicket = ticketRef.current;
+    // `linea.ticket_id` es un override explícito: lo usa la pantalla cuando
+    // acaba de crear el ticket y el `ticketId` de React todavía no se propagó
+    // al ref (el `setTicketId` es asíncrono). Sin este override, el PRIMER
+    // ítem se quedaría solo en memoria y nunca se persistiría (contrato 18).
+    const idTicket = linea.ticket_id || ticketRef.current;
     if (!cliente || !idTicket) {
       return { outcome: 'ok', reason: null, data: { item_id: itemId, local: true } };
     }

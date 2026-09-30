@@ -56,6 +56,9 @@ import ThemeSelector from './components/ThemeSelector.jsx';
 import VoiceCartPanel from './components/VoiceCartPanel.jsx';
 import VisionVisor from './components/VisionVisor.jsx';
 import OrderProgrammingModal from './components/OrderProgrammingModal.jsx';
+// F8.6 — Integración con CRM y Notificaciones (lado POS).
+import CustomerIdentificationPanel from './components/CustomerIdentificationPanel.jsx';
+import TicketDeliveryPanel from './components/TicketDeliveryPanel.jsx';
 import { OverlayExito, OverlayError } from './components/POSOverlays.jsx';
 
 /**
@@ -110,6 +113,15 @@ export default function RetailVisionPOS({
   const [pedidoAbierto, setPedidoAbierto] = useState(false);
   // Bloque `order_*` capturado por el modal; se adjunta al crear el ticket.
   const [bloquePedido, setBloquePedido] = useState(null);
+  // F8.6 — CRM (identificación del cliente) + Notificaciones (entrega del ticket).
+  //   - `clienteAbierto`: visibilidad del panel de identificación (overlay).
+  //   - `cliente`: el cliente identificado (CRM), o null. Se usa para PRECARGAR
+  //     el contacto en el paso de entrega (RN-92) y para resaltar el botón.
+  //   - `entregaAbierta`: visibilidad del paso post-cobro de entrega. Aparece
+  //     SOLO después de que `cobrar()` resolvió con éxito.
+  const [clienteAbierto, setClienteAbierto] = useState(false);
+  const [cliente, setCliente] = useState(null);
+  const [entregaAbierta, setEntregaAbierta] = useState(false);
 
   // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
   // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
@@ -170,8 +182,14 @@ export default function RetailVisionPOS({
   }, [productos, categoriaActiva]);
 
   // ── (D-12) Asegura que exista un ticket OPEN antes de persistir un ítem ────
-  // El ticket nace al agregar el PRIMER ítem. Devuelve `true` si hay ticket
-  // (creado ahora o ya existente) y `false` si la creación falló.
+  // El ticket nace al agregar el PRIMER ítem. Devuelve el `id` del ticket
+  // (creado ahora o ya existente) o `null` si la creación falló.
+  //
+  // Devuelve el ID (no un booleano) porque `setTicketId` es asíncrono: el
+  // `ticketId` de React todavía NO se propagó a `useCart` en el mismo tick.
+  // El llamador DEBE pasar ese id a `anadirLinea({ ticket_id })` para que el
+  // PRIMER ítem se persista de verdad (contrato 18). Sin esto, el primer ítem
+  // se quedaría solo en memoria local.
   const ticketIdRef = useRef(ticketId);
   ticketIdRef.current = ticketId;
 
@@ -179,16 +197,16 @@ export default function RetailVisionPOS({
   // programación capturó. Se adjuntan SOLO al crear el ticket (contrato 3).
   const asegurarTicket = useCallback(
     async (bloque = null) => {
-      if (ticketIdRef.current) return true;
+      if (ticketIdRef.current) return ticketIdRef.current;
 
       const creado = await acciones.crearTicket([], bloque);
       if (creado.outcome !== 'ok' || !creado.data?.id) {
         setError(creado.reason || 'No se pudo abrir el ticket');
-        return false;
+        return null;
       }
       setTicketId(creado.data.id);
       ticketIdRef.current = creado.data.id;
-      return true;
+      return creado.data.id;
     },
     [acciones]
   );
@@ -196,9 +214,10 @@ export default function RetailVisionPOS({
   // ── RN-17: un producto aparece una sola vez; agregarlo incrementa ──────────
   const agregarProducto = useCallback(
     async (producto) => {
-      const listo = await asegurarTicket();
-      if (!listo) return;
+      const idTicket = await asegurarTicket();
+      if (!idTicket) return;
       carrito.anadirLinea({
+        ticket_id: idTicket,
         product_id: producto.id,
         name: producto.name,
         quantity: 1,
@@ -247,9 +266,10 @@ export default function RetailVisionPOS({
         return;
       }
       setBanner(null);
-      const listo = await asegurarTicket();
-      if (!listo) return;
+      const idTicket = await asegurarTicket();
+      if (!idTicket) return;
       carrito.anadirLinea({
+        ticket_id: idTicket,
         product_id: producto.id,
         name: producto.name,
         quantity: 1,
@@ -297,6 +317,10 @@ export default function RetailVisionPOS({
       // Cobro verificado: limpieza del carrito (prohibición #2).
       await carrito.clearCart();
       setCheckoutAbierto(false);
+      // F8.6 — Paso post-cobro de entrega del ticket (F8.5). Aparece SOLO
+      // cuando el cobro ya resolvió con éxito: si el cobro falla, se retorna
+      // antes y este paso NUNCA se abre (punto delicado del plan §3.7).
+      setEntregaAbierta(true);
     },
     [acciones, carrito]
   );
@@ -341,6 +365,8 @@ export default function RetailVisionPOS({
         vozDisponible={voz.disponible}
         onAbrirPedido={() => setPedidoAbierto(true)}
         pedidoProgramado={Boolean(bloquePedido)}
+        onAbrirCliente={() => setClienteAbierto(true)}
+        clienteIdentificado={Boolean(cliente)}
       />
 
       {error ? (
@@ -378,9 +404,10 @@ export default function RetailVisionPOS({
               onAgregar={async (s) => {
                 // La IA sugiere; el operador decide. Solo aquí se toca el carrito.
                 if (!s?.resuelto || !s.producto) return;
-                const listo = await asegurarTicket();
-                if (!listo) return;
+                const idTicket = await asegurarTicket();
+                if (!idTicket) return;
                 carrito.anadirLinea({
+                  ticket_id: idTicket,
                   product_id: s.producto.id,
                   name: s.producto.name,
                   quantity: 1,
@@ -533,10 +560,11 @@ export default function RetailVisionPOS({
             const lineas = voz.propuesta?.lineas || [];
             const validas = lineas.filter((l) => l.resuelto && l.producto);
             if (validas.length > 0) {
-              const listo = await asegurarTicket();
-              if (!listo) return;
+              const idTicket = await asegurarTicket();
+              if (!idTicket) return;
               validas.forEach((l) => {
                 carrito.anadirLinea({
+                  ticket_id: idTicket,
                   product_id: l.producto.id,
                   name: l.producto.name,
                   quantity: l.cantidad || 1,
@@ -565,6 +593,41 @@ export default function RetailVisionPOS({
           datosIniciales={bloquePedido}
           onGuardar={guardarPedido}
           onCerrar={() => setPedidoAbierto(false)}
+        />
+      ) : null}
+
+      {/* ── F8.6 — CRM + Notificaciones (lado POS) ────────────────────────────
+          El POS CONSUME los contratos #26 (beneficios) y #27 (encolar ticket).
+          NUNCA escribe en `customers` ni en `notification_outbox` (A-02). */}
+
+      {/* Identificación del cliente (F8.4). El panel llama al contrato #26 por
+          el hook `useCustomerIdentification`; al identificar, entrega el cliente
+          a la pantalla para precargar el contacto del paso de entrega (RN-92). */}
+      {clienteAbierto ? (
+        <CustomerIdentificationPanel
+          items={carrito.lineas.map((l) => ({
+            product_id: l.product_id,
+            quantity: l.quantity,
+          }))}
+          onIdentificado={(identificado) => {
+            setCliente(identificado);
+            setClienteAbierto(false);
+          }}
+          onCerrar={() => setClienteAbierto(false)}
+        />
+      ) : null}
+
+      {/* Entrega del ticket (F8.5). Es un overlay del screen, hermano de
+          `OverlayExito`: aparece DESPUÉS del cobro, no dentro del modal de pago.
+          Imprimir SIEMPRE está disponible (RN-87); WhatsApp/Email encolan por el
+          contrato #27 (RN-86) y, si la cola está caída, la venta NO se revierte
+          (DT-07). El contacto se precarga desde el CRM (RN-92). */}
+      {entregaAbierta && acciones.ticket ? (
+        <TicketDeliveryPanel
+          ticket={acciones.ticket}
+          cliente={cliente}
+          onOmitir={() => setEntregaAbierta(false)}
+          onEnviado={() => setEntregaAbierta(false)}
         />
       ) : null}
 

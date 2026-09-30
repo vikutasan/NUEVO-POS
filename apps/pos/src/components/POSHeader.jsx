@@ -36,6 +36,12 @@ const ETIQUETAS_ESTADO = Object.freeze({
  * @param {() => void} [props.onCambiarEstacion] - abre el selector de terminal.
  * @param {() => void} [props.onAbrirTema] - abre el panel de tema (F7.5).
  * @param {() => void} [props.onAbrirVoz] - abre el panel de voz (F7.5).
+ * @param {() => void} [props.onAbrirCliente] - abre el panel de identificación
+ *   del cliente (F8.6). Es la UX heredada del viejo POS (§6.8): el botón vive
+ *   en el header, la implementación se reescribe.
+ * @param {boolean} [props.clienteIdentificado=false] - ¿hay un cliente ya
+ *   identificado en la cuenta en curso? (F8.6). Si es `true`, el botón se
+ *   resalta, igual que `pedidoProgramado`.
  * @param {boolean} [props.vozDisponible=true] - ¿está disponible el dictado por
  *   voz? (F7.6.1). Si es `false`, el botón de voz se deshabilita, igual que en
  *   el viejo POS (`#btn-dictado-voz` con `disabled={!voiceAvailable}`).
@@ -57,6 +63,8 @@ export default function POSHeader({
   vozDisponible = true,
   onAbrirPedido,
   pedidoProgramado = false,
+  onAbrirCliente,
+  clienteIdentificado = false,
 }) {
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
   const nombreTerminal =
@@ -114,6 +122,22 @@ export default function POSHeader({
           aria-label="Programar pedido"
         >
           <span aria-hidden="true">📌</span>
+        </button>
+        {/* F8.6 — Identificación del cliente (CRM). UX heredada del viejo POS
+            (§6.8): el botón vive en el header. Se resalta cuando ya hay un
+            cliente identificado en la cuenta en curso. */}
+        <button
+          type="button"
+          onClick={() => onAbrirCliente?.()}
+          className={`min-h-tactil min-w-tactil border rounded-xl px-3 flex items-center justify-center transition-all ${
+            clienteIdentificado
+              ? 'bg-acento text-fondo-profundo border-acento'
+              : 'bg-fondo-profundo border-white/5 hover:bg-fondo-panel'
+          }`}
+          title={clienteIdentificado ? 'Cliente identificado' : 'Identificar cliente'}
+          aria-label="Identificar cliente"
+        >
+          <span aria-hidden="true">👤</span>
         </button>
         <button
           type="button"
