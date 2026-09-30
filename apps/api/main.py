@@ -24,7 +24,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from routers import catalog, cash, pos, ia
+from routers import catalog, cash, pos, ia, terminals
 from rules import ReglaViolada
 
 app = FastAPI(
@@ -68,6 +68,7 @@ async def _manejador_regla_violada(_: Request, exc: ReglaViolada) -> JSONRespons
 # ---------------------------------------------------------------------------
 app.include_router(catalog.router)
 app.include_router(pos.router)
+app.include_router(terminals.router)
 app.include_router(cash.router)
 app.include_router(ia.router)
 

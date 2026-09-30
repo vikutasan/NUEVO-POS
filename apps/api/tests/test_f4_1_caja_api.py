@@ -19,7 +19,7 @@ las puertas de FASE 3.2 y 4.0.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import httpx
@@ -365,12 +365,26 @@ async def test_cerrar_turno_con_descuadre(entorno):
 
 @pytest.mark.asyncio
 async def test_reporte_diario_usa_dia_local(entorno):
-    """El reporte agrupa por canal/cajero/terminal del día local (RN-59)."""
+    """El reporte agrupa por canal/cajero/terminal del día local (RN-59).
+
+    Determinismo horario: el día de negocio es el LOCAL (UTC-6), no el UTC. Si
+    se siembra el ticket con el `now()` de la BD (UTC) y se consulta el día
+    local, el test falla entre las 00:00 y las 06:00 UTC (18:00–00:00 local),
+    porque el día UTC ya cambió y el local no. Para que la puerta sea estable a
+    cualquier hora, se fija `created_at` al MEDIODÍA LOCAL del día local actual
+    y se consulta ese mismo día local.
+    """
     ent: _Entorno = entorno
     await _limpiar(ent)
     try:
-        # Se siembra un ticket PAID con caja y fecha de hoy (UTC).
-        hoy_local = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+        # Día local de negocio (UTC-6) y su mediodía, expresado en UTC.
+        tz_negocio = timezone(timedelta(hours=-6))
+        ahora_local = datetime.now(tz=tz_negocio)
+        hoy_local = ahora_local.strftime("%Y-%m-%d")
+        mediodia_local = ahora_local.replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        created_at_utc = mediodia_local.astimezone(timezone.utc)
         async with ent.Session() as db:
             caja = CashSession(
                 terminal_id=TERMINAL_ID,
@@ -388,6 +402,7 @@ async def test_reporte_diario_usa_dia_local(entorno):
                 terminal_id=TERMINAL_ID,
                 channel="PANADERIA",
                 cash_session_id=caja.id,
+                created_at=created_at_utc,
                 payment_details={"metodo": "EFECTIVO", "cajero": "Cajero F4.1"},
             )
             db.add(ticket)

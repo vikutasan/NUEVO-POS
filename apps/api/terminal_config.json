@@ -1,0 +1,32 @@
+[
+  {
+    "id": "T1",
+    "name": "Terminal 1",
+    "icon": "🖥️"
+  },
+  {
+    "id": "T2",
+    "name": "Terminal 2",
+    "icon": "🖥️"
+  },
+  {
+    "id": "T3",
+    "name": "Terminal 3",
+    "icon": "🖥️"
+  },
+  {
+    "id": "T4",
+    "name": "Terminal 4",
+    "icon": "🖥️"
+  },
+  {
+    "id": "T5",
+    "name": "Terminal 5",
+    "icon": "🖥️"
+  },
+  {
+    "id": "T6",
+    "name": "Terminal 6",
+    "icon": "🖥️"
+  }
+]
