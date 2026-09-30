@@ -153,7 +153,11 @@ async def _siguiente_folio(db: AsyncSession) -> str:
 
 
 def _ticket_a_salida(ticket: Ticket) -> TicketSalida:
-    """Proyecta el modelo ORM al esquema de salida (con sus líneas)."""
+    """Proyecta el modelo ORM al esquema de salida (con sus líneas).
+
+    F9.1.4 — `payment_details` viaja al cliente para que el ticket impreso
+    pueda desglosar los N pagos del cobro mixto. Es `None` antes del cobro.
+    """
     return TicketSalida(
         id=ticket.id,
         account_num=ticket.account_num,
@@ -163,6 +167,7 @@ def _ticket_a_salida(ticket: Ticket) -> TicketSalida:
         terminal_id=ticket.terminal_id,
         channel=ticket.channel,
         items=[LineaSalida.model_validate(i) for i in ticket.items],
+        payment_details=ticket.payment_details,
     )
 
 

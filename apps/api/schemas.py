@@ -143,6 +143,11 @@ class TicketSalida(BaseModel):
     `account_num` es el folio (presentación, RN-10); `id` es la identidad
     (RN-09). `version` viaja para que el cliente pueda cobrar con concurrencia
     optimista (RN-15, RN-25).
+
+    `payment_details` viaja desde FASE 9.1.4 para que el ticket IMPRESO pueda
+    desglosar los N pagos del cobro mixto (antes el dato se persistía pero
+    nunca llegaba al cliente, así que el papel no podía mostrar el desglose).
+    Es `None` mientras el ticket no se ha cobrado.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -155,6 +160,7 @@ class TicketSalida(BaseModel):
     terminal_id: str | None = None
     channel: str
     items: list[LineaSalida] = Field(default_factory=list)
+    payment_details: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------

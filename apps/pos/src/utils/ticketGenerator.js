@@ -115,6 +115,70 @@ function totalArticulos(lineas) {
 }
 
 /**
+ * Etiqueta legible de un método de pago (incluye el tipo de tarjeta).
+ * Acepta las dos formas del contrato:
+ *   - canónica: `{ metodo: 'TARJETA', tipo: 'DEBITO' }` → 'Tarjeta débito'
+ *   - método directo: `{ metodo: 'DEBITO' }` → 'Débito'
+ *     (CREDITO/DEBITO son métodos de primera clase en `checkoutService.js`).
+ */
+function etiquetaMetodoPago(pago) {
+  const metodo = String(pago.metodo || '').toUpperCase();
+  const tipo = String(pago.tipo || '').toUpperCase();
+  if (metodo === 'TARJETA') {
+    if (tipo === 'CREDITO') return 'Tarjeta crédito';
+    if (tipo === 'DEBITO') return 'Tarjeta débito';
+    return 'Tarjeta';
+  }
+  if (metodo === 'CREDITO') return 'Crédito';
+  if (metodo === 'DEBITO') return 'Débito';
+  if (metodo === 'EFECTIVO') return 'Efectivo';
+  if (metodo === 'TRANSFERENCIA') return 'Transferencia';
+  return metodo || 'Pago';
+}
+
+/**
+ * Extrae la lista de pagos de un `payment_details` en cualquiera de sus formas:
+ *   - canónica F9.1: `{ pagos: [ {metodo, monto, ...}, ... ] }`
+ *   - vieja (un solo pago): `{ metodo, recibido, cambio }`
+ * Devuelve `[]` si no hay nada que desglosar. Nunca lanza.
+ */
+function listaDePagos(paymentDetails) {
+  if (!paymentDetails || typeof paymentDetails !== 'object') return [];
+  if (Array.isArray(paymentDetails.pagos)) return paymentDetails.pagos;
+  if (paymentDetails.metodo) return [paymentDetails];
+  return [];
+}
+
+/**
+ * Bloque de desglose de pagos del ticket (F9.1.4).
+ * Con UN solo pago imprime una línea; con VARIOS imprime la lista completa y
+ * el cambio entregado. Devuelve '' si no hay pagos (ticket sin cobrar).
+ */
+function bloquePagos(paymentDetails) {
+  const pagos = listaDePagos(paymentDetails);
+  if (pagos.length === 0) return '';
+
+  const filas = pagos
+    .map((p) => filaPago(etiquetaMetodoPago(p), moneda(p.monto ?? p.recibido)))
+    .join('');
+  const cambio = pagos.reduce((acc, p) => acc + Number(p.cambio || 0), 0);
+  const filaCambio =
+    cambio > 0 ? filaPago('Cambio', moneda(cambio)) : '';
+
+  return `
+    <div class="line"></div>
+    <div class="small upper">Forma de pago</div>
+    ${filas}
+    ${filaCambio}
+  `;
+}
+
+/** Una fila etiqueta/valor del desglose de pagos. */
+function filaPago(etiqueta, valor) {
+  return `<div class="row"><span class="small upper">${etiqueta}</span><span class="bold">${valor}</span></div>`;
+}
+
+/**
  * Genera el HTML térmico de un ticket de venta.
  * @param {Object} ticket - Datos del ticket (account_num, total, lineas, terminal_id, ...).
  * @returns {string} Documento HTML autosuficiente listo para imprimir.
@@ -142,6 +206,7 @@ export function generarTicketHTML(ticket = {}) {
     <div class="row bold" style="font-size: 10pt; margin: 2px 0;">
       <span>TOTAL</span><span>${moneda(ticket.total)}</span>
     </div>
+    ${bloquePagos(ticket.payment_details)}
     <div class="audit">
       <div class="row bold"><span>CAPTURÓ:</span><span>${capturo}</span></div>
       <div class="row bold"><span>COBRÓ:</span><span>${cobro}</span></div>

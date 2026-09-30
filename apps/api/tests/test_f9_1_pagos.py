@@ -189,3 +189,52 @@ def test_cobro_viejo_normalizado_cuadra():
     pagos = normalizado["pagos"]
     R.rn95_metodos_de_pago_validos(pagos)
     R.rn94_suma_de_pagos_cuadra_total(pagos, Decimal("100.00"))
+
+
+# ===========================================================================
+# Criterio 6 — F9.1.4a: `payment_details` viaja al cliente (TicketSalida)
+# ===========================================================================
+
+def test_ticket_salida_expone_payment_details():
+    """`TicketSalida` incluye `payment_details` para que el papel lo desglose.
+
+    Antes de F9.1.4 el dato se persistía en la tabla pero NUNCA llegaba al
+    cliente: el ticket impreso no podía mostrar los N pagos del cobro mixto.
+    """
+    from schemas import TicketSalida
+
+    salida = TicketSalida(
+        id="00000000-0000-0000-0000-000000000001",
+        account_num="V0001",
+        status="PAID",
+        total=Decimal("100.00"),
+        version=2,
+        channel="POS",
+        items=[],
+        payment_details={
+            "pagos": [
+                {"metodo": "EFECTIVO", "monto": "40.00"},
+                {"metodo": "DEBITO", "monto": "60.00"},
+            ],
+            "cajero": "Ana",
+        },
+    )
+    assert salida.payment_details is not None
+    assert len(salida.payment_details["pagos"]) == 2
+    assert salida.payment_details["pagos"][1]["metodo"] == "DEBITO"
+
+
+def test_ticket_salida_sin_cobro_no_tiene_payment_details():
+    """Un ticket aún no cobrado expone `payment_details = None` (no rompe)."""
+    from schemas import TicketSalida
+
+    salida = TicketSalida(
+        id="00000000-0000-0000-0000-000000000002",
+        account_num="V0002",
+        status="DRAFT",
+        total=Decimal("50.00"),
+        version=1,
+        channel="POS",
+        items=[],
+    )
+    assert salida.payment_details is None
