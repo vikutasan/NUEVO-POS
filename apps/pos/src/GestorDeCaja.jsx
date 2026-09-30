@@ -41,6 +41,8 @@ import * as contexto from './services/dailyContextService.js';
 import { esOk } from './utils/outcome.js';
 import DailyContextModal from './components/DailyContextModal.jsx';
 import TecladoTactil from './components/TecladoTactil.jsx';
+import { imprimirCorte } from './services/printService.js';
+import { generarCorteHTML } from './utils/ticketGenerator.js';
 
 /** Formatea un valor como moneda mexicana. */
 function formatearPrecio(valor) {
@@ -130,6 +132,7 @@ export default function GestorDeCaja({
   // Espejo de los valores en un ref: PROHIBICIÓN #3 — los callbacks leen del
   // ref, nunca de un cierre sobre el estado de React (evita el bug del $453).
   const valoresRef = useRef({});
+
   valoresRef.current = {
     fondoInicial,
     montoMov,
@@ -340,6 +343,47 @@ export default function GestorDeCaja({
   const esperado = useMemo(() => Number(resumen?.esperado ?? 0), [resumen]);
   const capturado = Number(conteoEfectivo) || 0;
   const descuadreEnVivo = capturado - esperado;
+
+  /**
+   * FASE 10.6.4 — PARIDAD DE OPERACIÓN. Imprime el corte de caja.
+   *
+   * El viejo POS imprimía el corte al cerrar el turno (auto-print) y ofrecía un
+   * botón para reimprimirlo; el nuevo POS cerraba el turno pero NUNCA imprimía
+   * el corte, así que el cajero no tenía el comprobante físico del arqueo. La
+   * integración se hereda del viejo POS (§6.8); la implementación se reescribe
+   * con el servicio de impresión del POS nuevo (`imprimirCorte`).
+   *
+   * El HTML se genera con `generarCorteHTML` (string térmico autosuficiente) a
+   * partir de los mismos datos que alimentan el `CorteTicketTemplate` oculto.
+   * La impresión es NO crítica: si falla, el corte ya quedó cerrado.
+   *
+   * NOTA: este `useCallback` se declara DESPUÉS de `esperado`/`capturado`
+   * porque su arreglo de dependencias los evalúa durante el render; declararlo
+   * antes dispara un ReferenceError de zona muerta temporal (TDZ).
+   */
+  const alImprimirCorte = useCallback(() => {
+    const datos = {
+      terminalId,
+      cajero: turno?.usuario_nombre || usuarioNombre || '—',
+      abiertaEn: turno?.abierta_en || null,
+      cerradaEn: new Date().toISOString(),
+      esperado,
+      contado: capturado,
+      credito: Number(conteoCredito) || 0,
+      debito: Number(conteoDebito) || 0,
+      movimientos,
+    };
+    imprimirCorte(generarCorteHTML(datos));
+  }, [
+    terminalId,
+    turno,
+    usuarioNombre,
+    esperado,
+    capturado,
+    conteoCredito,
+    conteoDebito,
+    movimientos,
+  ]);
 
   // FASE 10.5 — paridad de datos: el desglose que el viejo POS mostraba al
   // cajero (fondo, entradas, salidas, ventas por método, total y número de
@@ -685,6 +729,15 @@ export default function GestorDeCaja({
                   {formatearPrecio(diferencia.diferencia)}
                 </strong>
               </span>
+              {/* FASE 10.6.4 — imprimir el corte (paridad con el viejo POS). */}
+              <button
+                type="button"
+                onClick={alImprimirCorte}
+                data-testid="imprimir-corte"
+                className="self-start min-h-tactil rounded-canon35 bg-acento text-fondo-profundo font-semibold px-4"
+              >
+                Imprimir corte
+              </button>
               {/* FASE 10.4 — contexto diario post-corte (no crítico). */}
               {contextoRegistrado ? (
                 <span data-testid="contexto-registrado" className="text-crema-ticket/70">
@@ -741,6 +794,15 @@ export default function GestorDeCaja({
           onCerrar={alCerrarContexto}
         />
       ) : null}
+
+      {/* FASE 10.6.4 — NOTA DE DISEÑO: el viejo POS montaba un
+          `CorteTicketTemplate` oculto y serializaba su DOM para imprimir. El
+          POS nuevo NO lo necesita: `alImprimirCorte` genera el string térmico
+          con `generarCorteHTML` (autosuficiente, sin leer el DOM). Montar una
+          copia oculta duplicaría los `data-testid` del resumen visible
+          (`esperado`, `contado`, `diferencia`, `movimientos`) y rompería las
+          consultas de los tests. La paridad es de OPERACIÓN (se imprime el
+          corte), no de DOM. */}
     </div>
   );
 }
