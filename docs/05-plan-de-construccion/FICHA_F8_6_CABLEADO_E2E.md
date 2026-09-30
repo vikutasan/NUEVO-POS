@@ -5,6 +5,7 @@
 **Plan que la gobierna:** `PLAN_DE_ABORDAJE_FASE_8_POR_PARTES.md` §3.7 (v2.0)
 **Regla que gobierna la ejecución:** REGLA DURA 2 — *"Verificar, no asumir"*
 **Estado:** ✅ CERRADA
+**Commit:** `99e94cb` — *"F8.6: cableado end-to-end CRM + Notificaciones en el POS"*
 
 ---
 
