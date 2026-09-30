@@ -209,8 +209,10 @@ corregido.
 
 | Repo | Commit | Descripción |
 |---|---|---|
-| `NUEVO-POS` | `<pendiente de commit en el repo NUEVO-POS>` | Ficha F11.0 |
-| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | `<pendiente de commit en el repo PLANOS>` | 10 correcciones al Plan Maestro |
+| `NUEVO-POS` | `c7aa49e` | Ficha F11.0 |
+| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | `df24655` | 10 correcciones al Plan Maestro |
+
+**Push:** `NUEVO-POS` `4b6a05e..c7aa49e` · `PLANOS` `2e8eb21..df24655`.
 
 ---
 
