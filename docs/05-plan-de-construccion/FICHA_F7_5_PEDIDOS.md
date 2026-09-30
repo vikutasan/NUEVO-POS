@@ -3,7 +3,7 @@
 > **Fase:** 7 (Voz + Visión IA + Selector de Temas) — Sub-fase **7.5a**
 > **Estado:** ✅ CERRADA — puerta en verde
 > **Fecha:** 2026-09-30
-> **Commit:** _(se registra al final de esta ficha)_
+> **Commit:** `4dc2dc1` (código) + `459530c` (planos)
 > **Plan de abordaje:** [`PLAN_DE_ABORDAJE_FASE_7_5_PEDIDOS.md`](../../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/05-plan-de-construccion/PLAN_DE_ABORDAJE_FASE_7_5_PEDIDOS.md) §5
 
 ---
@@ -273,4 +273,7 @@ La **F7.5b** queda **explícitamente diferida** hasta que exista el módulo
 
 ## 7. Commit
 
-_(se registra al final de esta ficha)_
+- **Código (`NUEVO-POS`):** `4dc2dc1` — *F7.5a — El puente POS → Pedidos (proyección ticket → order por contrato)*
+- **Planos (`PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS`):** `459530c` — *F7.5a CERRADA — el puente POS → Pedidos queda construido*
+
+Ambos commits están **empujados** a `origin/main`.
