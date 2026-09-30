@@ -193,18 +193,27 @@ def _candado_vigente(candado: TerminalLock, ahora: datetime) -> bool:
 def _a_estado(candado: TerminalLock | None, ahora: datetime) -> dict[str, object]:
     """Proyecta un candado al mapa de estado que consume el frontend.
 
-    Forma: `{ occupier_id, occupier_name, locked_at, stale_session }`.
+    Forma: `{ occupier_id, occupier_ref, occupier_name, locked_at, stale_session }`.
     Un candado vencido se reporta como libre (occupier_id = None).
+
+    `occupier_id` es el UUID canónico (C-01) que vive en la tabla. Pero el
+    frontend identifica al usuario con su id ORIGINAL (p. ej. `1` o `cajero-1`),
+    no con el UUID derivado. Por eso se expone además `occupier_ref`: el id tal
+    como lo envió el cliente (guardado en `occupier_name`). Sin este campo, el
+    dueño de la terminal no se reconocía a sí mismo y su propia terminal se
+    pintaba como "ocupada por otro" — el bloqueo que impedía entrar.
     """
     if candado is None or not _candado_vigente(candado, ahora):
         return {
             "occupier_id": None,
+            "occupier_ref": None,
             "occupier_name": None,
             "locked_at": None,
             "stale_session": False,
         }
     return {
         "occupier_id": str(candado.occupier_id),
+        "occupier_ref": candado.occupier_name,
         "occupier_name": candado.occupier_name,
         "locked_at": candado.locked_at.isoformat(),
         "stale_session": False,

@@ -11,10 +11,20 @@
  * @param {object|null|undefined} info - Entrada de terminalStatuses[tid]
  * @param {number|string|null|undefined} currentUserId - ID del usuario actual
  * @returns {'free'|'mine'|'occupied'}
+ *
+ * IMPORTANTE: se compara contra `occupier_ref` (el id ORIGINAL del usuario,
+ * tal como lo envió el cliente), NO contra `occupier_id` (el UUID canónico de
+ * la tabla). El frontend identifica al usuario con `1` o `cajero-1`, nunca con
+ * el UUID derivado; comparar contra el UUID hacía que el dueño no se reconociera
+ * a sí mismo y su propia terminal se pintara como "ocupada por otro".
+ * Se conserva el fallback a `occupier_id` por compatibilidad.
  */
 export function resolveCardState(info, currentUserId) {
   if (!info || !info.occupier_id) return 'free';
-  if (currentUserId != null && info.occupier_id === currentUserId) return 'mine';
+  if (currentUserId == null) return 'occupied';
+  const referencia = info.occupier_ref ?? info.occupier_id;
+  // Comparación tolerante a tipo: `1` (number) y `"1"` (string) son el mismo usuario.
+  if (String(referencia) === String(currentUserId)) return 'mine';
   return 'occupied';
 }
 

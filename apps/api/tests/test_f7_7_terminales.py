@@ -169,6 +169,50 @@ async def test_criterio2_status_ocupada_expone_occupier(entorno):
     assert estado["T2"]["locked_at"] is not None
 
 
+@pytest.mark.asyncio
+async def test_criterio2_status_expone_occupier_ref_original(entorno):
+    """El status expone `occupier_ref` con el id ORIGINAL del usuario.
+
+    Regresión del bloqueo de entrada: el frontend identifica al usuario con su
+    id original (`1`, `cajero-1`), no con el UUID derivado. Si el status solo
+    expone el UUID, el dueño no se reconoce a sí mismo y su propia terminal se
+    pinta como "ocupada por otro" — impidiendo entrar.
+    """
+    await _limpiar(entorno)
+    await _sembrar_candado(entorno, "T3", "1")
+    async with _cliente() as cliente:
+        r = await cliente.get("/pos/terminals/status")
+    estado = r.json()
+    # El UUID canónico sigue presente (C-01)...
+    assert estado["T3"]["occupier_id"] != "1"
+    # ...pero además se expone el id original para que el frontend compare.
+    assert estado["T3"]["occupier_ref"] == "1"
+
+
+@pytest.mark.asyncio
+async def test_criterio2_occupier_ref_es_none_si_libre(entorno):
+    """Una terminal libre expone `occupier_ref` en None (no un UUID fantasma)."""
+    await _limpiar(entorno)
+    async with _cliente() as cliente:
+        r = await cliente.get("/pos/terminals/status")
+    estado = r.json()
+    assert estado["T1"]["occupier_ref"] is None
+
+
+@pytest.mark.asyncio
+async def test_criterio2_occupier_ref_sobrevive_al_lock(entorno):
+    """Tras un lock real, `occupier_ref` devuelve el id que envió el cliente."""
+    await _limpiar(entorno)
+    async with _cliente() as cliente:
+        await cliente.post(
+            "/pos/terminals/lock", json={"terminal_id": "T4", "user_id": "1"}
+        )
+        r = await cliente.get("/pos/terminals/status")
+    estado = r.json()
+    assert estado["T4"]["occupier_ref"] == "1"
+    assert estado["T4"]["occupier_id"] != "1"
+
+
 # ---------------------------------------------------------------------------
 # Criterio 3 — RN-03: el candado es exclusivo (409 si está ocupada).
 # ---------------------------------------------------------------------------
