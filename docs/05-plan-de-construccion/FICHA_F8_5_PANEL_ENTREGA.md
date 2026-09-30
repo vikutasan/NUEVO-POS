@@ -141,4 +141,5 @@ La puerta funcionó como debe: obligó a hacer explícito lo que estaba implíci
 
 - **Gate:** `19 passed (19)` — 8 criterios cubiertos.
 - **Regresiones:** 0 (el componente es nuevo; no toca código existente).
-- **Commit:** _(se registra en el commit de la sub-fase)_
+- **Commit:** `d8bf8ca` — *"F8.5: TicketDeliveryPanel.jsx (paso post-cobro de entrega) + gate 8 criterios/19 tests"* (3 archivos, +731)
+- **Push:** `2153f70..d8bf8ca` → `origin/main`
