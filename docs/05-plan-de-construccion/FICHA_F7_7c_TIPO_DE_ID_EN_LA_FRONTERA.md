@@ -3,7 +3,7 @@
 **Fase:** 7.7c (corrección del bloqueo de entrada a terminales — tercera capa)
 **Fecha:** 2026-09-30
 **Estado:** ✅ CERRADA
-**Commit:** _(pendiente de registrar)_
+**Commit:** `67b45e7`
 
 ---
 
