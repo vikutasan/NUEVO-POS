@@ -164,7 +164,21 @@ class TicketSalida(BaseModel):
 class CobrarTicketEntrada(BaseModel):
     """Entrada del contrato 5: cobrar un ticket.
 
-    `payment_details` es libre (JSONB): método, monto recibido, cambio, etc.
+    `payment_details` es libre (JSONB) pero tiene una FORMA CANÓNICA desde
+    FASE 9.1 (pagos mixtos)::
+
+        {
+          "pagos": [
+            {"metodo": "EFECTIVO", "monto": "40.00", "recibido": "50.00", "cambio": "10.00"},
+            {"metodo": "TARJETA",  "monto": "60.00", "tipo": "DEBITO"}
+          ],
+          "cajero": "Nombre"
+        }
+
+    La suma de `monto` debe cuadrar EXACTAMENTE el total del ticket (RN-94) y
+    cada `metodo` debe ser válido (RN-95). El router normaliza la forma vieja
+    (`{metodo, recibido, cambio}`) a `pagos[]` por retrocompatibilidad.
+
     `version` es obligatorio: el cobro es una escritura y valida concurrencia
     optimista (RN-25). Si no coincide, el servidor responde 409.
     """

@@ -216,7 +216,9 @@ describe('CheckoutScreen — cobro (efectivo, tarjeta, cambio, validación)', ()
 
   it('F3.4: muestra el faltante cuando el efectivo es insuficiente', () => {
     render(<CheckoutScreen total={100} onConfirmar={() => {}} onCancelar={() => {}} />);
-    const input = screen.getByPlaceholderText('0.00');
+    // Se localiza por etiqueta: el input de "Monto del abono" (F9.1.3)
+    // comparte el placeholder `0.00`.
+    const input = screen.getByLabelText('Efectivo recibido');
     fireEvent.change(input, { target: { value: '40' } });
     expect(screen.getByText(/Faltan/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /CONFIRMAR PAGO/ }).disabled).toBe(true);
@@ -242,7 +244,9 @@ describe('CheckoutScreen — cobro (efectivo, tarjeta, cambio, validación)', ()
     const boton = screen.getByRole('button', { name: /CONFIRMAR PAGO/ });
     expect(boton.disabled).toBe(false);
     fireEvent.click(boton);
-    expect(onConfirmar).toHaveBeenCalledWith({ metodo: 'TARJETA', recibido: 100, cambio: 0 });
+    // F9.1.3: la UI "Tarjeta" se canoniza a DEBITO (RN-57 solo acepta
+    // EFECTIVO/CREDITO/DEBITO/TRANSFERENCIA; "TARJETA" sería rechazado).
+    expect(onConfirmar).toHaveBeenCalledWith({ metodo: 'DEBITO', recibido: 100, cambio: 0 });
   });
 
   it('F3.4: muestra el error de cobro inline sin cerrar el modal (Regla 19)', () => {

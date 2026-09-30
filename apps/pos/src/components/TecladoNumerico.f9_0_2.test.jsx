@@ -114,7 +114,9 @@ describe('F9.0.2 — CheckoutScreen integra el teclado', () => {
     render(
       <CheckoutScreen total={100} onConfirmar={() => {}} onCancelar={() => {}} />,
     );
-    const input = screen.getByPlaceholderText('0.00');
+    // Se localiza por etiqueta: el input de "Monto del abono" (F9.1.3)
+    // comparte el placeholder `0.00`.
+    const input = screen.getByLabelText('Efectivo recibido');
     fireEvent.change(input, { target: { value: '150' } });
     expect(input.value).toBe('150');
     expect(screen.getByText('$50.00')).toBeTruthy();

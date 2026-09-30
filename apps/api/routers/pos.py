@@ -63,6 +63,8 @@ from rules.registry import (
     rn27_incrementar_version,
     rn37_umbral_anti_degradacion,
     rn49_una_sesion_caja_por_terminal,
+    rn94_suma_de_pagos_cuadra_total,
+    rn95_metodos_de_pago_validos,
 )
 from services.orders_service import proyectar_pedido
 from schemas import (
@@ -205,6 +207,41 @@ async def _ticket_con_items_o_404(db: AsyncSession, ticket_id: UUID) -> Ticket:
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket inexistente")
     return ticket
+
+
+def _normalizar_pagos(payment_details: dict, total: Decimal | None = None) -> dict:
+    """FASE 9.1 — Normaliza `payment_details` a la forma canónica `pagos[]`.
+
+    Retrocompatibilidad: un cobro viejo (`{metodo, recibido, cambio}`) se
+    convierte en `{pagos: [{metodo, monto, recibido, cambio}]}`. Un cobro nuevo
+    (`{pagos: [...]}`) se respeta tal cual. Así el arqueo (F9.1.1) siempre puede
+    leer `pagos[]` sin ramificar por forma.
+
+    El POS viejo NO enviaba `monto` en el pago único: cobraba el total exacto y
+    solo mandaba `recibido`/`cambio`. Por eso, cuando falta `monto`, se usa el
+    `total` del ticket como monto del abono (el pago único cubre el total). Si
+    tampoco hay `total`, se deja sin `monto` para que RN-94 lo detecte.
+    """
+    detalles = dict(payment_details or {})
+    if "pagos" in detalles:
+        return detalles
+    metodo = detalles.get("metodo")
+    if metodo is None:
+        return detalles
+    pago: dict = {"metodo": str(metodo).upper()}
+    # El monto del pago único es el total cobrado. El POS viejo no lo enviaba:
+    # se reconstruye desde el total del ticket (retrocompatibilidad F4.x).
+    if "monto" in detalles:
+        pago["monto"] = detalles["monto"]
+    elif total is not None:
+        pago["monto"] = str(total)
+    if "recibido" in detalles:
+        pago["recibido"] = detalles["recibido"]
+    if "cambio" in detalles:
+        pago["cambio"] = detalles["cambio"]
+    normalizado = {k: v for k, v in detalles.items() if k not in {"metodo", "recibido", "cambio", "monto"}}
+    normalizado["pagos"] = [pago]
+    return normalizado
 
 
 def _recalcular_total(ticket: Ticket) -> Decimal:
@@ -368,10 +405,20 @@ async def cobrar_ticket(
     # (400) con el motivo "No hay turno de caja abierto para esta terminal".
     sesion_caja = await _sesion_caja_activa_o_400(db, ticket.terminal_id)
 
+    # FASE 9.1 — Pagos mixtos: se normaliza `payment_details` a la forma canónica
+    # `pagos[]` (retrocompatibilidad con el cobro viejo de un solo método) y se
+    # valida RN-94 (la suma cuadra el total) + RN-95 (cada método es válido)
+    # ANTES de guardar. Así el arqueo (F9.1.1) siempre lee `pagos[]` y un cobro
+    # mal formado nunca llega a la base de datos.
+    detalles_normalizados = _normalizar_pagos(entrada.payment_details, ticket.total)
+    pagos = detalles_normalizados.get("pagos", [])
+    rn95_metodos_de_pago_validos(pagos)
+    rn94_suma_de_pagos_cuadra_total(pagos, ticket.total)
+
     # RN-14: el cobro lleva el ticket a PAID. RN-27: incrementa el version.
     ticket.status = rn14_ciclo_de_vida("PAID")
     ticket.version = rn27_incrementar_version(ticket.version)
-    ticket.payment_details = entrada.payment_details
+    ticket.payment_details = detalles_normalizados
     # FASE 4.0: liga el ticket a su turno de caja para que el arqueo lo cuente.
     ticket.cash_session_id = sesion_caja.id
 

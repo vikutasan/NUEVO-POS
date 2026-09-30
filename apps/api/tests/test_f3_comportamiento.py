@@ -2,7 +2,7 @@
 
 Verifica los 3 criterios de la puerta (Plan de Construcción §5.3):
 
-  1. La matriz `regla → test` está completa (93 de 93).
+  1. La matriz `regla → test` está completa (95 de 95).
   2. Ninguna regla migró sin test (verificable por la matriz).
   3. Las cicatrices (DRAFT GUARD, anti-degradación, bloqueo optimista,
      reciclaje de folios, idempotencia de emergencia) están presentes y probadas.
@@ -24,20 +24,20 @@ from rules import registry as R
 
 
 # ===========================================================================
-# Criterio 1 y 2 — la matriz regla → test está completa (81/81)
+# Criterio 1 y 2 — la matriz regla → test está completa (95/95)
 # ===========================================================================
 
-def test_criterio1_la_matriz_tiene_93_reglas():
-    """La matriz regla → test tiene exactamente 93 entradas."""
+def test_criterio1_la_matriz_tiene_95_reglas():
+    """La matriz regla → test tiene exactamente 95 entradas."""
     matriz = matriz_regla_test()
-    assert len(matriz) == 93, f"La matriz tiene {len(matriz)} entradas, no 93"
+    assert len(matriz) == 95, f"La matriz tiene {len(matriz)} entradas, no 95"
 
 
-def test_criterio1_los_numeros_van_de_rn01_a_rn93():
-    """Los números de regla son RN-01 … RN-93, sin huecos."""
+def test_criterio1_los_numeros_van_de_rn01_a_rn95():
+    """Los números de regla son RN-01 … RN-95, sin huecos."""
     numeros = [r.numero for r in LAS_81_REGLAS]
-    esperados = [f"RN-{i:02d}" for i in range(1, 94)]
-    assert numeros == esperados, "Los números de regla no son RN-01 … RN-93 en orden"
+    esperados = [f"RN-{i:02d}" for i in range(1, 96)]
+    assert numeros == esperados, "Los números de regla no son RN-01 … RN-95 en orden"
 
 
 def test_criterio2_ninguna_regla_sin_test():
@@ -54,16 +54,16 @@ def test_criterio2_cada_regla_tiene_enunciado():
         assert r.categoria.startswith("C."), f"{r.numero} no tiene categoría"
 
 
-def test_criterio2_las_16_categorias_estan_presentes():
-    """Las 16 categorías C.1 … C.16 están representadas."""
+def test_criterio2_las_17_categorias_estan_presentes():
+    """Las 17 categorías C.1 … C.17 están representadas."""
     categorias = {r.categoria for r in LAS_81_REGLAS}
-    esperadas = {f"C.{i}" for i in range(1, 17)}
+    esperadas = {f"C.{i}" for i in range(1, 18)}
     assert categorias == esperadas, f"Faltan categorías: {esperadas - categorias}"
 
 
-def test_listar_reglas_devuelve_las_93():
-    """listar_reglas() devuelve las 93 reglas."""
-    assert len(listar_reglas()) == 93
+def test_listar_reglas_devuelve_las_95():
+    """listar_reglas() devuelve las 95 reglas."""
+    assert len(listar_reglas()) == 95
 
 
 # ===========================================================================
@@ -689,6 +689,48 @@ def test_rn81():
     R.rn81_sin_offset_hardcodeado("instante.astimezone(get_business_tz())")
     with pytest.raises(ReglaViolada):
         R.rn81_sin_offset_hardcodeado("instante + timedelta(hours=-6)")
+
+
+# ===========================================================================
+# C.17 — Pagos mixtos (RN-94 a RN-95) — FASE 9.1
+# ===========================================================================
+
+def test_rn94():
+    """RN-94: la suma de los pagos cuadra exactamente el total del ticket."""
+    # Un pago mixto que cuadra: 40 + 60 = 100.
+    R.rn94_suma_de_pagos_cuadra_total(
+        [{"metodo": "EFECTIVO", "monto": "40.00"}, {"metodo": "DEBITO", "monto": "60.00"}],
+        Decimal("100.00"),
+    )
+    # Un pago único que cuadra.
+    R.rn94_suma_de_pagos_cuadra_total([{"metodo": "EFECTIVO", "monto": "100.00"}], Decimal("100.00"))
+    # Cobrar de menos (saldo pendiente) se rechaza.
+    with pytest.raises(ReglaViolada) as e:
+        R.rn94_suma_de_pagos_cuadra_total([{"metodo": "EFECTIVO", "monto": "40.00"}], Decimal("100.00"))
+    assert e.value.codigo == 400
+    # Cobrar de más (cambio mal calculado) se rechaza.
+    with pytest.raises(ReglaViolada):
+        R.rn94_suma_de_pagos_cuadra_total([{"metodo": "EFECTIVO", "monto": "120.00"}], Decimal("100.00"))
+    # Sin pagos se rechaza.
+    with pytest.raises(ReglaViolada):
+        R.rn94_suma_de_pagos_cuadra_total([], Decimal("100.00"))
+
+
+def test_rn95():
+    """RN-95: cada pago usa un método válido (reutiliza RN-57)."""
+    # Un pago mixto con métodos válidos pasa.
+    R.rn95_metodos_de_pago_validos(
+        [{"metodo": "EFECTIVO", "monto": "40.00"}, {"metodo": "TRANSFERENCIA", "monto": "60.00"}]
+    )
+    # Un método inválido en cualquier abono se rechaza.
+    with pytest.raises(ReglaViolada) as e:
+        R.rn95_metodos_de_pago_validos(
+            [{"metodo": "EFECTIVO", "monto": "40.00"}, {"metodo": "BITCOIN", "monto": "60.00"}]
+        )
+    assert e.value.codigo == 400
+    # Sin pagos se rechaza.
+    with pytest.raises(ReglaViolada):
+        R.rn95_metodos_de_pago_validos([])
 
 
 # ===========================================================================

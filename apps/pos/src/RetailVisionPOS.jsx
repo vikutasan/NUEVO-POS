@@ -68,6 +68,9 @@ import GestorDeCaja from './GestorDeCaja.jsx';
 // F4.5.3 — Guarda de cobro: la pantalla consulta el turno de caja para avisar
 // ANTES de intentar cobrar (en vez de dejar que el backend devuelva un 400).
 import * as caja from './services/cashService.js';
+// F9.1.3 — Pagos mixtos: el checkout devuelve N abonos y aquí se construye el
+// `payment_details` canónico (valida RN-94 en la frontera; nunca lanza).
+import { construirPaymentDetails } from './services/checkoutService.js';
 
 /**
  * F7.7d — LA TERMINAL ES UN PROP, NO UNA CONSTANTE.
@@ -351,11 +354,31 @@ export default function RetailVisionPOS({
         ticketIdRef.current = creado.data.id;
       }
 
-      const pagado = await acciones.cobrar({
-        metodo: pago.metodo,
-        recibido: pago.recibido,
-        cambio: pago.cambio,
-      });
+      // F9.1.3 — El checkout puede devolver DOS formas:
+      //   - `{ abonos: [...] }`  → cobro MIXTO (N pagos). Se construye el
+      //     `payment_details` canónico con el servicio (valida RN-94 en la
+      //     frontera; nunca lanza).
+      //   - `{ metodo, recibido, cambio }` → cobro de UN solo pago (regresión).
+      let paymentDetails;
+      if (Array.isArray(pago?.abonos)) {
+        const construido = construirPaymentDetails({
+          abonos: pago.abonos,
+          total: carrito.total,
+        });
+        if (construido.outcome !== 'ok') {
+          setError(construido.reason || 'Los pagos no cuadran con el total');
+          return;
+        }
+        paymentDetails = construido.data;
+      } else {
+        paymentDetails = {
+          metodo: pago.metodo,
+          recibido: pago.recibido,
+          cambio: pago.cambio,
+        };
+      }
+
+      const pagado = await acciones.cobrar(paymentDetails);
       if (pagado.outcome !== 'ok') {
         setError(pagado.reason || 'Error al cobrar el ticket');
         return;

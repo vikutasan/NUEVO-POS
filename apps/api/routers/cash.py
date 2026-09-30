@@ -91,6 +91,14 @@ async def _ventas_en_efectivo(db: AsyncSession, cash_session_id: UUID) -> Decima
     El cobro del POS (FASE 4.0) liga cada ticket a su caja. Aquí se leen esos
     tickets y se clasifican por método (RN-57): solo el EFECTIVO entra al
     esperado de la caja física. Crédito/débito/transferencia no son efectivo.
+
+    FASE 9.1.1 — PAGOS MIXTOS (corrección crítica). Antes se leía
+    `payment_details["metodo"]` como un único string y se sumaba `t.total`
+    completo: un ticket pagado $40 en efectivo + $60 con tarjeta habría metido
+    los $100 al efectivo esperado (inflando la caja en $60). Ahora se lee la
+    forma canónica `pagos[]` y se suma SOLO el `monto` de cada abono cuyo
+    método sea EFECTIVO. Se mantiene la retrocompatibilidad con el cobro viejo
+    (`{metodo, monto}` sin `pagos[]`).
     """
     tickets = (
         await db.execute(select(Ticket).where(Ticket.cash_session_id == cash_session_id))
@@ -99,10 +107,20 @@ async def _ventas_en_efectivo(db: AsyncSession, cash_session_id: UUID) -> Decima
     pagos: list[dict] = []
     for t in tickets:
         detalles = t.payment_details or {}
+        # Forma canónica (FASE 9.1): `pagos[]` con el monto de cada abono.
+        abonos = detalles.get("pagos")
+        if isinstance(abonos, list) and abonos:
+            for abono in abonos:
+                metodo = str(abono.get("metodo", "")).upper()
+                # RN-57: un método desconocido no se clasifica; se ignora.
+                if metodo in {"EFECTIVO", "CREDITO", "DEBITO", "TRANSFERENCIA"}:
+                    pagos.append({"metodo": metodo, "monto": abono.get("monto", "0.00")})
+            continue
+        # Retrocompatibilidad: cobro viejo de un solo método. El monto es el
+        # total del ticket (el POS viejo no enviaba `monto` por abono).
         metodo = str(detalles.get("metodo", "")).upper()
-        # RN-57: un método desconocido no se clasifica; se ignora del efectivo.
         if metodo in {"EFECTIVO", "CREDITO", "DEBITO", "TRANSFERENCIA"}:
-            pagos.append({"metodo": metodo, "monto": t.total})
+            pagos.append({"metodo": metodo, "monto": detalles.get("monto", t.total)})
 
     clasificado = rn58_clasificacion_alimenta_resumen(pagos)
     return clasificado.get("EFECTIVO", Decimal("0.00"))

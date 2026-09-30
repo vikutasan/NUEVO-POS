@@ -1,4 +1,4 @@
-"""Las 93 reglas de negocio (RN-01 a RN-93) — FASE 3 + FASE 8.0 (CRM).
+"""Las 95 reglas de negocio (RN-01 a RN-95) — FASE 3 + FASE 8.0 (CRM) + FASE 9.1 (Pagos mixtos).
 
 Cada regla es una `Regla` con:
   - `numero`   : RN-01 … RN-93
@@ -473,6 +473,37 @@ def rn58_clasificacion_alimenta_resumen(pagos: list[dict]) -> dict:
     return resumen
 
 
+def rn94_suma_de_pagos_cuadra_total(pagos: list[dict], total: Decimal) -> None:
+    """RN-94: la suma de los pagos debe cuadrar EXACTAMENTE el total del ticket.
+
+    FASE 9.1 — Pagos mixtos. El dinero es Decimal (DT-02): no hay tolerancia de
+    punto flotante. Si la suma de los abonos no es igual al total, se lanza
+    `ReglaViolada` (400). Esto impide cobrar de menos (saldo pendiente) o de más
+    (cambio mal calculado) y es la defensa de frontera del cobro mixto.
+    """
+    if not pagos:
+        raise ReglaViolada("RN-94", "El cobro no tiene pagos", 400)
+    suma = sum((Decimal(str(p["monto"])) for p in pagos), Decimal("0.00"))
+    if suma != Decimal(str(total)):
+        raise ReglaViolada(
+            "RN-94",
+            f"La suma de los pagos ({suma}) no cuadra el total ({total})",
+            400,
+        )
+
+
+def rn95_metodos_de_pago_validos(pagos: list[dict]) -> None:
+    """RN-95: cada pago usa un método válido (reutiliza RN-57, no duplica la lista).
+
+    FASE 9.1 — Pagos mixtos. Se valida cada abono por separado para que un pago
+    mixto con un método inválido falle con el mismo motivo que un pago único.
+    """
+    if not pagos:
+        raise ReglaViolada("RN-95", "El cobro no tiene pagos", 400)
+    for p in pagos:
+        rn57_clasificar_por_metodo(str(p.get("metodo", "")).upper())
+
+
 def rn59_reporte_usa_dia_local(instante_utc: datetime) -> str:
     """RN-59: el reporte diario usa el día local de negocio, no el día UTC."""
     return a_hora_local(instante_utc).strftime("%Y-%m-%d")
@@ -880,11 +911,14 @@ LAS_81_REGLAS: tuple[Regla, ...] = (
     Regla("RN-91", "C.16", "Un beneficio solo se aplica al cliente que lo posee.", "test_rn91", rn91_beneficio_pertenece_al_cliente),
     Regla("RN-92", "C.16", "Una promoción solo aplica si está vigente a la fecha.", "test_rn92", rn92_promocion_vigente),
     Regla("RN-93", "C.16", "Cada beneficio aplicado se registra en la auditoría (DT-05).", "test_rn93", rn93_auditoria_del_beneficio_aplicado),
+    # C.17 — Pagos mixtos (RN-94 a RN-95) — FASE 9.1
+    Regla("RN-94", "C.17", "La suma de los pagos cuadra exactamente el total del ticket.", "test_rn94", rn94_suma_de_pagos_cuadra_total),
+    Regla("RN-95", "C.17", "Cada pago usa un método válido (efectivo, crédito, débito, transferencia).", "test_rn95", rn95_metodos_de_pago_validos),
 )
 
 
 def listar_reglas() -> tuple[Regla, ...]:
-    """Devuelve las 93 reglas en orden."""
+    """Devuelve las 95 reglas en orden."""
     return LAS_81_REGLAS
 
 
