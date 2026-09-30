@@ -3,6 +3,7 @@
 > **Fase:** 7.7 (corrección de un hueco estructural detectado en la verificación visual de F7.7)
 > **Estado:** ✅ CERRADA
 > **Fecha:** 2026-09-30
+> **Commit:** `2f07577`
 > **Tipo:** Corrección de defecto bloqueante (no una funcionalidad nueva)
 
 ---
