@@ -122,6 +122,14 @@ brechas), no solo la compuerta de calidad de cada pieza.
 | `FICHA_F10_2_B01_COPIAR_URL.md` | El cierre de la única brecha portada |
 | `PLAN_MAESTRO_DEFINITIVO_POS.md` §6.8 | UX heredada — la integración se hereda |
 | `PLAN_MAESTRO_DEFINITIVO_POS.md` §10.6.1 | La lección de F4.5 — la integración es una compuerta |
+| `PLAN_MAESTRO_DEFINITIVO_POS.md` §10.6.2 | La lección de F10 — la completitud del conjunto es una compuerta |
 | `PLAN_MAESTRO_DEFINITIVO_POS.md` §11 | Documentación final (se ejecuta DESPUÉS de F10) |
 | `FICHA_F4_5_INTEGRACION.md` | Instancia 1 (GestorDeCaja huérfano) |
 | `FICHA_F9_1_4_IMPRESION_CIERRE.md` | Instancia 2 (`payment_details`) |
+
+### 7.1 Commits
+
+| Repo | Commit | Contenido |
+|------|--------|-----------|
+| `NUEVO-POS` | `168003c` | B-01 (Copiar URL) + test 4/4 + `FICHA_F10_2_B01_COPIAR_URL.md` + `FICHA_F10_PARIDAD.md` |
+| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | `bf58859` | Plan Maestro §7 (Fase 10) + §10.6.2 + `PLAN_DE_ABORDAJE_FASE_10_PARIDAD.md` |
