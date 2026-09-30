@@ -1,12 +1,14 @@
 # 🧩 FICHA F4.5 — MONTAJE DEL GESTOR DE CAJA (micro-fase correctiva)
 
-> **Versión:** 1.0
+> **Versión:** 1.1
 > **Fecha:** 30 Sep 2026
 > **Autor:** Arquitecto del Nuevo POS
 > **Estado:** ✅ CERRADA
 > **Naturaleza:** Micro-fase **CORRECTIVA** — cierra un hueco de INTEGRACIÓN
 > detectado en la Fase 4. No es una fase nueva del Plan Maestro.
 > **Plan de referencia:** `PLAN_DE_ABORDAJE_FASE_4_5_MONTAJE_CAJA.md` (v1.0)
+> **Commit de cierre (NUEVO-POS):** `4fd127e`
+> **Commit del Plan Maestro (PLANOS):** `e44d19c`
 
 ---
 
@@ -200,3 +202,4 @@ npx vitest run src/RetailVisionPOS.f4_5.test.jsx
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 30 Sep 2026 | Ficha inicial de cierre de la micro-fase F4.5. CI completo en verde. |
+| 1.1 | 30 Sep 2026 | Registro de hashes reales: NUEVO-POS `4fd127e`, PLANOS `e44d19c`. |
