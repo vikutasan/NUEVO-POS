@@ -3,7 +3,7 @@
 **Sub-fase:** F8.2 — `notificationsService.js`
 **Fecha:** 30 de septiembre de 2026
 **Estado:** ✅ CERRADA
-**Commit de esta sub-fase:** _(pendiente — se registra tras el commit)_
+**Commit de esta sub-fase:** `c42d83c`
 
 ---
 
