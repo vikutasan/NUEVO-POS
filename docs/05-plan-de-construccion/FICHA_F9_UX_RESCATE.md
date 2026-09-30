@@ -39,9 +39,9 @@ La Fase 9 se ejecutó **de adentro hacia afuera**: primero el componente con su 
 
 | Sub-fase | Qué construyó | Gate | Commit |
 |---|---|---|---|
-| **9.0.1** | `ExitAccountModal.jsx` (salvaguarda de salida con cuenta abierta) + cableado en `RetailVisionPOS.jsx` | 12/12 | `PENDIENTE` |
-| **9.0.2** | `TecladoNumerico.jsx` (teclado táctil puro) + montaje en `CheckoutScreen.jsx` | 12/12 | `PENDIENTE` |
-| **9.0.3** | `OfflineBanner` en `POSOverlays.jsx` (solo estado de red) + montaje en `RetailVisionPOS.jsx` | 6/6 | `PENDIENTE` |
+| **9.0.1** | `ExitAccountModal.jsx` (salvaguarda de salida con cuenta abierta) + cableado en `RetailVisionPOS.jsx` | 12/12 | `20a163d` |
+| **9.0.2** | `TecladoNumerico.jsx` (teclado táctil puro) + montaje en `CheckoutScreen.jsx` | 12/12 | `20a163d` |
+| **9.0.3** | `OfflineBanner` en `POSOverlays.jsx` (solo estado de red) + montaje en `RetailVisionPOS.jsx` | 6/6 | `20a163d` |
 
 **Total: 30 criterios de puerta en verde.**
 
@@ -246,6 +246,7 @@ Test Files  3 passed (3)
 | Versión | Fecha | Cambio |
 |---------|-------|--------|
 | 1.0 | 30 Sep 2026 | Ficha de cierre inicial. 3 piezas (F9.0.1-F9.0.3) + CI verde + trazabilidad. |
+| 1.1 | 30 Sep 2026 | Registro de los hashes reales: NUEVO-POS `20a163d` (código + ficha) · PLANOS `3f942f9` (Plan Maestro v2.0). |
 
 ---
 
