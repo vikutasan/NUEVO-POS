@@ -1,4 +1,4 @@
-"""Los 17 modelos del POS nuevo — FASE 1 (Cimiento de datos).
+"""Los 18 modelos del POS nuevo — FASE 1 (Cimiento de datos) + FASE 7.5.1a.
 
 Cada modelo corresponde a una tabla del `MODELO_DE_DATOS_DEL_NUEVO_POS.md`
 (Documento 8). Todos aplican las 4 correcciones estructurales:
@@ -19,6 +19,7 @@ from .catalog import Category, Product, ProductTechnicalSheet
 from .heladeria import HeladeriaProductConfig, TicketItemComponent
 from .orders import Order
 from .pos import TerminalLock, TerminalSession, Ticket, TicketItem
+from .settings import SystemSetting
 from .warehouse import (
     Almacen,
     MovimientoInventario,
@@ -42,6 +43,8 @@ __all__ = [
     "ProductTechnicalSheet",
     # Pedidos
     "Order",
+    # Configuración transversal (DT-06 — FASE 7.5.1a)
+    "SystemSetting",
     # Almacén (ledger)
     "Almacen",
     "StockAlmacen",

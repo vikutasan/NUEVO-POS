@@ -71,10 +71,17 @@ export function useTicketActions(opciones = {}) {
 
   /**
    * Crea el ticket con sus líneas (contrato 3). NUNCA lanza.
+   *
+   * F7.5.6 — El segundo argumento `bloquePedido` es OPCIONAL: son los campos
+   * `order_*` que el modal de programación (F7.5.5) arma con
+   * `construirBloquePedido`. Si no viene (o viene `{}`), el ticket es una venta
+   * directa de mostrador y el comportamiento es idéntico al de la Fase 3.
+   *
    * @param {Array<{product_id: string, quantity: number}>} items
+   * @param {object} [bloquePedido] - campos `order_*` (contrato 3, opcionales)
    * @returns {Promise<import('../utils/outcome.js').Outcome>}
    */
-  const crearTicket = useCallback(async (items) => {
+  const crearTicket = useCallback(async (items, bloquePedido = null) => {
     const cliente = apiRef.current;
     if (!cliente) {
       const r = { outcome: 'error', reason: 'api_no_disponible', data: null };
@@ -91,6 +98,10 @@ export function useTicketActions(opciones = {}) {
             terminal_id: terminalRef.current,
             channel: channelRef.current,
             items,
+            // Solo se adjunta el bloque si trae campos (no se mandan `{}`).
+            ...(bloquePedido && Object.keys(bloquePedido).length > 0
+              ? bloquePedido
+              : {}),
           })
         )
       );

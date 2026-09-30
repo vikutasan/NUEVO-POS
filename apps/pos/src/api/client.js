@@ -298,6 +298,23 @@ export function listarCuentasAbiertas(terminalId) {
   return peticion(`/pos/open-accounts?${qs.toString()}`);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FASE 7.5.4 — Pedidos (contrato 16)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /orders/by-ticket/{ticket_id} — el pedido asociado a un ticket (contrato 16).
+ *
+ * Devuelve una PROYECCIÓN del pedido (10 campos), no la fila completa de
+ * `orders`. El POS la usa para mostrar la programación de un pedido ya creado.
+ * Un ticket sin pedido (venta directa) responde 404.
+ *
+ * @param {string} ticketId
+ */
+export function getPedidoDelTicket(ticketId) {
+  return peticion(`/orders/by-ticket/${ticketId}`);
+}
+
 export default {
   getCatalogo,
   getSesionActiva,
@@ -318,5 +335,6 @@ export default {
   cerrarTurno,
   getReporteDiario,
   listarCuentasAbiertas,
+  getPedidoDelTicket,
   ApiError,
 };

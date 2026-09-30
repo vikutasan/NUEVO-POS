@@ -98,11 +98,31 @@ class LineaEntrada(BaseModel):
 
 
 class CrearTicketEntrada(BaseModel):
-    """Entrada del contrato 3: crear un ticket OPEN con sus líneas."""
+    """Entrada del contrato 3: crear un ticket OPEN con sus líneas.
+
+    FASE 7.5.0 — El ticket puede nacer como PEDIDO PROGRAMADO. Los 9 campos
+    de programación son OPCIONALES: si no vienen, el ticket es una venta
+    directa de mostrador (comportamiento intacto desde la Fase 3).
+
+    El POS guarda su copia de trabajo en `tickets.order_*` (los 9 campos del
+    modelo `Ticket`). La proyección a `orders` la gobierna el módulo Pedidos
+    (contrato 15), no el POS (A-02: frontera por contratos).
+    """
 
     terminal_id: str
     channel: str = "PANADERIA"
     items: list[LineaEntrada] = Field(min_length=1)
+
+    # ── Programación de pedido (opcional) ─────────────────────────────────
+    order_type: str = "VENTA_DIRECTA"
+    order_status: str | None = None
+    delivery_type: str | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    committed_at: datetime | None = None
+    packaging_type: str | None = None
+    delivery_address: str | None = None
+    order_notes: str | None = None
 
 
 class LineaSalida(BaseModel):
@@ -389,3 +409,30 @@ class CuentasAbiertasSalida(BaseModel):
     """
 
     cuentas: list[CuentaAbiertaSalida] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Pedidos — Contrato 16 (FASE 7.5.3)
+# ---------------------------------------------------------------------------
+
+class PedidoDelTicketSalida(BaseModel):
+    """El pedido asociado a un ticket (contrato 16).
+
+    Es una PROYECCIÓN, no la fila completa de `orders` (O-23): expone solo los
+    10 campos que el POS necesita para mostrar la programación. NO expone
+    `delivery_lat`/`delivery_lng`/`delivery_distance_km` (internos de Reparto)
+    ni `created_at`/`updated_at` (auditoría).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    order_id: UUID
+    delivery_type: str
+    status: str
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    committed_at: datetime | None = None
+    packaging_type: str
+    delivery_address: str | None = None
+    delivery_fee: Decimal | None = None
+    notes: str | None = None

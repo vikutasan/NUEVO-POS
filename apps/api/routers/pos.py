@@ -64,6 +64,7 @@ from rules.registry import (
     rn37_umbral_anti_degradacion,
     rn49_una_sesion_caja_por_terminal,
 )
+from services.orders_service import proyectar_pedido
 from schemas import (
     AnadirItemEntrada,
     CambiarCantidadEntrada,
@@ -281,6 +282,9 @@ async def crear_ticket(
         )
 
     # RN-14: el ticket nace OPEN. RN-10: folio V####. RN-15: version inicial 0.
+    # FASE 7.5.0 — El ticket guarda su copia de trabajo de la programación en
+    # `tickets.order_*` (los 9 campos del modelo). Si el cliente no los manda,
+    # se usan los defaults del modelo (VENTA_DIRECTA / PROGRAMADO...).
     ticket = Ticket(
         account_num=await _siguiente_folio(db),
         status=rn14_ciclo_de_vida("OPEN"),
@@ -290,9 +294,22 @@ async def crear_ticket(
         channel=entrada.channel or "PANADERIA",
         session_id=sesion.id,
         items=lineas,
+        order_type=entrada.order_type or "VENTA_DIRECTA",
+        order_status=entrada.order_status or "PROGRAMADO PARA SER PREPARADO",
+        delivery_type=entrada.delivery_type,
+        customer_name=entrada.customer_name,
+        customer_phone=entrada.customer_phone,
+        committed_at=entrada.committed_at,
+        packaging_type=entrada.packaging_type,
+        delivery_address=entrada.delivery_address,
+        order_notes=entrada.order_notes,
     )
     db.add(ticket)
-    await db.commit()
+    # FASE 7.5.0 / D-5 — NO se hace commit aquí. El ticket se `flush()`ea para
+    # obtener su `id`, y el commit lo hace el llamador (o el endpoint) DESPUÉS
+    # de proyectar el pedido. Así el ticket y su pedido nacen en la MISMA
+    # transacción: o existen los dos, o no existe ninguno (atomicidad).
+    await db.flush()
 
     # Recargar con las líneas ya persistidas para proyectar la salida completa.
     ticket = (
@@ -300,6 +317,17 @@ async def crear_ticket(
             select(Ticket).options(selectinload(Ticket.items)).where(Ticket.id == ticket.id)
         )
     ).scalars().one()
+
+    # FASE 7.5.2 — Proyección del pedido (contrato 15) en la MISMA transacción.
+    # Si la política de pago es SIN_PAGO, el pedido nace aquí (TENTATIVO). Si es
+    # ANTICIPO o PAGO_COMPLETO, `proyectar_pedido` no hace nada al crear: el
+    # pedido nacerá al cobrar. Una venta directa nunca proyecta.
+    await proyectar_pedido(db, ticket)
+
+    # FASE 7.5.0 / D-5 — El commit se hace AQUÍ, al final del endpoint, DESPUÉS
+    # de proyectar el pedido. Así el ticket y su pedido nacen juntos: o existen
+    # los dos, o no existe ninguno (atomicidad).
+    await db.commit()
 
     return _ticket_a_salida(ticket)
 
@@ -347,8 +375,25 @@ async def cobrar_ticket(
     # FASE 4.0: liga el ticket a su turno de caja para que el arqueo lo cuente.
     ticket.cash_session_id = sesion_caja.id
 
-    await db.commit()
+    # FASE 7.5.0 / D-5b — `flush()` en vez de `commit()`: el cobro deja el ticket
+    # PAID en la transacción abierta. En F7.5.2 la proyección del pedido (que al
+    # pasar a PAID cambia su estado a PAGADO) se insertará aquí, y el commit
+    # final lo hará el endpoint. Así el cobro y la actualización del pedido son
+    # atómicos: o se cobra y el pedido queda PAGADO, o no pasa ninguno de los dos.
+    await db.flush()
     await db.refresh(ticket)
+
+    # FASE 7.5.2 — Proyección del pedido en el COBRO (contrato 15). El cobro ES
+    # la señal de que el pedido puede prepararse: se proyecta con `forzar=True`
+    # para que la política `PAGO_COMPLETO` (la default segura) no lo bloquee.
+    # Si el pedido ya existía (política SIN_PAGO/ANTICIPO), se ACTUALIZA a
+    # PAGADO en vez de duplicarse (idempotencia por `ticket_id`, RN-68).
+    await proyectar_pedido(db, ticket, forzar=True)
+
+    # FASE 7.5.0 / D-5b — El commit se hace AQUÍ, al final del endpoint, DESPUÉS
+    # de proyectar el pedido. Así el cobro y el paso del pedido a PAGADO son
+    # atómicos: o se cobra y el pedido queda PAGADO, o no pasa ninguno de los dos.
+    await db.commit()
 
     return _ticket_a_salida(ticket)
 

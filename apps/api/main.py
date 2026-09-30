@@ -24,7 +24,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from routers import catalog, cash, pos, ia, terminals
+from routers import catalog, cash, ia, orders, pos, terminals
 from rules import ReglaViolada
 
 app = FastAPI(
@@ -71,6 +71,7 @@ app.include_router(pos.router)
 app.include_router(terminals.router)
 app.include_router(cash.router)
 app.include_router(ia.router)
+app.include_router(orders.router)
 
 
 @app.get("/health", tags=["salud"])

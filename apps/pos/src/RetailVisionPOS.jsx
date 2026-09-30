@@ -55,6 +55,7 @@ import POSHeader from './components/POSHeader.jsx';
 import ThemeSelector from './components/ThemeSelector.jsx';
 import VoiceCartPanel from './components/VoiceCartPanel.jsx';
 import VisionVisor from './components/VisionVisor.jsx';
+import OrderProgrammingModal from './components/OrderProgrammingModal.jsx';
 import { OverlayExito, OverlayError } from './components/POSOverlays.jsx';
 
 /**
@@ -105,6 +106,10 @@ export default function RetailVisionPOS({
   const [temaAbierto, setTemaAbierto] = useState(false);
   const [vozAbierta, setVozAbierta] = useState(false);
   const [viewMode, setViewMode] = useState('GRID'); // 'GRID' | 'CAMERA'
+  // F7.5.6 — Modal de programación de pedido (puente POS → Pedidos).
+  const [pedidoAbierto, setPedidoAbierto] = useState(false);
+  // Bloque `order_*` capturado por el modal; se adjunta al crear el ticket.
+  const [bloquePedido, setBloquePedido] = useState(null);
 
   // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
   // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
@@ -170,18 +175,23 @@ export default function RetailVisionPOS({
   const ticketIdRef = useRef(ticketId);
   ticketIdRef.current = ticketId;
 
-  const asegurarTicket = useCallback(async () => {
-    if (ticketIdRef.current) return true;
+  // F7.5.6 — `bloquePedido` (opcional): los campos `order_*` que el modal de
+  // programación capturó. Se adjuntan SOLO al crear el ticket (contrato 3).
+  const asegurarTicket = useCallback(
+    async (bloque = null) => {
+      if (ticketIdRef.current) return true;
 
-    const creado = await acciones.crearTicket([]);
-    if (creado.outcome !== 'ok' || !creado.data?.id) {
-      setError(creado.reason || 'No se pudo abrir el ticket');
-      return false;
-    }
-    setTicketId(creado.data.id);
-    ticketIdRef.current = creado.data.id;
-    return true;
-  }, [acciones]);
+      const creado = await acciones.crearTicket([], bloque);
+      if (creado.outcome !== 'ok' || !creado.data?.id) {
+        setError(creado.reason || 'No se pudo abrir el ticket');
+        return false;
+      }
+      setTicketId(creado.data.id);
+      ticketIdRef.current = creado.data.id;
+      return true;
+    },
+    [acciones]
+  );
 
   // ── RN-17: un producto aparece una sola vez; agregarlo incrementa ──────────
   const agregarProducto = useCallback(
@@ -291,6 +301,23 @@ export default function RetailVisionPOS({
     [acciones, carrito]
   );
 
+  // ── F7.5.6 — Programación de pedido (puente POS → Pedidos) ─────────────────
+  // El modal captura los datos y devuelve el bloque `order_*`. Si el ticket aún
+  // no existe, se crea CON el bloque (el backend proyecta el pedido en la misma
+  // transacción, contrato 15). Si ya existe, el bloque se guarda para el
+  // siguiente ticket (el pedido se programa ANTES de abrir la cuenta).
+  const guardarPedido = useCallback(
+    async (bloque) => {
+      setPedidoAbierto(false);
+      setBloquePedido(bloque);
+      if (!ticketIdRef.current) {
+        const listo = await asegurarTicket(bloque);
+        if (!listo) return;
+      }
+    },
+    [asegurarTicket]
+  );
+
   const total = carrito.total;
   const estadoCuenta = acciones.ticket
     ? acciones.ticket.status === 'PAID'
@@ -312,6 +339,8 @@ export default function RetailVisionPOS({
         onAbrirTema={() => setTemaAbierto(true)}
         onAbrirVoz={() => setVozAbierta(true)}
         vozDisponible={voz.disponible}
+        onAbrirPedido={() => setPedidoAbierto(true)}
+        pedidoProgramado={Boolean(bloquePedido)}
       />
 
       {error ? (
@@ -522,6 +551,20 @@ export default function RetailVisionPOS({
             voz.reset();
             setVozAbierta(false);
           }}
+        />
+      ) : null}
+
+      {/* Programación de pedido (F7.5.5) — UX heredada del viejo POS (§6.8).
+          El modal NO toca el carrito ni la API: solo construye el bloque de
+          pedido y lo entrega a `guardarPedido`, que lo persiste por el MISMO
+          camino que la venta directa (POST /pos/tickets → proyección). */}
+      {pedidoAbierto ? (
+        <OrderProgrammingModal
+          lineas={carrito.lineas}
+          numeroCuenta={ticketId || null}
+          datosIniciales={bloquePedido}
+          onGuardar={guardarPedido}
+          onCerrar={() => setPedidoAbierto(false)}
         />
       ) : null}
 

@@ -55,6 +55,8 @@ export default function POSHeader({
   onAbrirTema,
   onAbrirVoz,
   vozDisponible = true,
+  onAbrirPedido,
+  pedidoProgramado = false,
 }) {
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
   const nombreTerminal =
@@ -98,6 +100,21 @@ export default function POSHeader({
         {/* Acciones de IA: tema (overlay nuevo) y voz (overlay con gate).
             R-04: target ≥44px. La visión NO vive aquí: es un modo de vista
             que se conmuta desde la CategoryBar (UX heredada del viejo POS). */}
+        {/* F7.5.6 — Programar pedido (puente POS → Pedidos). Se resalta cuando
+            ya hay un pedido programado en la cuenta en curso. */}
+        <button
+          type="button"
+          onClick={() => onAbrirPedido?.()}
+          className={`min-h-tactil min-w-tactil border rounded-xl px-3 flex items-center justify-center transition-all ${
+            pedidoProgramado
+              ? 'bg-acento text-fondo-profundo border-acento'
+              : 'bg-fondo-profundo border-white/5 hover:bg-fondo-panel'
+          }`}
+          title={pedidoProgramado ? 'Pedido programado' : 'Programar pedido'}
+          aria-label="Programar pedido"
+        >
+          <span aria-hidden="true">📌</span>
+        </button>
         <button
           type="button"
           onClick={() => onAbrirTema?.()}
