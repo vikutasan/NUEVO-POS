@@ -14,6 +14,25 @@
 
 import React from 'react';
 
+/**
+ * F7.7e — HALLAZGO 5: la API serializa `price` (Decimal) como STRING.
+ *
+ * `GET /catalog/products-for-sale` devuelve `"price":"12.00"`, no `12.00`.
+ * El código original hacía `(producto.price || 0).toFixed(2)`: como un string
+ * no vacío es *truthy*, el `|| 0` no protegía nada y `.toFixed` —que solo
+ * existe en `Number`— lanzaba `TypeError`. React desmontaba el árbol entero y
+ * la pantalla quedaba en blanco (solo el fondo `--madera` del `body`).
+ *
+ * El gate no lo detectó porque sus fixtures usaban precios NUMÉRICOS. Este
+ * helper coercionar SIEMPRE con `Number()` y cae a `0` si el valor no es
+ * numérico, igual que `formatearMoneda` en `SalesReceipt`/`POSOverlays`.
+ */
+function formatearPrecio(valor) {
+  const numero = Number(valor);
+  if (Number.isNaN(numero)) return '$0.00';
+  return `$${numero.toFixed(2)}`;
+}
+
 export default function ProductCard({ producto, onAgregar }) {
   const sinStock = producto.activo === false;
 
@@ -48,7 +67,7 @@ export default function ProductCard({ producto, onAgregar }) {
         </p>
         <div className="bg-acento group-hover:bg-fondo-profundo px-3 py-0.5 rounded-full shadow-md mt-1">
           <p className="text-[14px] font-black text-fondo-profundo group-hover:text-acento italic font-mono tracking-tighter">
-            ${(producto.price || 0).toFixed(2)}
+            {formatearPrecio(producto.price)}
           </p>
         </div>
       </div>
