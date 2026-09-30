@@ -299,6 +299,31 @@ export function listarCuentasAbiertas(terminalId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FASE 8.1 — Beneficios del cliente (contrato 26)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /crm/benefits/for-ticket — los beneficios de un cliente para un carrito
+ * (contrato 26, proveedor CRM).
+ *
+ * El POS NO calcula descuentos: pregunta al CRM y el CRM decide. La respuesta
+ * es una PROYECCIÓN (`customer_id`, `nombre`, `nivel`, `descuentos`,
+ * `puntos_a_ganar`, `puntos_disponibles`, `puede_canjear`), no la tabla
+ * `customers`.
+ *
+ * DT-02: `total` y `unit_price` viajan como String en el cable (dinero decimal).
+ * El servicio los coerciona con `Number()` en la frontera.
+ *
+ * @param {{telefono: string, items: Array<{product_id: string, qty: number, unit_price: string}>}} cuerpo
+ */
+export function getBeneficiosParaTicket(cuerpo) {
+  return peticion('/crm/benefits/for-ticket', {
+    method: 'POST',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // FASE 7.5.4 — Pedidos (contrato 16)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -336,5 +361,6 @@ export default {
   getReporteDiario,
   listarCuentasAbiertas,
   getPedidoDelTicket,
+  getBeneficiosParaTicket,
   ApiError,
 };
