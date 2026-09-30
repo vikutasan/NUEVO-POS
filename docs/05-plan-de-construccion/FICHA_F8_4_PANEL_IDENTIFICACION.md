@@ -3,7 +3,7 @@
 > **Sub-fase:** F8.4 — Componente `CustomerIdentificationPanel.jsx`
 > **Fase:** 8 — Integración con CRM y Notificaciones (lado POS)
 > **Plan:** [`PLAN_DE_ABORDAJE_FASE_8_POR_PARTES.md`](../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/05-plan-de-construccion/PLAN_DE_ABORDAJE_FASE_8_POR_PARTES.md) §3.5
-> **Commit de esta sub-fase:** _(pendiente de registrar)_
+> **Commit de esta sub-fase:** `70685f5`
 > **Estado:** ✅ CERRADA — gate verde (18 tests)
 
 ---
