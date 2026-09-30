@@ -1,4 +1,4 @@
-"""Registro de los 27 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM).
+"""Registro de los 28 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario).
 
 Cada contrato se declara aquí con su firma completa (entrada/salida) y su
 proveedor. El registro es la fuente única de verdad: el test de la puerta F2
@@ -731,9 +731,40 @@ CONTRATOS: tuple[Contrato, ...] = (
         ),
         estado_hoy="FASE 8.0",
     ),
+    # ── §14 Estadísticas — Contexto diario (proveedor: POS — FASE 10.4) ─────
+    Contrato(
+        numero=28,
+        nombre="pos.contexto_diario",
+        consumidor="Estadísticas",
+        proveedor="POS",
+        operacion="PUT /pos/daily-context",
+        entrada={
+            "target_date": "Date (hora local)",
+            "is_atypical": "Boolean = false",
+            "weather_condition": "String | None",
+            "notes": "String | None",
+        },
+        salida={
+            "target_date": "Date (hora local)",
+            "is_atypical": "Boolean",
+            "weather_condition": "String | None",
+            "notes": "String | None",
+        },
+        garantias=(
+            "El POS captura el contexto del día tras el corte (clima, atípico, notas).",
+            "El POS NO es dueño de la tabla `daily_contexts`: la posee Estadísticas.",
+            "Es una DEUDA: el endpoint aún no existe en el nuevo POS (F10.4 lo porta).",
+            "No bloquea la venta ni el cierre: si falla, el cajero puede omitirlo.",
+        ),
+        errores=(
+            "400 si `target_date` no es una fecha válida.",
+            "503 `ESTADISTICAS_NO_DISPONIBLE` si el módulo no responde; el POS no bloquea.",
+        ),
+        estado_hoy="Deuda",
+    ),
 )
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 27 contratos del registro."""
+    """Devuelve los 28 contratos del registro."""
     return CONTRATOS

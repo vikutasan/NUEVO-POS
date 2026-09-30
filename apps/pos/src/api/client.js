@@ -282,6 +282,31 @@ export function getReporteDiario(fecha) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FASE 10.4 — Contexto diario post-corte (contrato 28, `pos.contexto_diario`)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT del contexto diario al módulo de Estadísticas (contrato 28).
+ *
+ * El POS NO es dueño de la tabla `daily_contexts`: la posee Estadísticas. El
+ * POS solo la ALIMENTA tras el corte (clima, día atípico, notas).
+ *
+ * ── Estado: DEUDA ─────────────────────────────────────────────────────────────
+ * El endpoint propio del POS nuevo (`PUT /pos/daily-context`) AÚN NO EXISTE.
+ * Mientras no exista, se apunta al endpoint heredado del ERP
+ * (`PUT /analytics/context`), que es el que consumía el viejo POS. Cuando el
+ * POS nuevo exponga su endpoint, solo cambia la ruta aquí.
+ *
+ * @param {{target_date: string, is_atypical: boolean, weather_condition: string|null, notes: string|null}} cuerpo
+ */
+export function enviarContextoDiario(cuerpo) {
+  return peticion('/analytics/context', {
+    method: 'PUT',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // FASE 5.1 — Pizarrón de cuentas abiertas (contrato 23)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -381,6 +406,7 @@ export default {
   getResumenTurno,
   cerrarTurno,
   getReporteDiario,
+  enviarContextoDiario,
   listarCuentasAbiertas,
   getPedidoDelTicket,
   getBeneficiosParaTicket,

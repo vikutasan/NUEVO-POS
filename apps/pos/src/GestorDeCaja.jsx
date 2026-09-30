@@ -25,11 +25,21 @@
  *
  * @see PLAN_DE_ABORDAJE_FASE_4_POR_PARTES.md §7 (Sub-fase 4.3)
  * @see FICHA_F4_2_CASH_SERVICE.md (el servicio que consume)
+ *
+ * FASE 10.4 — Contexto diario post-corte (contrato 28, `pos.contexto_diario`).
+ * Al confirmar el cierre del turno se abre `DailyContextModal` para registrar
+ * clima / atípico / notas del día. Es NO crítico: si falla, el corte ya quedó
+ * cerrado y el cajero puede omitirlo. La integración se hereda del viejo POS
+ * (§6.8); la implementación se reescribe con el contrato `{outcome, reason}`.
+ *
+ * @see PLAN_DE_ABORDAJE_F10_4_CONTEXTO_DIARIO.md
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as caja from './services/cashService.js';
+import * as contexto from './services/dailyContextService.js';
 import { esOk } from './utils/outcome.js';
+import DailyContextModal from './components/DailyContextModal.jsx';
 
 /** Formatea un valor como moneda mexicana. */
 function formatearPrecio(valor) {
@@ -67,6 +77,7 @@ export default function GestorDeCaja({
   terminalId,
   usuarioId,
   servicio = caja,
+  servicioContexto = contexto,
   onCerrar,
 }) {
   const [estado, setEstado] = useState(ESTADOS.SIN_TURNO);
@@ -75,6 +86,10 @@ export default function GestorDeCaja({
   const [movimientos, setMovimientos] = useState([]);
   const [error, setError] = useState(null);
   const [ocupado, setOcupado] = useState(false);
+
+  // FASE 10.4 — contexto diario post-corte (no crítico).
+  const [mostrarContexto, setMostrarContexto] = useState(false);
+  const [contextoRegistrado, setContextoRegistrado] = useState(false);
 
   // Campos del formulario de apertura.
   const [fondoInicial, setFondoInicial] = useState('');
@@ -188,7 +203,15 @@ export default function GestorDeCaja({
       return;
     }
     setDiferencia(r.data);
+    // FASE 10.4 — el corte ya quedó cerrado; el contexto es NO crítico.
+    setMostrarContexto(true);
   }, [servicio, turno, conteoEfectivo, conteoCredito, conteoDebito]);
+
+  /** Cierra el modal de contexto diario (guardado u omitido). */
+  const alCerrarContexto = useCallback((registrado = false) => {
+    setMostrarContexto(false);
+    if (registrado) setContextoRegistrado(true);
+  }, []);
 
   const esperado = useMemo(() => Number(resumen?.esperado ?? 0), [resumen]);
   const capturado = Number(conteoEfectivo) || 0;
@@ -433,12 +456,28 @@ export default function GestorDeCaja({
           {diferencia ? (
             <div
               role="status"
-              className="rounded-canon35 bg-acento/20 text-crema-ticket px-4 py-3 text-sm"
+              className="rounded-canon35 bg-acento/20 text-crema-ticket px-4 py-3 text-sm flex flex-col gap-2"
             >
-              Turno cerrado. Diferencia final:{' '}
-              <strong data-testid="diferencia-final">
-                {formatearPrecio(diferencia.diferencia)}
-              </strong>
+              <span>
+                Turno cerrado. Diferencia final:{' '}
+                <strong data-testid="diferencia-final">
+                  {formatearPrecio(diferencia.diferencia)}
+                </strong>
+              </span>
+              {/* FASE 10.4 — contexto diario post-corte (no crítico). */}
+              {contextoRegistrado ? (
+                <span data-testid="contexto-registrado" className="text-crema-ticket/70">
+                  ✅ Contexto del día registrado.
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setMostrarContexto(true)}
+                  className="self-start min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 px-4"
+                >
+                  Registrar contexto del día
+                </button>
+              )}
             </div>
           ) : null}
 
@@ -460,6 +499,14 @@ export default function GestorDeCaja({
             </button>
           </div>
         </section>
+      ) : null}
+
+      {/* FASE 10.4 — modal de contexto diario (se abre al cerrar el turno). */}
+      {mostrarContexto ? (
+        <DailyContextModal
+          servicio={servicioContexto}
+          onCerrar={alCerrarContexto}
+        />
       ) : null}
     </div>
   );
