@@ -447,3 +447,34 @@ async def test_criterio9_usuario_id_vacio_es_rechazado(entorno):
     async with _cliente() as cliente:
         r = await cliente.post("/pos/terminals/T1/lock", json={"usuario_id": ""})
     assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_criterio10_user_id_numerico_es_rechazado_422(entorno):
+    """El contrato declara `user_id` como `str`: un número es 422 (F7.7c).
+
+    Este test DOCUMENTA la causa raíz del bloqueo de entrada. El frontend
+    enviaba `user_id: 1` (número) y Pydantic v2 lo rechazaba con
+    "Input should be a valid string". La corrección vive en la frontera del
+    cliente (coerción a string); aquí se fija que el contrato NO acepta números,
+    para que nadie "arregle" el 422 relajando el esquema en vez de coercionar.
+    """
+    await _limpiar(entorno)
+    async with _cliente() as cliente:
+        r = await cliente.post(
+            "/pos/terminals/lock", json={"terminal_id": "T1", "user_id": 1}
+        )
+    assert r.status_code == 422, r.text
+    assert "string" in r.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_criterio10_user_id_texto_es_aceptado(entorno):
+    """El mismo id, enviado como string, sí toma el candado (200)."""
+    await _limpiar(entorno)
+    async with _cliente() as cliente:
+        r = await cliente.post(
+            "/pos/terminals/lock", json={"terminal_id": "T1", "user_id": "1"}
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["success"] is True

@@ -38,6 +38,21 @@ export class ApiError extends Error {
 }
 
 /**
+ * Normaliza un id de usuario a string para la frontera HTTP.
+ *
+ * Los contratos de candado declaran `usuario_id` como `str` (Pydantic v2 rechaza
+ * un número con 422). El usuario que entrega el ERP puede traer el id como número
+ * (p. ej. `1`). Esta coerción vive AQUÍ, en la frontera del cliente, para que los
+ * hooks no tengan que conocer el tipo exacto que exige el contrato.
+ *
+ * @param {string|number} usuarioId
+ * @returns {string}
+ */
+function aIdTexto(usuarioId) {
+  return usuarioId === null || usuarioId === undefined ? '' : String(usuarioId);
+}
+
+/**
  * Ejecuta una petición al API del POS nuevo.
  * @param {string} ruta  Ruta relativa (p. ej. `/catalog/products-for-sale`).
  * @param {object} [opciones]  Opciones de fetch (method, body, …).
@@ -186,7 +201,7 @@ export function verificarEnvio(ticketId, cuerpo) {
 export function latir(terminalId, usuarioId) {
   return peticion(`/pos/terminals/${terminalId}/heartbeat`, {
     method: 'POST',
-    body: JSON.stringify({ usuario_id: usuarioId }),
+    body: JSON.stringify({ usuario_id: aIdTexto(usuarioId) }),
   });
 }
 
@@ -198,7 +213,7 @@ export function latir(terminalId, usuarioId) {
 export function tomarLock(terminalId, usuarioId) {
   return peticion(`/pos/terminals/${terminalId}/lock`, {
     method: 'POST',
-    body: JSON.stringify({ usuario_id: usuarioId }),
+    body: JSON.stringify({ usuario_id: aIdTexto(usuarioId) }),
   });
 }
 
@@ -210,7 +225,7 @@ export function tomarLock(terminalId, usuarioId) {
 export function liberarLock(terminalId, usuarioId) {
   return peticion(`/pos/terminals/${terminalId}/unlock`, {
     method: 'POST',
-    body: JSON.stringify({ usuario_id: usuarioId }),
+    body: JSON.stringify({ usuario_id: aIdTexto(usuarioId) }),
   });
 }
 

@@ -19,6 +19,22 @@
 const API_BASE_URL = 'http://localhost:5101';
 
 /**
+ * Normaliza un id de usuario a string para la frontera HTTP.
+ *
+ * El contrato de la API declara `user_id`/`usuario_id` como `str` (Pydantic v2
+ * rechaza un número con 422). Pero el usuario que entrega el ERP puede traer el
+ * id como número (p. ej. `1`). Esta coerción vive AQUÍ, en la frontera del
+ * servicio, para que ni el hook ni el componente tengan que conocer el tipo
+ * exacto que exige el contrato.
+ *
+ * @param {string|number} userId
+ * @returns {string}
+ */
+function aIdTexto(userId) {
+  return userId === null || userId === undefined ? '' : String(userId);
+}
+
+/**
  * Obtiene el estado de ocupación de todas las terminales.
  * @returns {Promise<Object>} Mapa { T1: { occupier_id, occupier_name, locked_at, stale_session }, ... }
  */
@@ -38,7 +54,7 @@ export async function lockTerminal(terminalId, userId) {
   const res = await fetch(`${API_BASE_URL}/pos/terminals/lock`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ terminal_id: terminalId, user_id: userId }),
+    body: JSON.stringify({ terminal_id: terminalId, user_id: aIdTexto(userId) }),
   });
   if (!res.ok) throw new Error(`Lock terminal: ${res.status}`);
   return res.json();
@@ -54,7 +70,7 @@ export async function unlockTerminal(terminalId, userId) {
   const res = await fetch(`${API_BASE_URL}/pos/terminals/unlock`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ terminal_id: terminalId, user_id: userId }),
+    body: JSON.stringify({ terminal_id: terminalId, user_id: aIdTexto(userId) }),
   });
   if (!res.ok) throw new Error(`Unlock terminal: ${res.status}`);
   return res.json();
