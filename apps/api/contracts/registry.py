@@ -287,7 +287,14 @@ CONTRATOS: tuple[Contrato, ...] = (
         consumidor="POS",
         proveedor="Caja",
         operacion="POST /cash/open-session",
-        entrada={"terminal_id": "UUID", "usuario_id": "UUID", "monto_inicial": "Numeric(12,2)"},
+        entrada={
+            "terminal_id": "UUID",
+            "usuario_id": "UUID",
+            "monto_inicial": "Numeric(12,2)",
+            # F10.5 — paridad de datos: el nombre del cajero que el viejo POS
+            # persistía en `cash_sessions.employee_name`. Opcional.
+            "usuario_nombre": "String NULL",
+        },
         salida={"cash_session_id": "UUID", "abierta_en": "DateTime(timezone=True)"},
         garantias=("Una sola sesión abierta por terminal.",),
         errores=("409 si ya hay una sesión abierta en la terminal.",),
@@ -320,6 +327,15 @@ CONTRATOS: tuple[Contrato, ...] = (
         salida={
             "esperado": "Numeric(12,2)",
             "movimientos": "List[{tipo, monto: Numeric(12,2)}]",
+            # F10.5 — paridad de datos: el desglose que el viejo POS exponía
+            # en `CashSummaryResponse` (8 campos). Se calcula con RN-53/RN-58.
+            "fondo_inicial": "Numeric(12,2)",
+            "total_entradas": "Numeric(12,2)",
+            "total_salidas": "Numeric(12,2)",
+            "total_credito": "Numeric(12,2)",
+            "total_debito": "Numeric(12,2)",
+            "total_ventas": "Numeric(12,2)",
+            "num_transacciones": "Integer",
         },
         garantias=("Devuelve una PROYECCIÓN, no la tabla `cash_movements`.",),
         errores=("404 si la sesión no existe.",),

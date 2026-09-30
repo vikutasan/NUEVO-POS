@@ -311,11 +311,20 @@ class AbrirTurnoEntrada(BaseModel):
 
     `monto_inicial` es el fondo con el que arranca el cajero (RN-50: no puede
     ser negativo). `usuario_id` es el empleado que abre el turno.
+
+    FASE 10.5 — PARIDAD DE DATOS DE CAJA. El viejo POS enviaba
+    `employee_name` al abrir la sesión y lo persistía en
+    `cash_sessions.employee_name`; el corte y el reporte diario lo mostraban.
+    El nuevo POS solo enviaba `usuario_id`, así que el nombre del cajero se
+    perdía (se guardaba el UUID como nombre). `usuario_nombre` restaura ese
+    dato. Es OPCIONAL para no romper a un consumidor que aún no lo envíe: si
+    falta, el router cae al `usuario_id` (comportamiento anterior).
     """
 
     terminal_id: str
     usuario_id: UUID
     monto_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
+    usuario_nombre: str | None = None
 
 
 class AbrirTurnoSalida(BaseModel):
@@ -355,10 +364,27 @@ class ResumenTurnoSalida(BaseModel):
 
     `esperado` es el efectivo que debería haber en la caja (RN-53):
     fondo + entradas − salidas + ventas en efectivo.
+
+    FASE 10.5 — PARIDAD DE DATOS DE CAJA. El viejo POS exponía
+    `CashSummaryResponse` con 8 campos (`efectivo_esperado`, `total_credito`,
+    `total_debito`, `total_ventas`, `num_transacciones`, `fondo_inicial`,
+    `total_entradas`, `total_salidas`). El nuevo POS solo exponía 2
+    (`esperado`, `movimientos`): el desglose que el cajero veía al cerrar el
+    turno se había perdido. Estos 7 campos restauran ese desglose. Siguen
+    siendo una PROYECCIÓN (no la tabla): se calculan con las reglas RN-53 y
+    RN-58, no se leen columnas crudas.
     """
 
     esperado: Decimal
     movimientos: list[MovimientoResumen] = Field(default_factory=list)
+    # --- Desglose de paridad (F10.5) ---
+    fondo_inicial: Decimal = Decimal("0.00")
+    total_entradas: Decimal = Decimal("0.00")
+    total_salidas: Decimal = Decimal("0.00")
+    total_credito: Decimal = Decimal("0.00")
+    total_debito: Decimal = Decimal("0.00")
+    total_ventas: Decimal = Decimal("0.00")
+    num_transacciones: int = 0
 
 
 class CerrarTurnoEntrada(BaseModel):

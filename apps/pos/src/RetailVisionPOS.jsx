@@ -766,6 +766,9 @@ export default function RetailVisionPOS({
             <GestorDeCaja
               terminalId={terminalEfectiva}
               usuarioId={sesion?.employee_id || null}
+              // F10.5 — paridad de datos: el viejo POS persistía el NOMBRE del
+              // cajero (`employee_name`). Se hereda del usuario autenticado.
+              usuarioNombre={currentUser?.name || null}
               onCerrar={() => {
                 setCajaAbierta(false);
                 // F4.5.3 — Al cerrar el gestor, se relee el turno: si el operador

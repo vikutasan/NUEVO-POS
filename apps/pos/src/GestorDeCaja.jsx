@@ -76,6 +76,7 @@ export const ESTADOS = Object.freeze({
 export default function GestorDeCaja({
   terminalId,
   usuarioId,
+  usuarioNombre = null,
   servicio = caja,
   servicioContexto = contexto,
   onCerrar,
@@ -154,6 +155,10 @@ export default function GestorDeCaja({
       terminal_id: terminalId,
       usuario_id: usuarioId,
       monto_inicial: Number(fondoInicial) || 0,
+      // FASE 10.5 — paridad de datos: el viejo POS persistía el NOMBRE del
+      // cajero (`employee_name`); el nuevo guardaba el UUID. Se envía el
+      // nombre si el contenedor lo provee; si no, el backend cae al UUID.
+      usuario_nombre: usuarioNombre || undefined,
     });
     setOcupado(false);
 
@@ -163,7 +168,7 @@ export default function GestorDeCaja({
     }
     setTurno(r.data);
     setEstado(ESTADOS.ABIERTO);
-  }, [servicio, terminalId, usuarioId, fondoInicial]);
+  }, [servicio, terminalId, usuarioId, usuarioNombre, fondoInicial]);
 
   /** Registra una entrada o salida de efectivo (RN-51, RN-55). */
   const alRegistrarMovimiento = useCallback(async () => {
@@ -216,6 +221,22 @@ export default function GestorDeCaja({
   const esperado = useMemo(() => Number(resumen?.esperado ?? 0), [resumen]);
   const capturado = Number(conteoEfectivo) || 0;
   const descuadreEnVivo = capturado - esperado;
+
+  // FASE 10.5 — paridad de datos: el desglose que el viejo POS mostraba al
+  // cajero (fondo, entradas, salidas, ventas por método, total y número de
+  // transacciones). El contrato 12 lo expone; aquí solo se formatea.
+  const desglose = useMemo(
+    () => ({
+      fondo_inicial: Number(resumen?.fondo_inicial ?? 0),
+      total_entradas: Number(resumen?.total_entradas ?? 0),
+      total_salidas: Number(resumen?.total_salidas ?? 0),
+      total_credito: Number(resumen?.total_credito ?? 0),
+      total_debito: Number(resumen?.total_debito ?? 0),
+      total_ventas: Number(resumen?.total_ventas ?? 0),
+      num_transacciones: Number(resumen?.num_transacciones ?? 0),
+    }),
+    [resumen],
+  );
 
   return (
     <div className="w-full max-w-[1100px] mx-auto p-4 flex flex-col gap-4">
@@ -306,6 +327,54 @@ export default function GestorDeCaja({
                 </dd>
               </div>
             </dl>
+            {/* FASE 10.5 — desglose de paridad (lo que el viejo POS mostraba). */}
+            <div
+              aria-label="Desglose del turno"
+              className="border-t border-white/10 pt-3 flex flex-col gap-2 text-sm text-crema-ticket"
+            >
+              <h3 className="font-semibold text-crema-ticket/80">Desglose del turno</h3>
+              <dl className="flex flex-col gap-1">
+                <div className="flex justify-between">
+                  <dt className="text-crema-ticket/60">Fondo inicial</dt>
+                  <dd data-testid="desglose-fondo">{formatearPrecio(desglose.fondo_inicial)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-crema-ticket/60">Entradas</dt>
+                  <dd data-testid="desglose-entradas">
+                    {formatearPrecio(desglose.total_entradas)}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-crema-ticket/60">Salidas</dt>
+                  <dd data-testid="desglose-salidas">{formatearPrecio(desglose.total_salidas)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-crema-ticket/60">Ventas en efectivo</dt>
+                  <dd data-testid="desglose-efectivo">
+                    {formatearPrecio(desglose.total_ventas - desglose.total_credito - desglose.total_debito)}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-crema-ticket/60">Crédito</dt>
+                  <dd data-testid="desglose-credito">{formatearPrecio(desglose.total_credito)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-crema-ticket/60">Débito</dt>
+                  <dd data-testid="desglose-debito">{formatearPrecio(desglose.total_debito)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-crema-ticket/60">Total de ventas</dt>
+                  <dd data-testid="desglose-total-ventas">
+                    {formatearPrecio(desglose.total_ventas)}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-crema-ticket/60">Transacciones</dt>
+                  <dd data-testid="desglose-transacciones">{desglose.num_transacciones}</dd>
+                </div>
+              </dl>
+            </div>
+
             <button
               type="button"
               onClick={() => setEstado(ESTADOS.CIERRE)}

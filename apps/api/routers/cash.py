@@ -85,8 +85,10 @@ async def _sesion_o_404(db: AsyncSession, cash_session_id: UUID) -> CashSession:
     return sesion
 
 
-async def _ventas_en_efectivo(db: AsyncSession, cash_session_id: UUID) -> Decimal:
-    """Suma las ventas en EFECTIVO ligadas al turno (RN-53).
+async def _clasificar_ventas_del_turno(
+    db: AsyncSession, cash_session_id: UUID
+) -> dict:
+    """Clasifica las ventas del turno por método (RN-53, RN-57, RN-58).
 
     El cobro del POS (FASE 4.0) liga cada ticket a su caja. Aquí se leen esos
     tickets y se clasifican por método (RN-57): solo el EFECTIVO entra al
@@ -96,9 +98,17 @@ async def _ventas_en_efectivo(db: AsyncSession, cash_session_id: UUID) -> Decima
     `payment_details["metodo"]` como un único string y se sumaba `t.total`
     completo: un ticket pagado $40 en efectivo + $60 con tarjeta habría metido
     los $100 al efectivo esperado (inflando la caja en $60). Ahora se lee la
-    forma canónica `pagos[]` y se suma SOLO el `monto` de cada abono cuyo
-    método sea EFECTIVO. Se mantiene la retrocompatibilidad con el cobro viejo
-    (`{metodo, monto}` sin `pagos[]`).
+    forma canónica `pagos[]` y se suma SOLO el `monto` de cada abono. Se
+    mantiene la retrocompatibilidad con el cobro viejo (`{metodo, monto}` sin
+    `pagos[]`).
+
+    FASE 10.5 — PARIDAD DE DATOS DE CAJA. Antes esta función devolvía solo el
+    EFECTIVO (un Decimal). El viejo POS exponía el desglose completo
+    (efectivo, crédito, débito, total de ventas y número de transacciones) en
+    su resumen de caja. Ahora devuelve el diccionario COMPLETO de la
+    clasificación (RN-58) más el conteo de tickets, para que el resumen del
+    turno (contrato 12) pueda reconstruir ese desglose sin leer columnas
+    crudas. El llamador que solo necesita el efectivo usa `["EFECTIVO"]`.
     """
     tickets = (
         await db.execute(select(Ticket).where(Ticket.cash_session_id == cash_session_id))
@@ -123,7 +133,10 @@ async def _ventas_en_efectivo(db: AsyncSession, cash_session_id: UUID) -> Decima
             pagos.append({"metodo": metodo, "monto": detalles.get("monto", t.total)})
 
     clasificado = rn58_clasificacion_alimenta_resumen(pagos)
-    return clasificado.get("EFECTIVO", Decimal("0.00"))
+    # RN-58 devuelve {EFECTIVO, CREDITO, DEBITO, TRANSFERENCIA}. Se añade el
+    # conteo de tickets para el desglose de paridad (F10.5).
+    clasificado["num_transacciones"] = len(tickets)
+    return clasificado
 
 
 async def _movimientos_del_turno(
@@ -216,10 +229,17 @@ async def abrir_turno(
     # RN-50: el fondo inicial no puede ser negativo.
     fondo = rn50_opening_float(entrada.monto_inicial)
 
+    # FASE 10.5 — PARIDAD DE DATOS DE CAJA. El viejo POS persistía el NOMBRE
+    # del cajero (`employee_name`); el nuevo guardaba el UUID como nombre, así
+    # que el corte y el reporte diario mostraban un UUID. Si el POS envía
+    # `usuario_nombre`, se usa; si no, se cae al `usuario_id` (comportamiento
+    # anterior) para no romper a un consumidor que aún no lo envíe.
+    nombre_cajero = entrada.usuario_nombre or str(entrada.usuario_id)
+
     sesion = CashSession(
         terminal_id=entrada.terminal_id,
         employee_id=entrada.usuario_id,
-        employee_name=str(entrada.usuario_id),
+        employee_name=nombre_cajero,
         opening_float=fondo,
         status="OPEN",
     )
@@ -276,15 +296,28 @@ async def resumen_del_turno(
     cash_session_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> ResumenTurnoSalida:
-    """Devuelve la PROYECCIÓN del turno, no la tabla (RN-53, RN-60).
+    """Devuelve la PROYECCIÓN del turno, no la tabla (RN-53, RN-58, RN-60).
 
     `esperado` = fondo + entradas − salidas + ventas en efectivo (RN-53).
+
+    FASE 10.5 — PARIDAD DE DATOS DE CAJA. Además del `esperado`, se expone el
+    desglose que el viejo POS mostraba al cerrar el turno: fondo inicial,
+    totales de entradas/salidas, ventas por método (efectivo/crédito/débito),
+    total de ventas y número de transacciones. Todo se calcula con las reglas
+    (RN-53, RN-58); no se leen columnas crudas de la tabla.
     """
     sesion = await _sesion_o_404(db, cash_session_id)
 
     movimientos = await _movimientos_del_turno(db, cash_session_id)
     entradas, salidas = _sumar_movimientos(movimientos)
-    ventas_efectivo = await _ventas_en_efectivo(db, cash_session_id)
+    clasificado = await _clasificar_ventas_del_turno(db, cash_session_id)
+
+    ventas_efectivo = clasificado.get("EFECTIVO", Decimal("0.00"))
+    total_credito = clasificado.get("CREDITO", Decimal("0.00"))
+    total_debito = clasificado.get("DEBITO", Decimal("0.00"))
+    total_transferencia = clasificado.get("TRANSFERENCIA", Decimal("0.00"))
+    # El "total de ventas" del viejo POS sumaba los cuatro métodos.
+    total_ventas = ventas_efectivo + total_credito + total_debito + total_transferencia
 
     esperado = rn53_efectivo_esperado(
         Decimal(str(sesion.opening_float)), entradas, salidas, ventas_efectivo
@@ -296,6 +329,13 @@ async def resumen_del_turno(
             MovimientoResumen(tipo=m.movement_type, monto=Decimal(str(m.amount)))
             for m in movimientos
         ],
+        fondo_inicial=Decimal(str(sesion.opening_float)),
+        total_entradas=entradas,
+        total_salidas=salidas,
+        total_credito=total_credito,
+        total_debito=total_debito,
+        total_ventas=total_ventas,
+        num_transacciones=clasificado.get("num_transacciones", 0),
     )
 
 
@@ -321,7 +361,13 @@ async def cerrar_turno(
 
     movimientos = await _movimientos_del_turno(db, entrada.cash_session_id)
     entradas, salidas = _sumar_movimientos(movimientos)
-    ventas_efectivo = await _ventas_en_efectivo(db, entrada.cash_session_id)
+    # F10.5: la clasificación por método (RN-58) alimenta el esperado con el
+    # EFECTIVO del turno. Antes se llamaba `_ventas_en_efectivo`; el refactor
+    # de paridad la generalizó a `_clasificar_ventas_del_turno`. RN-58 solo
+    # incluye las claves de los métodos PRESENTES: sin ventas en efectivo la
+    # clave no existe, por eso se usa `.get` con cero.
+    clasificacion = await _clasificar_ventas_del_turno(db, entrada.cash_session_id)
+    ventas_efectivo = clasificacion.get("EFECTIVO", Decimal("0.00"))
 
     esperado = rn53_efectivo_esperado(
         Decimal(str(sesion.opening_float)), entradas, salidas, ventas_efectivo
