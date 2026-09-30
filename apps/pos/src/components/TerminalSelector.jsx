@@ -184,6 +184,33 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   function cancelEdit() { setEditingId(null); setEditName(''); setEditIcon(''); }
   function applyEdit() { updateTerminal(editingId, { name: editName, icon: editIcon }); cancelEdit(); }
 
+  /* ─── B-01 (F10.2) — Copiar URL de acceso directo ─────────────────────────
+     UX heredada del viejo POS (§6.8): el gestor permite copiar la URL con el
+     `?terminal=<id>` para pegar en el acceso directo de cada máquina. La
+     IMPLEMENTACIÓN se reescribe (navigator.clipboard con fallback a
+     `execCommand`), pero la INTEGRACIÓN se hereda: el botón vive en la tarjeta
+     del gestor, junto a Editar y Eliminar. */
+  async function copyUrl(tid) {
+    const url = `http://${window.location.hostname}:${window.location.port}/?terminal=${tid}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // Fallback para contextos sin Clipboard API (http no seguro, navegadores viejos).
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      showToast(`✅ URL copiada: ${url}`, 'success');
+    } catch {
+      showToast(`No se pudo copiar. URL: ${url}`, 'error');
+    }
+  }
+
   function handleRemove(tid) {
     const result = removeTerminal(tid);
     if (!result.success) { showToast(result.message, 'error'); return; }
@@ -307,11 +334,21 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
                     <span style={{ fontSize: '0.6rem', opacity: 0.3, fontFamily: 'monospace' }}>{t.id}</span>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => startEdit(t)}
+                              title="Editar"
                               style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', color: '#fff',
                                        border: 'none', borderRadius: '0.75rem', padding: '0.4rem 0.75rem', cursor: 'pointer' }}>
                         ✏️
                       </button>
+                      {/* B-01 (F10.2) — Copiar URL de acceso directo (UX heredada §6.8) */}
+                      <button onClick={() => copyUrl(t.id)}
+                              data-testid={`copiar-url-${t.id}`}
+                              title="Copiar URL"
+                              style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', color: '#fff',
+                                       border: 'none', borderRadius: '0.75rem', padding: '0.4rem 0.75rem', cursor: 'pointer' }}>
+                        📋
+                      </button>
                       <button onClick={() => setConfirmDelete(t.id)}
+                              title="Eliminar"
                               style={{ fontSize: '0.75rem', background: 'rgba(153,27,27,0.2)', color: '#fca5a5',
                                        border: 'none', borderRadius: '0.75rem', padding: '0.4rem 0.75rem', cursor: 'pointer' }}>
                         🗑️
