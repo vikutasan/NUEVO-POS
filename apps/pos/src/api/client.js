@@ -299,6 +299,28 @@ export function listarCuentasAbiertas(terminalId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FASE 8.2 — Notificaciones (contrato 27)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /notifications/enqueue-ticket — encola el envío del ticket (contrato 27,
+ * proveedor Notificaciones).
+ *
+ * Patrón Outbox (Regla de Oro #7): el POS solo ESCRIBE en la cola; el worker
+ * envía después. La operación NUNCA falla por culpa del canal externo.
+ * Idempotente por `evento_id`.
+ *
+ * @param {{evento_id: string, ticket_uuid: string, canales: string[],
+ *          destinatario: {telefono?: string, email?: string}, payload: object}} cuerpo
+ */
+export function encolarTicket(cuerpo) {
+  return peticion('/notifications/enqueue-ticket', {
+    method: 'POST',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // FASE 8.1 — Beneficios del cliente (contrato 26)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -362,5 +384,6 @@ export default {
   listarCuentasAbiertas,
   getPedidoDelTicket,
   getBeneficiosParaTicket,
+  encolarTicket,
   ApiError,
 };

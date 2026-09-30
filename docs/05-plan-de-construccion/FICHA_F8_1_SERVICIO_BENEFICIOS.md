@@ -4,7 +4,7 @@
 **Fecha:** 30 Sep 2026
 **Plan que ejecuta:** `PLAN_DE_ABORDAJE_FASE_8_POR_PARTES.md` v2.0 §3.2
 **Precedente:** F8.0 (contratos #26/#27 + reglas RN-82..RN-93) — commit `e594de0`
-**Commit de esta sub-fase:** _(se registra al cierre, en un commit aparte)_
+**Commit de esta sub-fase:** `b894f1d`
 
 ---
 
