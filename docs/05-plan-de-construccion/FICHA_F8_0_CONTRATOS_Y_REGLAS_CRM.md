@@ -3,7 +3,7 @@
 > **Fase:** 8 (CRM y Notificaciones — lado POS) — Sub-fase **8.0**
 > **Estado:** ✅ CERRADA — puerta en verde
 > **Fecha:** 2026-09-30
-> **Commit:** _(se registra al final de esta ficha)_
+> **Commit:** `e594de0` — F8.0: contratos 26/27 (CRM + Notificaciones) y reglas RN-82..RN-93 (C.16)
 > **Plan de abordaje:** [`PLAN_DE_ABORDAJE_FASE_8_POR_PARTES.md`](../../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/05-plan-de-construccion/PLAN_DE_ABORDAJE_FASE_8_POR_PARTES.md) §3 (F8.0)
 > **Regla que gobierna esta sub-fase:** REGLA DURA 2 — "Verificar, no asumir"
 
@@ -260,4 +260,8 @@ dejado 2 referencias obsoletas en el árbol.
 
 ## 7. Commit
 
-_(se registra al final de esta ficha)_
+- **Commit de la sub-fase:** `e594de0` — F8.0: contratos 26/27 (CRM + Notificaciones)
+  y reglas RN-82..RN-93 (C.16).
+- **Push:** `888519e..e594de0  main -> main` (repo `NUEVO-POS`).
+- **Archivos:** 9 cambiados, 506 inserciones(+), 41 eliminaciones(−).
+- **Estado:** ✅ CERRADA — puerta en verde.
