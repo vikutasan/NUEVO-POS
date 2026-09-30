@@ -42,6 +42,15 @@ const apiSimulada = vi.hoisted(() => ({
   latir: vi.fn(),
   tomarLock: vi.fn(),
   liberarLock: vi.fn(),
+  // Contratos de caja (Fase 4). F4.5.3 introdujo la guarda de cobro (RN-49):
+  // sin turno abierto el cobro NO se dispara. Este test cobra, así que debe
+  // declarar un turno abierto (es la precondición real de un cobro).
+  getSesionCajaActiva: vi.fn(),
+  abrirTurno: vi.fn(),
+  registrarMovimiento: vi.fn(),
+  getResumenTurno: vi.fn(),
+  cerrarTurno: vi.fn(),
+  getReporteDiario: vi.fn(),
   // Contratos de la Fase 8 (los servicios reales los consumen).
   getBeneficiosParaTicket: vi.fn(),
   encolarTicket: vi.fn(),
@@ -109,6 +118,21 @@ function sembrarApiFeliz() {
   apiSimulada.latir.mockResolvedValue({ ok: true });
   apiSimulada.tomarLock.mockResolvedValue({ ok: true });
   apiSimulada.liberarLock.mockResolvedValue({ ok: true });
+  // F4.5.3 — Turno de caja ABIERTO: precondición real del cobro (RN-49).
+  apiSimulada.getSesionCajaActiva.mockResolvedValue({
+    cash_session_id: 'caja-1',
+    terminal_id: 'TERM-01',
+    status: 'OPEN',
+    opening_float: '200.00',
+  });
+  apiSimulada.abrirTurno.mockResolvedValue({ cash_session_id: 'caja-1' });
+  apiSimulada.registrarMovimiento.mockResolvedValue({ id: 'mov-1' });
+  apiSimulada.getResumenTurno.mockResolvedValue({
+    cash_session_id: 'caja-1',
+    esperado_en_caja: '200.00',
+  });
+  apiSimulada.cerrarTurno.mockResolvedValue({ cash_session_id: 'caja-1' });
+  apiSimulada.getReporteDiario.mockResolvedValue({ fecha: '2026-09-30' });
   apiSimulada.getBeneficiosParaTicket.mockResolvedValue(BENEFICIOS);
   apiSimulada.encolarTicket.mockResolvedValue({ evento_id: 'ticket:A-0001' });
 }

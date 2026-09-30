@@ -62,6 +62,12 @@ import TicketDeliveryPanel from './components/TicketDeliveryPanel.jsx';
 import { OverlayExito, OverlayError, OfflineBanner } from './components/POSOverlays.jsx';
 // F9.0.1 — Salvaguarda de salida con cuenta abierta (UX heredada del viejo POS).
 import ExitAccountModal from './components/ExitAccountModal.jsx';
+// F4.5.2 — Gestor de Caja (Fase 4). Estaba construido pero HUÉRFANO: sin este
+// montaje, RN-49 impide cobrar (no hay forma de abrir el turno de caja).
+import GestorDeCaja from './GestorDeCaja.jsx';
+// F4.5.3 — Guarda de cobro: la pantalla consulta el turno de caja para avisar
+// ANTES de intentar cobrar (en vez de dejar que el backend devuelva un 400).
+import * as caja from './services/cashService.js';
 
 /**
  * F7.7d — LA TERMINAL ES UN PROP, NO UNA CONSTANTE.
@@ -127,6 +133,17 @@ export default function RetailVisionPOS({
   // F9.0.1 — Salvaguarda de salida: si el operador intenta salir con una cuenta
   // abierta, se muestra `ExitAccountModal` en vez de salir en silencio.
   const [salidaAbierta, setSalidaAbierta] = useState(false);
+  // F4.5.2 — Visibilidad del Gestor de Caja (overlay). Es el punto de entrada
+  // al turno de caja: sin turno abierto, RN-49 impide cobrar.
+  const [cajaAbierta, setCajaAbierta] = useState(false);
+  // F4.5.3 — El turno de caja activo (o null). La pantalla lo consulta para
+  // AVISAR antes de cobrar si no hay turno abierto (RN-49), en vez de dejar
+  // que el backend devuelva un 400 críptico.
+  const [turnoCaja, setTurnoCaja] = useState(null);
+  // F4.5.3 — Aviso proactivo: se enciende cuando el operador intenta cobrar sin
+  // turno de caja abierto. No bloquea (el backend sigue siendo la autoridad
+  // vía RN-49); solo explica el porqué y ofrece abrir el gestor.
+  const [avisoCaja, setAvisoCaja] = useState(false);
 
   // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
   // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
@@ -179,6 +196,22 @@ export default function RetailVisionPOS({
       activo = false;
     };
   }, []);
+
+  // ── F4.5.3 — Turno de caja activo (para la guarda de cobro) ────────────────
+  // Se consulta al montar y cada vez que el gestor de caja se cierra (por si
+  // el operador abrió o cerró el turno). Si el API no responde, se deja en
+  // `null`: la guarda es un AVISO, no un bloqueo duro (el backend sigue siendo
+  // la autoridad final vía RN-49).
+  const refrescarTurnoCaja = useCallback(async () => {
+    const r = await caja.obtenerTurnoActivo();
+    if (r.outcome === 'ok') {
+      setTurnoCaja(r.data && r.data.cash_session_id ? r.data : null);
+    }
+  }, []);
+
+  useEffect(() => {
+    refrescarTurnoCaja();
+  }, [refrescarTurnoCaja]);
 
   // ── Filtro por categoría ───────────────────────────────────────────────────
   const productosVisibles = useMemo(() => {
@@ -295,6 +328,15 @@ export default function RetailVisionPOS({
       setError(null);
       setBanner(null);
 
+      // F4.5.3 — Guarda de cobro (RN-49). Sin turno de caja abierto el backend
+      // rechaza el cobro con un 400 críptico. Aquí se AVISA antes: se cierra el
+      // checkout, se enciende el aviso y se ofrece abrir el gestor. No se cobra.
+      if (!turnoCaja) {
+        setCheckoutAbierto(false);
+        setAvisoCaja(true);
+        return;
+      }
+
       if (!ticketIdRef.current) {
         const items = carrito.lineas.map((l) => ({
           product_id: l.product_id,
@@ -327,7 +369,7 @@ export default function RetailVisionPOS({
       // antes y este paso NUNCA se abre (punto delicado del plan §3.7).
       setEntregaAbierta(true);
     },
-    [acciones, carrito]
+    [acciones, carrito, turnoCaja]
   );
 
   // ── F7.5.6 — Programación de pedido (puente POS → Pedidos) ─────────────────
@@ -404,6 +446,8 @@ export default function RetailVisionPOS({
         pedidoProgramado={Boolean(bloquePedido)}
         onAbrirCliente={() => setClienteAbierto(true)}
         clienteIdentificado={Boolean(cliente)}
+        onAbrirCaja={() => setCajaAbierta(true)}
+        cajaAbierta={cajaAbierta}
       />
 
       {error ? (
@@ -684,6 +728,74 @@ export default function RetailVisionPOS({
       {/* NOTA (F7.6.2): la visión ya NO se monta aquí como overlay suelto.
           Es un MODO DE VISTA (`viewMode === 'CAMERA'`) que reemplaza el cuerpo,
           como en el viejo POS. Ver el bloque del cuerpo más arriba. */}
+
+      {/* F4.5.2 — Gestor de Caja (overlay). Punto de entrada al turno de caja:
+          sin turno ABIERTO, RN-49 impide cobrar. Se monta con la terminal
+          efectiva y el usuario de la sesión (o null si aún no hay sesión). */}
+      {cajaAbierta ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Gestor de caja"
+        >
+          <div className="bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <GestorDeCaja
+              terminalId={terminalEfectiva}
+              usuarioId={sesion?.employee_id || null}
+              onCerrar={() => {
+                setCajaAbierta(false);
+                // F4.5.3 — Al cerrar el gestor, se relee el turno: si el operador
+                // acaba de abrirlo, la guarda de cobro deja de avisar.
+                refrescarTurnoCaja();
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {/* F4.5.3 — Aviso proactivo de caja (RN-49). Se enciende cuando el
+          operador intenta cobrar sin turno abierto. NO bloquea el cobro de
+          forma definitiva: el backend sigue siendo la autoridad final. Solo
+          explica el porqué y ofrece abrir el gestor en un clic. */}
+      {avisoCaja ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Caja cerrada"
+        >
+          <div className="bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 text-center">
+            <div className="text-5xl mb-3" aria-hidden="true">💰</div>
+            <h2 className="text-xl font-bold text-white mb-2">
+              Abre la caja antes de cobrar
+            </h2>
+            <p className="text-sm text-zinc-400 mb-6">
+              No hay un turno de caja abierto en esta terminal. Para cobrar
+              necesitas abrir la caja primero (RN-49).
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setAvisoCaja(false);
+                  setCajaAbierta(true);
+                }}
+                className="min-h-tactil rounded-2xl bg-acento px-5 py-3 font-semibold text-white hover:opacity-90"
+              >
+                Abrir caja
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvisoCaja(false)}
+                className="min-h-tactil rounded-2xl border border-white/15 px-5 py-3 font-semibold text-zinc-300 hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

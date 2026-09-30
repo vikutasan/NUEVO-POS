@@ -43,6 +43,13 @@ const apiSimulada = vi.hoisted(() => ({
   latir: vi.fn(),
   tomarLock: vi.fn(),
   liberarLock: vi.fn(),
+  // F4.5 — Contrato de caja: sin turno abierto, RN-49 impide cobrar.
+  getSesionCajaActiva: vi.fn(),
+  abrirTurno: vi.fn(),
+  registrarMovimiento: vi.fn(),
+  getResumenTurno: vi.fn(),
+  cerrarTurno: vi.fn(),
+  getReporteDiario: vi.fn(),
 }));
 
 vi.mock('./api/client.js', () => apiSimulada);
@@ -105,6 +112,25 @@ function sembrarApiFeliz() {
   apiSimulada.latir.mockResolvedValue({ ok: true });
   apiSimulada.tomarLock.mockResolvedValue({ ok: true });
   apiSimulada.liberarLock.mockResolvedValue({ ok: true });
+  // F4.5 — Turno de caja ABIERTO: la guarda de cobro (RN-49) deja pasar.
+  apiSimulada.getSesionCajaActiva.mockResolvedValue({
+    cash_session_id: 'caja-1',
+    terminal_id: 'TERM-01',
+    status: 'OPEN',
+    opening_float: '200.00',
+  });
+  apiSimulada.abrirTurno.mockResolvedValue({ cash_session_id: 'caja-1' });
+  apiSimulada.registrarMovimiento.mockResolvedValue({ id: 'mov-1' });
+  apiSimulada.getResumenTurno.mockResolvedValue({
+    cash_session_id: 'caja-1',
+    opening_float: '200.00',
+    entradas: '0.00',
+    salidas: '0.00',
+    ventas_efectivo: '0.00',
+    efectivo_esperado: '200.00',
+  });
+  apiSimulada.cerrarTurno.mockResolvedValue({ cash_session_id: 'caja-1' });
+  apiSimulada.getReporteDiario.mockResolvedValue({ lineas: [] });
 }
 
 /** Espera a que el catálogo termine de cargar y aparezcan los productos. */

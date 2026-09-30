@@ -65,6 +65,8 @@ export default function POSHeader({
   pedidoProgramado = false,
   onAbrirCliente,
   clienteIdentificado = false,
+  onAbrirCaja,
+  cajaAbierta = false,
 }) {
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
   const nombreTerminal =
@@ -105,6 +107,22 @@ export default function POSHeader({
 
       {/* DERECHA: Acciones de IA (F7.5/F7.6) + Sesión + Red + Modo */}
       <div className="flex items-center gap-2">
+        {/* F4.5.1 — Gestor de Caja (UX heredada del viejo POS, §6.8). Es el
+            punto de entrada al turno de caja: sin él, RN-49 impide cobrar.
+            Se resalta cuando hay un turno de caja ABIERTO. */}
+        <button
+          type="button"
+          onClick={() => onAbrirCaja?.()}
+          className={`min-h-tactil min-w-tactil border rounded-xl px-3 flex items-center justify-center transition-all ${
+            cajaAbierta
+              ? 'bg-acento text-fondo-profundo border-acento'
+              : 'bg-fondo-profundo border-white/5 hover:bg-fondo-panel'
+          }`}
+          title={cajaAbierta ? 'Caja abierta' : 'Abrir caja'}
+          aria-label="Gestor de caja"
+        >
+          <span aria-hidden="true">💰</span>
+        </button>
         {/* Acciones de IA: tema (overlay nuevo) y voz (overlay con gate).
             R-04: target ≥44px. La visión NO vive aquí: es un modo de vista
             que se conmuta desde la CategoryBar (UX heredada del viejo POS). */}
