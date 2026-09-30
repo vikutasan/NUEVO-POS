@@ -3,6 +3,7 @@
 **Fase:** 7.7b (corrección del bloqueo de entrada a terminales)
 **Fecha:** 2026-09-30
 **Estado:** ✅ CERRADA
+**Commit:** `62989bc`
 **Predecesora:** F7.7 (router de terminales — el hueco de la Fase 1)
 
 ---
