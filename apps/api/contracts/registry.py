@@ -1,4 +1,4 @@
-"""Registro de los 25 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA).
+"""Registro de los 27 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM).
 
 Cada contrato se declara aquí con su firma completa (entrada/salida) y su
 proveedor. El registro es la fuente única de verdad: el test de la puerta F2
@@ -43,8 +43,28 @@ Contratos de la FASE 7.0 (capacidades de IA — cierran la brecha de la DT-07):
   24  ia.transcribir_voz                  POS                 Centro de IA FASE 7.0
   25  ia.interpretar_intencion            POS                 Centro de IA FASE 7.0
 
+Contratos de la FASE 8.0 (CRM y Notificaciones — lado POS):
+
+  26  clientes.beneficios_para_ticket     POS                 CRM          FASE 8.0
+  27  notificaciones.encolar_ticket       POS                 Notificaciones FASE 8.0
+
 ──────────────────────────────────────────────────────────────────────────────
-NOTA DE FRONTERA — IA (DT-07) — añadida 29 Sep 2026 · CERRADA por F7.0
+NOTA DE FRONTERA — CRM Y NOTIFICACIONES (FASE 8.0) — añadida 30 Sep 2026
+──────────────────────────────────────────────────────────────────────────────
+El proveedor de los beneficios de cliente es el **CRM** (módulo del ERP), NO el
+POS. El POS **consume** el CRM por contrato; nunca lee sus tablas (A-02).
+
+  · El contrato 26 (`clientes.beneficios_para_ticket`) devuelve los beneficios
+    aplicables a un ticket (puntos canjeables, promociones vigentes). El POS
+    los muestra y los aplica; el CRM es el dueño del cálculo.
+
+  · El contrato 27 (`notificaciones.encolar_ticket`) ENCOLA el envío del ticket
+    (WhatsApp/Email) usando el patrón Outbox (Regla de Oro #7): el POS encola
+    dentro de la transacción del ticket; el worker de Notificaciones envía
+    después. El POS NUNCA envía directamente.
+
+  · Regla de oro (DT-07): un fallo del CRM o de Notificaciones NUNCA bloquea
+    una venta. El POS degrada a "sin beneficios" / "sin envío" y cobra igual.
 ──────────────────────────────────────────────────────────────────────────────
 El proveedor de las capacidades de IA es el **Centro de IA** (módulo paraguas
 del ERP, `apps/ai/`), NO el POS. El POS **consume** la IA por contrato; nunca
@@ -654,9 +674,66 @@ CONTRATOS: tuple[Contrato, ...] = (
         ),
         estado_hoy="FASE 7.0",
     ),
+    # ── §12 CRM — Beneficios del cliente (proveedor: CRM — FASE 8.0) ───────
+    Contrato(
+        numero=26,
+        nombre="clientes.beneficios_para_ticket",
+        consumidor="POS",
+        proveedor="CRM",
+        operacion="POST /crm/benefits/for-ticket",
+        entrada={
+            "cliente_id": "String | None",
+            "telefono": "String | None",
+            "total": "String",
+            "lineas": "List[Dict]",
+        },
+        salida={
+            "beneficios": "List[Dict]",
+            "puntos_disponibles": "Integer",
+            "puntos_a_ganar": "Integer",
+        },
+        garantias=(
+            "Devuelve los beneficios aplicables al ticket (puntos, promociones).",
+            "El CRM es el dueño del cálculo; el POS solo muestra y aplica.",
+            "Si el cliente no está identificado, devuelve lista vacía (200), no error.",
+        ),
+        errores=(
+            "400 si `total` no es un String decimal válido.",
+            "503 `CRM_NO_DISPONIBLE` si el CRM no responde; el POS degrada a sin beneficios.",
+        ),
+        estado_hoy="FASE 8.0",
+    ),
+    # ── §13 Notificaciones — Envío del ticket (proveedor: Notificaciones — FASE 8.0) ──
+    Contrato(
+        numero=27,
+        nombre="notificaciones.encolar_ticket",
+        consumidor="POS",
+        proveedor="Notificaciones",
+        operacion="POST /notifications/enqueue-ticket",
+        entrada={
+            "ticket_id": "String",
+            "canal": "String = 'whatsapp'",
+            "destino": "String",
+            "payload": "Dict",
+        },
+        salida={
+            "encolado": "Boolean",
+            "envio_id": "String",
+        },
+        garantias=(
+            "ENCOLA el envío del ticket (patrón Outbox, Regla de Oro #7).",
+            "El POS encola dentro de la transacción del ticket; el worker envía después.",
+            "El POS NUNCA envía directamente: solo encola.",
+        ),
+        errores=(
+            "400 si `destino` está vacío o `canal` no es soportado.",
+            "503 `NOTIFICACIONES_NO_DISPONIBLE` si la cola no responde; el POS no bloquea la venta.",
+        ),
+        estado_hoy="FASE 8.0",
+    ),
 )
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 25 contratos del registro."""
+    """Devuelve los 27 contratos del registro."""
     return CONTRATOS

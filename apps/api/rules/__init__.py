@@ -1,7 +1,7 @@
-"""Las 81 reglas de negocio del POS nuevo — FASE 3 (Comportamiento).
+"""Las 93 reglas de negocio del POS nuevo — FASE 3 (Comportamiento) + FASE 8.0 (CRM).
 
 Fuente autoritativa: `ESPECIFICACION_FUNCIONAL_POS_INGENIERIA_INVERSA.md` §C
-(15 categorías, RN-01 a RN-81).
+(16 categorías, RN-01 a RN-93).
 
 La unidad de migración NO es la regla: es **regla + test** (Plan §5.1).
 Este paquete contiene la implementación pura y determinista de cada regla,
@@ -23,7 +23,8 @@ de datos ni HTTP: así cada regla es verificable de forma aislada.
   C.13 Auditoría                           RN-75 – RN-77   (3)
   C.14 Tiempo y zona horaria               RN-78 – RN-80   (3)
   C.15 Regla transversal                   RN-81           (1)
-                                           TOTAL           81
+  C.16 CRM y Notificaciones                RN-82 – RN-93   (12)
+                                           TOTAL           93
 """
 
 from __future__ import annotations

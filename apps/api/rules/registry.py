@@ -1,8 +1,8 @@
-"""Las 81 reglas de negocio (RN-01 a RN-81) — FASE 3.
+"""Las 93 reglas de negocio (RN-01 a RN-93) — FASE 3 + FASE 8.0 (CRM).
 
 Cada regla es una `Regla` con:
-  - `numero`   : RN-01 … RN-81
-  - `categoria`: la categoría C.1 … C.15 de la ESPECIFICACION §C
+  - `numero`   : RN-01 … RN-93
+  - `categoria`: la categoría C.1 … C.16 de la ESPECIFICACION §C
   - `enunciado`: el texto verbatim de la regla
   - `test`     : el nombre del test que la prueba (trazabilidad regla → test)
   - `verificar`: la implementación pura de la regla (lanza `ReglaViolada` si
@@ -664,7 +664,110 @@ def rn81_sin_offset_hardcodeado(fuente: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# El registro de las 81 reglas y la matriz regla → test
+# C.16 — CRM y Notificaciones (RN-82 a RN-93) — FASE 8.0
+#
+# 7 reglas IMPLEMENTADAS (RN-82, RN-83, RN-84, RN-85, RN-86, RN-87, RN-88)
+# y 5 DECLARADAS (RN-89 a RN-93): su `verificar` es un guard explícito que
+# documenta la regla y falla ruidosamente si alguien la invoca antes de que
+# su sub-fase la implemente. Declarar ≠ implementar (defecto D-4 del plan).
+# ---------------------------------------------------------------------------
+
+def rn82_cliente_opcional_no_bloquea(cliente_id: str | None) -> None:
+    """RN-82: la identificación del cliente es OPCIONAL; nunca bloquea la venta.
+
+    El POS puede cobrar sin cliente (Público General). Un `cliente_id` ausente
+    es un caso válido, no un error.
+    """
+    if cliente_id is not None and not isinstance(cliente_id, str):
+        raise ReglaViolada("RN-82", "cliente_id debe ser String o None", 400)
+
+
+def rn83_beneficios_no_modifican_total_negativo(total: Decimal, descuento: Decimal) -> Decimal:
+    """RN-83: los beneficios (puntos/promos) NUNCA dejan el total por debajo de 0."""
+    resultado = total - descuento
+    if resultado < Decimal("0"):
+        raise ReglaViolada("RN-83", "El descuento no puede dejar el total negativo", 400)
+    return resultado
+
+
+def rn84_puntos_no_se_actualizan_se_anexan(operacion: str) -> None:
+    """RN-84: los puntos NUNCA se actualizan; se anexan al ledger (Regla de Oro #10)."""
+    if operacion.upper() != "INSERT":
+        raise ReglaViolada("RN-84", "Los puntos solo se anexan (INSERT), nunca UPDATE", 400)
+
+
+def rn85_envio_por_outbox_no_directo(envio_directo: bool) -> None:
+    """RN-85: el POS NUNCA envía el ticket directamente; lo ENCOLA (Outbox, Regla de Oro #7)."""
+    if envio_directo:
+        raise ReglaViolada("RN-85", "El POS debe encolar el envío, no enviarlo directo", 400)
+
+
+def rn86_encolar_en_la_misma_transaccion(orden: list[str]) -> None:
+    """RN-86: el encolado del envío ocurre DENTRO de la transacción del ticket."""
+    if "encolar" not in orden:
+        raise ReglaViolada("RN-86", "El encolado debe ocurrir en la transacción del ticket", 400)
+    if orden.index("encolar") > orden.index("commit"):
+        raise ReglaViolada("RN-86", "El encolado debe ir antes del commit", 400)
+
+
+def rn87_fallo_de_crm_no_tumba_el_pos(excepcion: Exception | None) -> None:
+    """RN-87: un fallo del CRM degrada a 'sin beneficios'; NUNCA bloquea la venta (DT-07)."""
+    if excepcion is not None:
+        # El POS captura y degrada; esta regla documenta que el fallo es tolerado.
+        return None
+    return None
+
+
+def rn88_fallo_de_notificaciones_no_tumba_el_pos(excepcion: Exception | None) -> None:
+    """RN-88: un fallo de Notificaciones degrada a 'sin envío'; NUNCA bloquea la venta (DT-07)."""
+    if excepcion is not None:
+        return None
+    return None
+
+
+def rn89_canal_de_envio_soportado(canal: str) -> str:
+    """RN-89 (DECLARADA): el canal de envío debe ser whatsapp o email.
+
+    Implementación pendiente en F8.4 (Notificaciones). Declarada aquí para que
+    la matriz regla → test exista desde F8.0.
+    """
+    raise NotImplementedError("RN-89 se implementa en F8.4 (Notificaciones)")
+
+
+def rn90_destino_valido_para_el_canal(destino: str, canal: str) -> None:
+    """RN-90 (DECLARADA): el destino debe ser un teléfono o email válido según el canal.
+
+    Implementación pendiente en F8.4 (Notificaciones).
+    """
+    raise NotImplementedError("RN-90 se implementa en F8.4 (Notificaciones)")
+
+
+def rn91_beneficio_pertenece_al_cliente(beneficio: dict, cliente_id: str) -> None:
+    """RN-91 (DECLARADA): un beneficio solo se aplica al cliente que lo posee.
+
+    Implementación pendiente en F8.2 (CRM).
+    """
+    raise NotImplementedError("RN-91 se implementa en F8.2 (CRM)")
+
+
+def rn92_promocion_vigente(promocion: dict, ahora: datetime) -> bool:
+    """RN-92 (DECLARADA): una promoción solo aplica si está vigente a la fecha.
+
+    Implementación pendiente en F8.2 (CRM).
+    """
+    raise NotImplementedError("RN-92 se implementa en F8.2 (CRM)")
+
+
+def rn93_auditoria_del_beneficio_aplicado(log: list[dict], beneficio_id: str) -> list[dict]:
+    """RN-93 (DECLARADA): cada beneficio aplicado se registra en la auditoría (DT-05).
+
+    Implementación pendiente en F8.2 (CRM).
+    """
+    raise NotImplementedError("RN-93 se implementa en F8.2 (CRM)")
+
+
+# ---------------------------------------------------------------------------
+# El registro de las 93 reglas y la matriz regla → test
 # ---------------------------------------------------------------------------
 
 LAS_81_REGLAS: tuple[Regla, ...] = (
@@ -764,11 +867,24 @@ LAS_81_REGLAS: tuple[Regla, ...] = (
     Regla("RN-80", "C.14", "Los límites del día local se calculan con local_day_bounds_utc.", "test_rn80", rn80_limites_del_dia_local),
     # C.15 — Regla transversal (RN-81)
     Regla("RN-81", "C.15", "Ninguna capa debe hardcodear un offset de zona horaria; siempre debe usar la utilidad de zona de negocio.", "test_rn81", rn81_sin_offset_hardcodeado),
+    # C.16 — CRM y Notificaciones (RN-82 a RN-93) — FASE 8.0
+    Regla("RN-82", "C.16", "La identificación del cliente es opcional; nunca bloquea la venta.", "test_rn82", rn82_cliente_opcional_no_bloquea),
+    Regla("RN-83", "C.16", "Los beneficios nunca dejan el total del ticket por debajo de cero.", "test_rn83", rn83_beneficios_no_modifican_total_negativo),
+    Regla("RN-84", "C.16", "Los puntos nunca se actualizan; se anexan al ledger (Regla de Oro #10).", "test_rn84", rn84_puntos_no_se_actualizan_se_anexan),
+    Regla("RN-85", "C.16", "El POS nunca envía el ticket directamente; lo encola (Outbox, Regla de Oro #7).", "test_rn85", rn85_envio_por_outbox_no_directo),
+    Regla("RN-86", "C.16", "El encolado del envío ocurre dentro de la transacción del ticket.", "test_rn86", rn86_encolar_en_la_misma_transaccion),
+    Regla("RN-87", "C.16", "Un fallo del CRM degrada a sin beneficios; nunca bloquea la venta (DT-07).", "test_rn87", rn87_fallo_de_crm_no_tumba_el_pos),
+    Regla("RN-88", "C.16", "Un fallo de Notificaciones degrada a sin envío; nunca bloquea la venta (DT-07).", "test_rn88", rn88_fallo_de_notificaciones_no_tumba_el_pos),
+    Regla("RN-89", "C.16", "El canal de envío debe ser whatsapp o email.", "test_rn89", rn89_canal_de_envio_soportado),
+    Regla("RN-90", "C.16", "El destino debe ser un teléfono o email válido según el canal.", "test_rn90", rn90_destino_valido_para_el_canal),
+    Regla("RN-91", "C.16", "Un beneficio solo se aplica al cliente que lo posee.", "test_rn91", rn91_beneficio_pertenece_al_cliente),
+    Regla("RN-92", "C.16", "Una promoción solo aplica si está vigente a la fecha.", "test_rn92", rn92_promocion_vigente),
+    Regla("RN-93", "C.16", "Cada beneficio aplicado se registra en la auditoría (DT-05).", "test_rn93", rn93_auditoria_del_beneficio_aplicado),
 )
 
 
 def listar_reglas() -> tuple[Regla, ...]:
-    """Devuelve las 81 reglas en orden."""
+    """Devuelve las 93 reglas en orden."""
     return LAS_81_REGLAS
 
 

@@ -64,10 +64,14 @@ def test_criterio1_existe_el_contrato_de_nlu():
     assert contrato.numero == 25, f"Se esperaba el número 25, es {contrato.numero}"
 
 
-def test_criterio1_el_registro_tiene_25_contratos():
-    """El registro pasa de 23 a 25 contratos con la F7.0."""
-    assert len(CONTRATOS) == 25, f"Se esperaban 25 contratos, hay {len(CONTRATOS)}"
-    assert len(listar_contratos()) == 25
+def test_criterio1_el_registro_tiene_al_menos_25_contratos():
+    """El registro tiene al menos los 25 contratos que introdujo la F7.0.
+
+    La F8.0 añadió los contratos 26 y 27 (CRM y Notificaciones); por eso la
+    aserción es `>= 25` y no `== 25`: la F7.0 garantiza su piso, no el techo.
+    """
+    assert len(CONTRATOS) >= 25, f"Se esperaban al menos 25 contratos, hay {len(CONTRATOS)}"
+    assert len(listar_contratos()) >= 25
 
 
 # ── Criterio 2: el proveedor es el Centro de IA (DT-07) ────────────────────

@@ -2,7 +2,7 @@
 
 Verifica los 3 criterios de la puerta (Plan de Construcción §5.3):
 
-  1. La matriz `regla → test` está completa (81 de 81).
+  1. La matriz `regla → test` está completa (93 de 93).
   2. Ninguna regla migró sin test (verificable por la matriz).
   3. Las cicatrices (DRAFT GUARD, anti-degradación, bloqueo optimista,
      reciclaje de folios, idempotencia de emergencia) están presentes y probadas.
@@ -27,17 +27,17 @@ from rules import registry as R
 # Criterio 1 y 2 — la matriz regla → test está completa (81/81)
 # ===========================================================================
 
-def test_criterio1_la_matriz_tiene_81_reglas():
-    """La matriz regla → test tiene exactamente 81 entradas."""
+def test_criterio1_la_matriz_tiene_93_reglas():
+    """La matriz regla → test tiene exactamente 93 entradas."""
     matriz = matriz_regla_test()
-    assert len(matriz) == 81, f"La matriz tiene {len(matriz)} entradas, no 81"
+    assert len(matriz) == 93, f"La matriz tiene {len(matriz)} entradas, no 93"
 
 
-def test_criterio1_los_numeros_van_de_rn01_a_rn81():
-    """Los números de regla son RN-01 … RN-81, sin huecos."""
+def test_criterio1_los_numeros_van_de_rn01_a_rn93():
+    """Los números de regla son RN-01 … RN-93, sin huecos."""
     numeros = [r.numero for r in LAS_81_REGLAS]
-    esperados = [f"RN-{i:02d}" for i in range(1, 82)]
-    assert numeros == esperados, "Los números de regla no son RN-01 … RN-81 en orden"
+    esperados = [f"RN-{i:02d}" for i in range(1, 94)]
+    assert numeros == esperados, "Los números de regla no son RN-01 … RN-93 en orden"
 
 
 def test_criterio2_ninguna_regla_sin_test():
@@ -54,16 +54,16 @@ def test_criterio2_cada_regla_tiene_enunciado():
         assert r.categoria.startswith("C."), f"{r.numero} no tiene categoría"
 
 
-def test_criterio2_las_15_categorias_estan_presentes():
-    """Las 15 categorías C.1 … C.15 están representadas."""
+def test_criterio2_las_16_categorias_estan_presentes():
+    """Las 16 categorías C.1 … C.16 están representadas."""
     categorias = {r.categoria for r in LAS_81_REGLAS}
-    esperadas = {f"C.{i}" for i in range(1, 16)}
+    esperadas = {f"C.{i}" for i in range(1, 17)}
     assert categorias == esperadas, f"Faltan categorías: {esperadas - categorias}"
 
 
-def test_listar_reglas_devuelve_las_81():
-    """listar_reglas() devuelve las 81 reglas."""
-    assert len(listar_reglas()) == 81
+def test_listar_reglas_devuelve_las_93():
+    """listar_reglas() devuelve las 93 reglas."""
+    assert len(listar_reglas()) == 93
 
 
 # ===========================================================================

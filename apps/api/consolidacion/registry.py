@@ -207,7 +207,7 @@ RIESGOS_QUE_CIERRA: tuple[dict[str, str], ...] = (
 # ── Los criterios de aceptación (MODELO §5) ───────────────────────────────────
 CRITERIOS_SUCURSAL: tuple[dict[str, str], ...] = (
     {"codigo": "S1", "criterio": "El ERP completo opera con el POS como módulo", "verificacion": "Venta real de punta a punta"},
-    {"codigo": "S2", "criterio": "Las 81 reglas se cumplen", "verificacion": "Suite de tests en verde (incluidos guardianes)"},
+    {"codigo": "S2", "criterio": "Las 93 reglas se cumplen", "verificacion": "Suite de tests en verde (incluidos guardianes)"},
     {"codigo": "S3", "criterio": "El POS no lee tablas ajenas", "verificacion": "Test de arquitectura en verde"},
     {"codigo": "S4", "criterio": "No hay try/except pass en la ruta crítica", "verificacion": "Búsqueda automatizada en CI"},
     {"codigo": "S5", "criterio": "El folio es local y el UUID es global", "verificacion": "Revisión de la matriz de trazabilidad"},
