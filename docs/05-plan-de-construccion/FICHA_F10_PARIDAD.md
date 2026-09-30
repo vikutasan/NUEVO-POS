@@ -178,5 +178,5 @@ POS hacia el ERP). Un POS puede tener todos sus componentes y aun así faltarle 
 |------|--------|-----------|
 | `NUEVO-POS` | `168003c` | B-01 (Copiar URL) + test 4/4 + `FICHA_F10_2_B01_COPIAR_URL.md` + `FICHA_F10_PARIDAD.md` |
 | `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | `bf58859` | Plan Maestro §7 (Fase 10) + §10.6.2 + `PLAN_DE_ABORDAJE_FASE_10_PARIDAD.md` |
-| `NUEVO-POS` | _(pendiente F10.4.5)_ | B-02 (Contexto diario) + contrato 28 + test 7/7 + `FICHA_F10_4_CONTEXTO_DIARIO.md` + esta ficha |
-| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | _(pendiente F10.4.5)_ | `PLAN_DE_ABORDAJE_F10_4_CONTEXTO_DIARIO.md` |
+| `NUEVO-POS` | `a202f56` | B-02 (Contexto diario) + contrato 28 + test 7/7 + `FICHA_F10_4_CONTEXTO_DIARIO.md` + esta ficha |
+| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | `8ecea3b` | `PLAN_DE_ABORDAJE_F10_4_CONTEXTO_DIARIO.md` + `PLAN_DE_ABORDAJE_F10_5_PARIDAD_DE_DATOS_DE_CAJA.md` + Plan Maestro §10.6.3 |

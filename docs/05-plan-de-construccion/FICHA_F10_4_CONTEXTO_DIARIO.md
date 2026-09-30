@@ -213,5 +213,5 @@ también **los flujos de datos entre módulos** (escrituras del POS hacia el ERP
 
 | Repo | Commit | Contenido |
 |------|--------|-----------|
-| `NUEVO-POS` | _(pendiente F10.4.5)_ | Contrato 28 + servicio + modal + integración + test 7/7 + esta ficha |
-| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | _(pendiente F10.4.5)_ | `PLAN_DE_ABORDAJE_F10_4_CONTEXTO_DIARIO.md` |
+| `NUEVO-POS` | `a202f56` | Contrato 28 + servicio + modal + integración + test 7/7 + esta ficha |
+| `PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS` | `8ecea3b` | `PLAN_DE_ABORDAJE_F10_4_CONTEXTO_DIARIO.md` + `PLAN_DE_ABORDAJE_F10_5_PARIDAD_DE_DATOS_DE_CAJA.md` + Plan Maestro §10.6.3 |
