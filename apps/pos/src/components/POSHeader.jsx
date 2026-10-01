@@ -73,6 +73,11 @@ export default function POSHeader({
   clienteIdentificado = false,
   onAbrirCaja,
   cajaAbierta = false,
+  // F12.5 — Pizarrón de cuentas abiertas (F5.3). Punto de entrada al pizarrón:
+  // sin este botón, el componente `OpenAccountsCorkboard` era inalcanzable
+  // (13ª instancia de §10.6). Muestra el número de cuentas abiertas si se pasa.
+  onAbrirPizarron,
+  cuentasAbiertas = 0,
 }) {
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
   const nombreTerminal =
@@ -102,16 +107,16 @@ export default function POSHeader({
         <button
           type="button"
           onClick={() => onAbrirCliente?.()}
-          className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+          className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${
             clienteIdentificado
               ? 'bg-acento text-fondo-profundo shadow-lg'
-              : 'bg-fondo-profundo border border-white/5 text-crema-ticket/50 hover:text-crema-ticket hover:bg-fondo-panel'
+              : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
           }`}
           title={clienteIdentificado ? 'Cliente identificado' : 'Identificar cliente'}
           aria-label="Identificar cliente"
         >
-          <span aria-hidden="true" className="text-[14px]">👤</span>
-          <span>Cliente</span>
+          <span aria-hidden="true" className="text-[12px] leading-none mt-0.5">👤</span>
+          <span className="leading-none mt-0.5">Cliente</span>
         </button>
 
         <div className="bg-fondo-profundo border border-white/10 px-8 py-2 rounded-3xl shadow-2xl flex flex-col items-center">
@@ -137,7 +142,8 @@ export default function POSHeader({
         {/* F12.1 — Selector VENTA DIRECTA / PEDIDO (UX heredada del viejo POS,
             §6.8). Gobierna la aparición del botón 📌 de programación. Al volver
             a VENTA DIRECTA se limpia el bloque de pedido ya capturado. */}
-        <div className="flex bg-[#0a0a0a] border border-white/10 rounded-full p-1.5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] items-center">
+        {/* F12.1 — Selector VENTA DIRECTA / PEDIDO (UX heredada del viejo POS) */}
+        <div className="flex bg-black/60 border border-white/10 rounded-2xl p-1 gap-1">
           <button
             type="button"
             id="btn-venta-directa"
@@ -146,10 +152,10 @@ export default function POSHeader({
               onLimpiarPedido?.();
             }}
             aria-pressed={tipoPedido === 'VENTA_DIRECTA'}
-            className={`min-h-tactil px-5 rounded-full text-[12px] font-black uppercase tracking-widest transition-all duration-300 ${
+            className={`min-h-tactil px-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
               tipoPedido === 'VENTA_DIRECTA'
-                ? 'bg-acento text-black shadow-[0_2px_10px_rgba(193,215,46,0.3)] border-b-2 border-white/40'
-                : 'text-white/40 hover:text-white/80 hover:bg-white/5'
+                ? 'bg-acento text-black shadow-lg'
+                : 'text-white/50 hover:text-white'
             }`}
           >
             Venta Directa
@@ -159,10 +165,10 @@ export default function POSHeader({
             id="btn-pedido"
             onClick={() => onCambiarTipoPedido?.('PEDIDO')}
             aria-pressed={tipoPedido === 'PEDIDO'}
-            className={`min-h-tactil px-5 rounded-full text-[12px] font-black uppercase tracking-widest transition-all duration-300 ${
+            className={`min-h-tactil px-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
               tipoPedido === 'PEDIDO'
-                ? 'bg-[#FF8C00] text-black shadow-[0_2px_10px_rgba(255,140,0,0.4)] border-b-2 border-white/40'
-                : 'text-[#FF8C00]/40 hover:text-[#FF8C00]/80 hover:bg-[#FF8C00]/10'
+                ? 'bg-orange-500 text-white shadow-lg'
+                : 'text-white/50 hover:text-white'
             }`}
           >
             📦 Pedido
@@ -224,6 +230,33 @@ export default function POSHeader({
               }`}
             >
               {cajaAbierta ? '● Activa' : '○ Habilitar'}
+            </p>
+          </div>
+        </button>
+        {/* F12.5 — Pizarrón de cuentas abiertas (F5.3). Punto de entrada al
+            pizarrón: sin este botón, `OpenAccountsCorkboard` era inalcanzable
+            (13ª instancia de §10.6). Muestra el conteo de cuentas abiertas. */}
+        <button
+          type="button"
+          onClick={() => onAbrirPizarron?.()}
+          className={`min-h-tactil border rounded-xl px-4 flex items-center transition-all ${
+            cuentasAbiertas > 0
+              ? 'bg-acento text-fondo-profundo border-acento'
+              : 'bg-fondo-profundo border-white/5 hover:bg-fondo-panel'
+          }`}
+          title="Pizarrón de cuentas abiertas"
+          aria-label="Pizarrón de cuentas abiertas"
+        >
+          <div className="text-left">
+            <p className="text-[18px] font-black uppercase tracking-widest leading-none mb-1">
+              Pizarrón
+            </p>
+            <p
+              className={`text-[14px] font-black uppercase tracking-tighter leading-none ${
+                cuentasAbiertas > 0 ? 'text-fondo-profundo' : 'text-acento/60'
+              }`}
+            >
+              {cuentasAbiertas > 0 ? `● ${cuentasAbiertas} abierta(s)` : '○ Sin cuentas'}
             </p>
           </div>
         </button>

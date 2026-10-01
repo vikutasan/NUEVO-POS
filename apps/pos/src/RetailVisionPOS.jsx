@@ -78,6 +78,14 @@ import { construirPaymentDetails } from './services/checkoutService.js';
 // NOTA: esta función es NUEVA del nuevo POS (no existe en el viejo POS).
 import SelectorCategoriasPDF from './components/SelectorCategoriasPDF.jsx';
 import { descargarCatalogoPDF } from './components/CatalogoPDF.jsx';
+// F12.5 — Pizarrón de cuentas abiertas (F5.3). Estaba construido pero HUÉRFANO:
+// `OpenAccountsCorkboard` (F5.3) + `useOpenAccounts` (F5.2) + `openAccountsService`
+// (F5.1) existen y pasan sus tests aislados, pero la pantalla NUNCA los montaba
+// y `POSHeader` no tenía botón para abrirlos. Sin este cableado, el cajero no
+// puede recuperar una cuenta abierta (13ª instancia de §10.6). UX heredada del
+// viejo POS (§6.8): el pizarrón se abre desde el header y recupera al carrito.
+import OpenAccountsCorkboard from './components/OpenAccountsCorkboard.jsx';
+import { listarCuentasAbiertas } from './services/openAccountsService.js';
 
 /**
  * F7.7d — LA TERMINAL ES UN PROP, NO UNA CONSTANTE.
@@ -165,6 +173,12 @@ export default function RetailVisionPOS({
   // Esta función es NUEVA del nuevo POS (no existe en el viejo POS).
   const [selectorPDFAbierto, setSelectorPDFAbierto] = useState(false);
   const [exportandoPDF, setExportandoPDF] = useState(false);
+  // F12.5 — Pizarrón de cuentas abiertas (F5.3). Visibilidad del overlay y el
+  // conteo de cuentas abiertas de la terminal (para el badge del botón). El
+  // conteo se refresca al abrir/cerrar el pizarrón; el pizarrón es la fuente
+  // de verdad de la lista (su hook `useOpenAccounts` la descarga).
+  const [pizarronAbierto, setPizarronAbierto] = useState(false);
+  const [cuentasAbiertas, setCuentasAbiertas] = useState(0);
 
   // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
   // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
@@ -239,6 +253,42 @@ export default function RetailVisionPOS({
   // PDF con el catálogo COMPLETO (para hidratar por `category_id`). El servicio
   // devuelve `{outcome, reason}` y NUNCA lanza (contrato del POS): si falla, se
   // avisa por el banner y se cierra el selector igual.
+  // ── F12.5 — Pizarrón de cuentas abiertas (F5.3) ────────────────────────────
+  // Refresca el CONTEO de cuentas abiertas de la terminal (para el badge del
+  // botón del header). Es una lectura ligera por el contrato 23; si falla, se
+  // deja el conteo en 0 sin romper la pantalla (el pizarrón es la autoridad).
+  const refrescarConteoCuentas = useCallback(async () => {
+    const r = await listarCuentasAbiertas(terminalEfectiva);
+    if (r.outcome === 'ok') {
+      setCuentasAbiertas((r.data?.cuentas ?? []).length);
+    }
+  }, [terminalEfectiva]);
+
+  useEffect(() => {
+    refrescarConteoCuentas();
+  }, [refrescarConteoCuentas]);
+
+  // Recupera una cuenta abierta. El pizarrón entrega la versión FRESCA del
+  // servidor (contrato 21, lección v6.0): aquí se ADOPTA la identidad de la
+  // cuenta (`ticketId` + `version`) para que el operador siga trabajando sobre
+  // la cuenta REAL y no sobre una copia vieja.
+  //
+  // ALCANCE HONESTO (Regla 15 / contrato 21): `leerTicket` devuelve EXACTAMENTE
+  // 5 campos escalares y NO las líneas — leer las líneas es de otro contrato.
+  // Por eso aquí NO se hidrata el carrito con líneas inventadas: se adopta la
+  // cuenta y se cierra el pizarrón. Hidratar las líneas del carrito es una
+  // operación aparte (fuera del alcance de F12.5, que es hacer ALCANZABLE el
+  // pizarrón, 13ª instancia de §10.6).
+  const recuperarCuentaAlCarrito = useCallback((cuenta) => {
+    if (!cuenta) return;
+    if (cuenta.id) setTicketId(cuenta.id);
+    setPizarronAbierto(false);
+    setBanner({
+      tipo: 'exito',
+      mensaje: `Cuenta ${cuenta.account_num || ''} recuperada`.trim(),
+    });
+  }, []);
+
   const exportarCartaPDF = useCallback(
     (categoriasSeleccionadas) => {
       setExportandoPDF(true);
@@ -516,6 +566,11 @@ export default function RetailVisionPOS({
         clienteIdentificado={Boolean(cliente)}
         onAbrirCaja={() => setCajaAbierta(true)}
         cajaAbierta={cajaAbierta}
+        // F12.5 — Pizarrón de cuentas abiertas (F5.3). Sin este prop, el botón
+        // "Pizarrón" del header no se pinta y `OpenAccountsCorkboard` queda
+        // inalcanzable (13ª instancia de §10.6). El conteo alimenta el badge.
+        onAbrirPizarron={() => setPizarronAbierto(true)}
+        cuentasAbiertas={cuentasAbiertas}
       />
 
       {error ? (
@@ -772,6 +827,25 @@ export default function RetailVisionPOS({
           onExportar={exportarCartaPDF}
           onCerrar={() => setSelectorPDFAbierto(false)}
         />
+      ) : null}
+
+      {/* F12.5 — Pizarrón de cuentas abiertas (F5.3). Se abre desde el botón
+          "Pizarrón" del header. El componente descarga la lista por el contrato
+          23 (vía `useOpenAccounts`) y, al recuperar, entrega la versión FRESCA
+          de la cuenta (contrato 21) a `recuperarCuentaAlCarrito`. Sin este
+          montaje, el pizarrón era inalcanzable (13ª instancia de §10.6). */}
+      {pizarronAbierto ? (
+        <div className="fixed inset-0 z-50 bg-fondo-profundo/80 flex items-start justify-center p-4 overflow-y-auto">
+          <OpenAccountsCorkboard
+            terminalId={terminalEfectiva}
+            modo={modo}
+            onRecuperar={recuperarCuentaAlCarrito}
+            onCerrar={() => {
+              setPizarronAbierto(false);
+              refrescarConteoCuentas();
+            }}
+          />
+        </div>
       ) : null}
 
       {/* ── F8.6 — CRM + Notificaciones (lado POS) ────────────────────────────
