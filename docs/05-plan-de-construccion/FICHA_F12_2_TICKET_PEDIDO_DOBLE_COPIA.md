@@ -4,7 +4,7 @@
 > **Sub-fase:** F12.2 — Plantilla de PEDIDO + doble copia.
 > **Estado:** ✅ CERRADA.
 > **Fecha:** 01 Oct 2026.
-> **Commit:** _(pendiente — se registra en el commit de seguimiento)_
+> **Commit:** `c662841` (NUEVO-POS).
 > **Repositorio:** NUEVO-POS.
 
 ---
