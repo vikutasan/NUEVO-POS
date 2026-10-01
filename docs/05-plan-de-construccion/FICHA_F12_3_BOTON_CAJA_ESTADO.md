@@ -4,7 +4,7 @@
 > **Sub-fase:** F12.3 — Botón CAJA con texto + estado.
 > **Estado:** ✅ CERRADA.
 > **Fecha:** 01 Oct 2026.
-> **Commit:** _(pendiente — se registra en el commit de seguimiento)_
+> **Commit:** `a7d4a75` (NUEVO-POS).
 > **Repositorio:** NUEVO-POS.
 
 ---
