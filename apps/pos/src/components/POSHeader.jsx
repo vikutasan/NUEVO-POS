@@ -183,19 +183,33 @@ export default function POSHeader({
       <div className="flex items-center gap-2">
         {/* F4.5.1 — Gestor de Caja (UX heredada del viejo POS, §6.8). Es el
             punto de entrada al turno de caja: sin él, RN-49 impide cobrar.
-            Se resalta cuando hay un turno de caja ABIERTO. */}
+            F12.3 — Se restaura la ESTÉTICA del viejo POS: el botón muestra el
+            rótulo "Caja" y su ESTADO ("● Activa" / "○ Habilitar"), en lugar de
+            un icono 💰 que no comunica nada. Se conserva el resaltado cuando
+            hay un turno de caja ABIERTO. */}
         <button
           type="button"
           onClick={() => onAbrirCaja?.()}
-          className={`min-h-tactil min-w-tactil border rounded-xl px-3 flex items-center justify-center transition-all ${
+          className={`min-h-tactil border rounded-xl px-4 flex items-center transition-all ${
             cajaAbierta
               ? 'bg-acento text-fondo-profundo border-acento'
               : 'bg-fondo-profundo border-white/5 hover:bg-fondo-panel'
           }`}
-          title={cajaAbierta ? 'Caja abierta' : 'Abrir caja'}
+          title={cajaAbierta ? 'Gestionar Caja (Activa)' : 'Habilitar como Caja'}
           aria-label="Gestor de caja"
         >
-          <span aria-hidden="true">💰</span>
+          <div className="text-left">
+            <p className="text-[18px] font-black uppercase tracking-widest leading-none mb-1">
+              Caja
+            </p>
+            <p
+              className={`text-[14px] font-black uppercase tracking-tighter leading-none ${
+                cajaAbierta ? 'text-fondo-profundo' : 'text-acento/60'
+              }`}
+            >
+              {cajaAbierta ? '● Activa' : '○ Habilitar'}
+            </p>
+          </div>
         </button>
         {/* Acciones de IA: tema (overlay nuevo) y voz (overlay con gate).
             R-04: target ≥44px. La visión NO vive aquí: es un modo de vista
