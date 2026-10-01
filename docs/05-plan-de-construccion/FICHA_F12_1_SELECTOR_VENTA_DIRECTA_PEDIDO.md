@@ -3,6 +3,7 @@
 > **Fase:** 12 — Portar funcionalidades puntuales del POS viejo (una por una).
 > **Sub-fase:** 12.1 — El selector VENTA DIRECTA / PEDIDO que gobierna el botón 📌.
 > **Estado:** ✅ CERRADA.
+> **Commit:** `0a57d8f` (NUEVO-POS).
 > **Regla rectora:** §6.8 — *la INTEGRACIÓN se hereda; solo la IMPLEMENTACIÓN se reescribe.*
 > **Lección aplicada:** §10.6.5 — *el inventario de componentes no ve la PARIDAD DE OPERACIÓN.*
 
