@@ -71,6 +71,13 @@ import * as caja from './services/cashService.js';
 // F9.1.3 — Pagos mixtos: el checkout devuelve N abonos y aquí se construye el
 // `payment_details` canónico (valida RN-94 en la frontera; nunca lanza).
 import { construirPaymentDetails } from './services/checkoutService.js';
+// F12.4 — Carta/catálogo en PDF (F6.3). Estaba construido pero HUÉRFANO: el
+// botón "Exportar carta a PDF" de `CategoryBar` solo se pinta si se le pasa
+// `onExportarPDF`, y la pantalla nunca lo hacía. Sin este cableado, el dueño
+// no puede imprimir la carta desde el POS (12ª instancia de §10.6).
+// NOTA: esta función es NUEVA del nuevo POS (no existe en el viejo POS).
+import SelectorCategoriasPDF from './components/SelectorCategoriasPDF.jsx';
+import { descargarCatalogoPDF } from './components/CatalogoPDF.jsx';
 
 /**
  * F7.7d — LA TERMINAL ES UN PROP, NO UNA CONSTANTE.
@@ -153,6 +160,11 @@ export default function RetailVisionPOS({
   // turno de caja abierto. No bloquea (el backend sigue siendo la autoridad
   // vía RN-49); solo explica el porqué y ofrece abrir el gestor.
   const [avisoCaja, setAvisoCaja] = useState(false);
+  // F12.4 — Carta/catálogo en PDF (F6.3). Visibilidad del selector de categorías
+  // y bandera de "generando" para deshabilitar el botón mientras se arma el PDF.
+  // Esta función es NUEVA del nuevo POS (no existe en el viejo POS).
+  const [selectorPDFAbierto, setSelectorPDFAbierto] = useState(false);
+  const [exportandoPDF, setExportandoPDF] = useState(false);
 
   // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
   // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
@@ -221,6 +233,27 @@ export default function RetailVisionPOS({
   useEffect(() => {
     refrescarTurnoCaja();
   }, [refrescarTurnoCaja]);
+
+  // ── F12.4 — Exportar la carta a PDF (F6.3) ─────────────────────────────────
+  // El selector entrega las categorías marcadas; aquí se genera y descarga el
+  // PDF con el catálogo COMPLETO (para hidratar por `category_id`). El servicio
+  // devuelve `{outcome, reason}` y NUNCA lanza (contrato del POS): si falla, se
+  // avisa por el banner y se cierra el selector igual.
+  const exportarCartaPDF = useCallback(
+    (categoriasSeleccionadas) => {
+      setExportandoPDF(true);
+      const resultado = descargarCatalogoPDF(categoriasSeleccionadas, productos);
+      setExportandoPDF(false);
+      setSelectorPDFAbierto(false);
+      if (resultado.outcome !== 'ok') {
+        setBanner({
+          tipo: 'error',
+          mensaje: `No se pudo generar la carta: ${resultado.reason || 'error'}`,
+        });
+      }
+    },
+    [productos],
+  );
 
   // ── Filtro por categoría ───────────────────────────────────────────────────
   const productosVisibles = useMemo(() => {
@@ -498,6 +531,9 @@ export default function RetailVisionPOS({
             onSeleccionar={setCategoriaActiva}
             viewMode={viewMode}
             onCambiarVista={setViewMode}
+            // F12.4 — Carta/catálogo en PDF (F6.3). Sin este prop, el botón
+            // "Exportar carta a PDF" NO se pinta (CategoryBar lo condiciona).
+            onExportarPDF={() => setSelectorPDFAbierto(true)}
           />
           {cargando ? (
             <div className="w-full flex items-center justify-center py-16 text-crema-ticket/50">
@@ -722,6 +758,19 @@ export default function RetailVisionPOS({
           datosIniciales={bloquePedido}
           onGuardar={guardarPedido}
           onCerrar={() => setPedidoAbierto(false)}
+        />
+      ) : null}
+
+      {/* F12.4 — Selector de categorías para la carta PDF (F6.3). Se abre desde
+          el botón "Exportar carta a PDF" de la CategoryBar. El dueño elige qué
+          categorías entran; al confirmar, `exportarCartaPDF` genera y descarga
+          el PDF. Esta función es NUEVA del nuevo POS (no existe en el viejo). */}
+      {selectorPDFAbierto ? (
+        <SelectorCategoriasPDF
+          categorias={categorias}
+          exportando={exportandoPDF}
+          onExportar={exportarCartaPDF}
+          onCerrar={() => setSelectorPDFAbierto(false)}
         />
       ) : null}
 
