@@ -3,7 +3,7 @@
 > **Sub-fase:** F12.4 — Cableado de `onExportarPDF` + `SelectorCategoriasPDF` en `RetailVisionPOS`
 > **Fase:** 12 — Porte de funcionalidades del viejo POS al nuevo POS
 > **Plan:** [`PLAN_MAESTRO_DEFINITIVO_POS.md`](../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/PLAN_MAESTRO_DEFINITIVO_POS.md) §6.2 + §10.6
-> **Commit de esta sub-fase:** `PENDIENTE`
+> **Commit de esta sub-fase:** `a31324d`
 > **Estado:** ✅ CERRADA — gate verde (8 tests) + CI verde
 
 ---
