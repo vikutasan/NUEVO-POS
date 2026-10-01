@@ -345,6 +345,9 @@ async def crear_ticket(
         packaging_type=entrada.packaging_type,
         delivery_address=entrada.delivery_address,
         order_notes=entrada.order_notes,
+        # F12.6 — Trazabilidad: el nombre del capturista se congela en el
+        # ticket (foto histórica, patrón F10.5). Sin JOIN, sin leer `employees`.
+        captured_by_name=entrada.capturista_nombre,
     )
     db.add(ticket)
     # FASE 7.5.0 / D-5 — NO se hace commit aquí. El ticket se `flush()`ea para
@@ -426,6 +429,9 @@ async def cobrar_ticket(
     ticket.payment_details = detalles_normalizados
     # FASE 4.0: liga el ticket a su turno de caja para que el arqueo lo cuente.
     ticket.cash_session_id = sesion_caja.id
+    # F12.6 — Trazabilidad: el nombre del cobrador se congela al cobrar
+    # (foto histórica, patrón F10.5). Sin JOIN, sin leer `employees`.
+    ticket.cashed_by_name = entrada.cobrador_nombre
 
     # FASE 7.5.0 / D-5b — `flush()` en vez de `commit()`: el cobro deja el ticket
     # PAID en la transacción abierta. En F7.5.2 la proyección del pedido (que al
@@ -678,7 +684,12 @@ async def cuentas_abiertas(
 
     Es de SOLO LECTURA y devuelve una PROYECCIÓN (O-23): nunca la tabla
     `tickets`. Respeta la Regla 15 (respuesta ligera): cada cuenta expone
-    EXACTAMENTE 5 campos escalares.
+    campos escalares explícitos (nada de tablas ni de `SELECT *`).
+
+    F12.6 — PARIDAD DE PRESENTACIÓN: la proyección se amplió con los campos
+    que el pizarrón del viejo POS mostraba en cada post-it (terminal, cliente,
+    capturista, teléfono, tipo de pedido, tipo de entrega y hora). Siguen
+    siendo escalares: la frontera A-02 / O-23 se respeta.
 
     Solo devuelve cuentas de la terminal pedida (RN-31), ordenadas por
     `created_at` ascendente (la más antigua primero, como un corcho real).

@@ -124,6 +124,12 @@ class CrearTicketEntrada(BaseModel):
     delivery_address: str | None = None
     order_notes: str | None = None
 
+    # ── Trazabilidad (F12.6) ──────────────────────────────────────────────
+    # El POS envía el NOMBRE del capturista (no el UUID): el backend lo
+    # persiste desnormalizado en `tickets.captured_by_name` (patrón F10.5).
+    # Es una foto histórica, no un valor vivo; sin JOIN, sin leer `employees`.
+    capturista_nombre: str | None = None
+
 
 class LineaSalida(BaseModel):
     """Una línea persistida del ticket."""
@@ -191,6 +197,10 @@ class CobrarTicketEntrada(BaseModel):
 
     payment_details: dict[str, Any] = Field(default_factory=dict)
     version: int = Field(ge=0, description="Version esperado (RN-25)")
+
+    # F12.6 — Trazabilidad: el POS envía el NOMBRE del cobrador (no el UUID).
+    # El backend lo persiste desnormalizado en `tickets.cashed_by_name`.
+    cobrador_nombre: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -460,8 +470,15 @@ class ReporteDiarioSalida(BaseModel):
 class CuentaAbiertaSalida(BaseModel):
     """Una cuenta abierta del pizarrón (contrato 23).
 
-    RESPUESTA LIGERA: EXACTAMENTE 5 campos escalares (Regla 15). NO incluye las
-    líneas: leer las líneas es responsabilidad del contrato 21.
+    RESPUESTA LIGERA: una PROYECCIÓN de campos escalares explícitos (Regla 15).
+    NO incluye las líneas: leer las líneas es responsabilidad del contrato 21.
+
+    F12.6 — PARIDAD DE PRESENTACIÓN: el pizarrón del viejo POS mostraba, en
+    cada post-it, el folio, la terminal, el cliente, el capturista, la hora y
+    el tipo de pedido. Para que el nuevo pizarrón tenga PARIDAD REAL, el
+    contrato 23 amplía su proyección con esos campos. Siguen siendo escalares
+    (nada de tablas ni de `SELECT *`): la frontera A-02 / O-23 se respeta.
+    `captured_by_name` viaja DESNORMALIZADO (foto histórica, patrón F10.5).
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -471,6 +488,14 @@ class CuentaAbiertaSalida(BaseModel):
     status: str
     total: Decimal
     version: int
+    # ── Paridad de presentación con el viejo POS (F12.6) ──────────────────
+    terminal_id: str | None = None
+    captured_by_name: str | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    order_type: str = "VENTA_DIRECTA"
+    delivery_type: str | None = None
+    created_at: datetime | None = None
 
 
 class CuentasAbiertasSalida(BaseModel):

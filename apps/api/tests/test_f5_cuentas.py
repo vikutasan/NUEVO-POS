@@ -15,9 +15,11 @@ Esta puerta verifica CUATRO cosas (Plan de Abordaje Fase 5 §4.0.3):
       Devuelve SOLO las cuentas OPEN de la terminal pedida, y NO las de otra
       terminal ni las ya cobradas (RN-31).
 
-  ✓ test_respuesta_ligera_max_5_campos  (Regla 15)
-      Cada cuenta expone EXACTAMENTE 5 campos escalares: id, account_num,
-      status, total, version. NO expone las líneas.
+  ✓ test_respuesta_ligera_campos_escalares  (Regla 15)
+      Cada cuenta expone una PROYECCIÓN de campos escalares explícitos (nunca
+      las líneas ni un `SELECT *`). FASE 5.0: 5 campos. FASE 12.6 amplió la
+      proyección a 12 campos para la paridad de presentación con el viejo POS
+      (terminal, capturista, cliente, teléfono, tipo de pedido, hora).
 
   ✓ test_terminal_id_vacio_es_400  (negativo)
       Un `terminal_id` vacío responde 400, no una lista silenciosa.
@@ -231,12 +233,38 @@ async def test_no_devuelve_cuentas_cobradas(entorno):
 
 
 # ---------------------------------------------------------------------------
-# Criterio 3 — respuesta ligera: EXACTAMENTE 5 campos (Regla 15)
+# Criterio 3 — respuesta ligera: proyección de campos escalares (Regla 15)
 # ---------------------------------------------------------------------------
 
+# FASE 5.0: la proyección eran 5 campos. FASE 12.6 la amplió a 12 para la
+# paridad de presentación con el viejo POS (corcho + post-it con terminal,
+# capturista, cliente, teléfono, tipo de pedido y hora). Regla 15 NO exige
+# "5 campos para siempre": exige una PROYECCIÓN de campos escalares explícitos
+# — nunca las líneas, nunca un `SELECT *` (frontera A-02 / O-23).
+CAMPOS_ESPERADOS = {
+    "id",
+    "account_num",
+    "status",
+    "total",
+    "version",
+    "terminal_id",
+    "captured_by_name",
+    "customer_name",
+    "customer_phone",
+    "order_type",
+    "delivery_type",
+    "created_at",
+}
+
+
 @pytest.mark.asyncio
-async def test_respuesta_ligera_max_5_campos(entorno):
-    """Cada cuenta expone EXACTAMENTE 5 campos escalares (Regla 15)."""
+async def test_respuesta_ligera_campos_escalares(entorno):
+    """Cada cuenta expone la proyección de campos escalares explícitos (Regla 15).
+
+    FASE 12.6: la proyección es de 12 campos (paridad de presentación con el
+    viejo POS). Lo que la Regla 15 prohíbe sigue prohibido: NO se exponen las
+    líneas del ticket (eso es del contrato 21) ni un volcado de la tabla.
+    """
     ent: _Entorno = entorno
     await _limpiar(ent)
     try:
@@ -252,8 +280,9 @@ async def test_respuesta_ligera_max_5_campos(entorno):
         assert len(cuentas) == 1, "Se esperaba exactamente una cuenta"
 
         campos = set(cuentas[0].keys())
-        assert campos == {"id", "account_num", "status", "total", "version"}, (
-            f"La respuesta ligera debe tener 5 campos, tiene: {campos}"
+        assert campos == CAMPOS_ESPERADOS, (
+            f"La respuesta ligera debe exponer la proyección de F12.6 "
+            f"({len(CAMPOS_ESPERADOS)} campos), tiene: {campos}"
         )
         # NO debe exponer las líneas (eso es del contrato 21).
         assert "items" not in campos

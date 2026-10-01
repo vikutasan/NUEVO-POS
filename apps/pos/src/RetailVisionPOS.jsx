@@ -835,10 +835,14 @@ export default function RetailVisionPOS({
           de la cuenta (contrato 21) a `recuperarCuentaAlCarrito`. Sin este
           montaje, el pizarrón era inalcanzable (13ª instancia de §10.6). */}
       {pizarronAbierto ? (
-        <div className="fixed inset-0 z-50 bg-fondo-profundo/80 flex items-start justify-center p-4 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 bg-fondo-profundo/80 flex items-start justify-center p-4 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Cuentas abiertas"
+        >
           <OpenAccountsCorkboard
             terminalId={terminalEfectiva}
-            modo={modo}
             onRecuperar={recuperarCuentaAlCarrito}
             onCerrar={() => {
               setPizarronAbierto(false);

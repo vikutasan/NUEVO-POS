@@ -628,12 +628,15 @@ CONTRATOS: tuple[Contrato, ...] = (
         salida={"cuentas": "List[CuentaAbiertaSalida]"},
         garantias=(
             "Devuelve una PROYECCIÓN de las cuentas OPEN, no la tabla `tickets` (O-23).",
-            "RESPUESTA LIGERA: cada cuenta expone EXACTAMENTE 5 campos escalares (Regla 15).",
+            "RESPUESTA LIGERA: cada cuenta expone campos escalares explícitos (Regla 15).",
+            "F12.6 — PARIDAD DE PRESENTACIÓN: la proyección incluye terminal, "
+            "capturista (nombre desnormalizado, patrón F10.5), cliente, teléfono, "
+            "tipo de pedido, tipo de entrega y hora de creación, como el viejo POS.",
             "Solo devuelve cuentas de la terminal pedida (RN-31).",
             "NO devuelve las líneas: leer las líneas es del contrato 21.",
         ),
         errores=("400 si `terminal_id` está vacío.",),
-        estado_hoy="FASE 5.0",
+        estado_hoy="FASE 5.0 + F12.6",
     ),
     # ── §11 IA — Voz (proveedor: Centro de IA — DT-07 / FASE 7.0) ──────────
     Contrato(

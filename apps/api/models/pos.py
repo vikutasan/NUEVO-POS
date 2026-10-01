@@ -106,6 +106,16 @@ class Ticket(Base):
     cashed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
+    # F12.6 — PARIDAD DE PRESENTACIÓN: el pizarrón muestra QUIÉN capturó y
+    # QUIÉN cobró, igual que el viejo POS. El nombre se DESNORMALIZA (patrón
+    # F10.5, igual que `cash_sessions.employee_name`): es una FOTO HISTÓRICA
+    # ("quién capturó ESTA cuenta el día X"), no un valor vivo que deba
+    # sincronizarse. Por eso NO es una segunda fuente de verdad (ver
+    # MODELO_DE_DATOS_DEL_NUEVO_POS.md:166 y :486, `component_name`).
+    # El POS lo envía al crear/cobrar; el backend lo persiste. Sin JOIN, sin
+    # leer `employees` (frontera A-02 / O-23).
+    captured_by_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    cashed_by_name: Mapped[str | None] = mapped_column(String, nullable=True)
 
     session: Mapped["TerminalSession | None"] = relationship(back_populates="tickets")
     items: Mapped[list["TicketItem"]] = relationship(back_populates="ticket")
