@@ -3,7 +3,7 @@
 > **Sub-fase:** F12.5 — Cableado del botón "Pizarrón" en `POSHeader` + montaje de `OpenAccountsCorkboard` en `RetailVisionPOS`
 > **Fase:** 12 — Porte de funcionalidades del viejo POS al nuevo POS
 > **Plan:** [`PLAN_MAESTRO_DEFINITIVO_POS.md`](../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/PLAN_MAESTRO_DEFINITIVO_POS.md) §5 (Fase 5) + §6.8 + §10.6
-> **Commit de esta sub-fase:** `PENDIENTE`
+> **Commit de esta sub-fase:** `4e51037`
 > **Estado:** ✅ CERRADA — gate verde (7 tests) + CI verde
 
 ---
