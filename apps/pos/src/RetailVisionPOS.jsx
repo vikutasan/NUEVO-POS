@@ -124,6 +124,12 @@ export default function RetailVisionPOS({
   const [pedidoAbierto, setPedidoAbierto] = useState(false);
   // Bloque `order_*` capturado por el modal; se adjunta al crear el ticket.
   const [bloquePedido, setBloquePedido] = useState(null);
+  // F12.1 — Selector VENTA DIRECTA / PEDIDO (UX heredada del viejo POS, §6.8).
+  //   Gobierna la aparición del botón 📌 de programación: SOLO se muestra en
+  //   modo 'PEDIDO', igual que en `apps/pos/RetailVisionPOS.jsx` (viejo POS,
+  //   estado `orderType`). Al volver a 'VENTA_DIRECTA' se limpia el bloque de
+  //   pedido ya capturado (equivalente a `onOrderDataClear` del viejo POS).
+  const [tipoPedido, setTipoPedido] = useState('VENTA_DIRECTA');
   // F8.6 — CRM (identificación del cliente) + Notificaciones (entrega del ticket).
   //   - `clienteAbierto`: visibilidad del panel de identificación (overlay).
   //   - `cliente`: el cliente identificado (CRM), o null. Se usa para PRECARGAR
@@ -467,6 +473,12 @@ export default function RetailVisionPOS({
         vozDisponible={voz.disponible}
         onAbrirPedido={() => setPedidoAbierto(true)}
         pedidoProgramado={Boolean(bloquePedido)}
+        // F12.1 — Selector VENTA DIRECTA / PEDIDO (UX heredada del viejo POS,
+        // §6.8). Gobierna la aparición del botón 📌 de programación. Al volver
+        // a VENTA_DIRECTA se limpia el bloque de pedido ya capturado.
+        tipoPedido={tipoPedido}
+        onCambiarTipoPedido={setTipoPedido}
+        onLimpiarPedido={() => setBloquePedido(null)}
         onAbrirCliente={() => setClienteAbierto(true)}
         clienteIdentificado={Boolean(cliente)}
         onAbrirCaja={() => setCajaAbierta(true)}

@@ -98,8 +98,16 @@ async function esperarCatalogo() {
   await screen.findByText('Concha de Vainilla');
 }
 
-/** Localiza el botón 📌 "Programar pedido" del header. */
+/**
+ * Localiza el botón 📌 "Programar pedido" del header.
+ *
+ * F12.1 — El botón 📌 ya NO está visible por defecto: hereda la operación del
+ * viejo POS (§6.8), donde SOLO aparece cuando el selector está en modo PEDIDO.
+ * Por eso este helper primero activa el modo PEDIDO (idempotente: pulsar
+ * "📦 Pedido" cuando ya está activo no tiene efecto) y luego devuelve el botón.
+ */
 function botonProgramarPedido() {
+  fireEvent.click(screen.getByRole('button', { name: /📦 Pedido/i }));
   return screen.getByRole('button', { name: /Programar pedido/i });
 }
 
