@@ -195,7 +195,7 @@ aria-label="Cuentas abiertas"` y le pasa `onCerrar`.
 
 ## 8. Commit
 
-- **NUEVO-POS:** `<hash pendiente>`
+- **NUEVO-POS:** `8c2b63e`
 
 ---
 
