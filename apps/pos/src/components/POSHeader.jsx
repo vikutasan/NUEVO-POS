@@ -121,7 +121,7 @@ export default function POSHeader({
         {/* F12.1 — Selector VENTA DIRECTA / PEDIDO (UX heredada del viejo POS,
             §6.8). Gobierna la aparición del botón 📌 de programación. Al volver
             a VENTA DIRECTA se limpia el bloque de pedido ya capturado. */}
-        <div className="flex bg-fondo-profundo border border-white/10 rounded-2xl p-1 gap-1">
+        <div className="flex bg-[#0a0a0a] border border-white/10 rounded-full p-1.5 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] items-center">
           <button
             type="button"
             id="btn-venta-directa"
@@ -130,10 +130,10 @@ export default function POSHeader({
               onLimpiarPedido?.();
             }}
             aria-pressed={tipoPedido === 'VENTA_DIRECTA'}
-            className={`min-h-tactil px-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+            className={`min-h-tactil px-5 rounded-full text-[12px] font-black uppercase tracking-widest transition-all duration-300 ${
               tipoPedido === 'VENTA_DIRECTA'
-                ? 'bg-acento text-fondo-profundo shadow-lg'
-                : 'text-crema-ticket/50 hover:text-crema-ticket'
+                ? 'bg-acento text-black shadow-[0_2px_10px_rgba(193,215,46,0.3)] border-b-2 border-white/40'
+                : 'text-white/40 hover:text-white/80 hover:bg-white/5'
             }`}
           >
             Venta Directa
@@ -143,15 +143,40 @@ export default function POSHeader({
             id="btn-pedido"
             onClick={() => onCambiarTipoPedido?.('PEDIDO')}
             aria-pressed={tipoPedido === 'PEDIDO'}
-            className={`min-h-tactil px-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+            className={`min-h-tactil px-5 rounded-full text-[12px] font-black uppercase tracking-widest transition-all duration-300 ${
               tipoPedido === 'PEDIDO'
-                ? 'bg-acento text-fondo-profundo shadow-lg'
-                : 'text-crema-ticket/50 hover:text-crema-ticket'
+                ? 'bg-[#FF8C00] text-black shadow-[0_2px_10px_rgba(255,140,0,0.4)] border-b-2 border-white/40'
+                : 'text-[#FF8C00]/40 hover:text-[#FF8C00]/80 hover:bg-[#FF8C00]/10'
             }`}
           >
             📦 Pedido
           </button>
         </div>
+        
+        {/* F7.5.6 — Programar pedido (puente POS → Pedidos). Movido aquí para coincidir 
+            con la UX heredada del viejo POS. Se resalta cuando ya hay un pedido programado. */}
+        {tipoPedido === 'PEDIDO' ? (
+          <button
+            type="button"
+            id="btn-programacion-pedido"
+            onClick={() => onAbrirPedido?.()}
+            className={`min-h-tactil px-5 rounded-2xl flex items-center justify-center transition-all shadow-lg border ${
+              pedidoProgramado
+                ? 'bg-[#FF8C00] text-black border-[#FF8C00]'
+                : 'bg-fondo-profundo border-[#FF8C00]/40 text-[#FF8C00] hover:bg-[#FF8C00]/10'
+            }`}
+            title={pedidoProgramado ? 'Pedido programado' : 'Programar pedido'}
+            aria-label="Programar pedido"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center leading-none">
+                <span className="text-[12px] font-black uppercase tracking-widest">Programación</span>
+                <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-80 mt-0.5">del pedido</span>
+              </div>
+              <span aria-hidden="true" className="text-[16px] drop-shadow-md">📅</span>
+            </div>
+          </button>
+        ) : null}
       </div>
 
       {/* DERECHA: Acciones de IA (F7.5/F7.6) + Sesión + Red + Modo */}
@@ -175,26 +200,7 @@ export default function POSHeader({
         {/* Acciones de IA: tema (overlay nuevo) y voz (overlay con gate).
             R-04: target ≥44px. La visión NO vive aquí: es un modo de vista
             que se conmuta desde la CategoryBar (UX heredada del viejo POS). */}
-        {/* F7.5.6 — Programar pedido (puente POS → Pedidos). F12.1: SOLO se
-            muestra en modo PEDIDO (UX heredada del viejo POS, §6.8), igual que
-            el botón "Programación del Pedido" del header viejo. Se resalta
-            cuando ya hay un pedido programado en la cuenta en curso. */}
-        {tipoPedido === 'PEDIDO' ? (
-          <button
-            type="button"
-            id="btn-programacion-pedido"
-            onClick={() => onAbrirPedido?.()}
-            className={`min-h-tactil min-w-tactil border rounded-xl px-3 flex items-center justify-center transition-all ${
-              pedidoProgramado
-                ? 'bg-acento text-fondo-profundo border-acento'
-                : 'bg-fondo-profundo border-white/5 hover:bg-fondo-panel'
-            }`}
-            title={pedidoProgramado ? 'Pedido programado' : 'Programar pedido'}
-            aria-label="Programar pedido"
-          >
-            <span aria-hidden="true">📌</span>
-          </button>
-        ) : null}
+
         {/* F8.6 — Identificación del cliente (CRM). UX heredada del viejo POS
             (§6.8): el botón vive en el header. Se resalta cuando ya hay un
             cliente identificado en la cuenta en curso. */}

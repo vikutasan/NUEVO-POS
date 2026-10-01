@@ -64,6 +64,9 @@ function estilosTermicos() {
     table { width: 100%; border-collapse: collapse; font-size: 8pt; font-weight: bold; }
     td { padding: 1px 0; vertical-align: top; }
     .audit { font-size: 7pt; text-transform: uppercase; margin-top: 3px; padding-top: 2px; border-top: 1px dashed #000; }
+    /* F12.2 — doble copia del ticket de PEDIDO: la térmica corta entre copias. */
+    .ticket-copy { page-break-after: always; }
+    .ticket-copy:last-child { page-break-after: auto; }
   `;
 }
 
@@ -179,11 +182,113 @@ function filaPago(etiqueta, valor) {
 }
 
 /**
- * Genera el HTML térmico de un ticket de venta.
+ * Formatea la fecha/hora de entrega programada de un pedido (es-MX, corta).
+ * Nunca lanza: si el instante es inválido devuelve '---'.
+ */
+function fechaEntregaProgramada(instante) {
+  if (!instante) return '---';
+  const fecha = new Date(instante);
+  if (Number.isNaN(fecha.getTime())) return '---';
+  return fecha.toLocaleString('es-MX', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Una fila etiqueta/valor de la sección DATOS DEL PEDIDO. */
+function filaPedido(etiqueta, valor) {
+  return `<div class="row"><span class="small">${etiqueta}:</span> <span class="upper">${valor}</span></div>`;
+}
+
+/**
+ * Sección "*** DATOS DEL PEDIDO ***" del ticket de un PEDIDO (F12.2).
+ *
+ * Porta FIELMENTE la sección del viejo POS (`apps/pos/utils/ticketGenerator.js:142-189`):
+ * el recuadro con borde que imprime los datos operativos del pedido — quién lo
+ * recoge, cuándo, con qué empaque, a qué dirección, con qué notas, y el estado
+ * "PAGADO - PENDIENTE DE RECOLECCIÓN/ENTREGA". Sin esta sección, el cliente no
+ * sabe cuándo recoger y el negocio no sabe qué preparar.
+ *
+ * Devuelve '' si el ticket NO es un PEDIDO (venta directa).
+ *
+ * @param {Object} ticket - Datos del ticket (order_type, customer_name, ...).
+ * @param {string|null} copyLabel - 'CLIENTE' | 'COMERCIO' | null.
+ * @returns {string} HTML de la sección, o ''.
+ */
+function seccionDatosPedido(ticket, copyLabel) {
+  if (ticket.order_type !== 'PEDIDO') return '';
+
+  const esPickup = ticket.delivery_type === 'PICKUP';
+  const tipo = esPickup ? '🏪 RECOLECCIÓN (PICKUP)' : '🚗 ENTREGA A DOMICILIO';
+  const empaque =
+    ticket.packaging_type === 'PROPIO' ? '🛍️ TRAE SU EMPAQUE' : '📦 EMPAQUE PAGADO';
+  const estado = esPickup
+    ? 'PAGADO - PENDIENTE DE RECOLECCION'
+    : 'PAGADO - PENDIENTE DE ENTREGA';
+
+  const direccion = ticket.delivery_address
+    ? `
+      <div style="margin-top: 4px; padding-top: 2px; border-top: 1px dashed #000;">
+        <div class="small bold">DIRECCIÓN:</div>
+        <div class="xsmall upper" style="line-height: 1.2;">${ticket.delivery_address}</div>
+      </div>`
+    : '';
+
+  const notas = ticket.notes || ticket.order_notes
+    ? `
+      <div style="margin-top: 4px; padding-top: 2px; border-top: 1px dashed #000;">
+        <div class="small bold">NOTAS:</div>
+        <div class="xsmall upper" style="line-height: 1.3;">${ticket.notes || ticket.order_notes}</div>
+      </div>`
+    : '';
+
+  const rotuloCopia = copyLabel
+    ? `
+      <div class="center bold" style="font-size: 9pt; margin-top: 6px; border: 1.5px dashed #000; padding: 3px 0;">
+        --- COPIA: ${copyLabel} ---
+      </div>`
+    : '';
+
+  return `
+    <div style="margin-top: 4px; border: 1.5px solid #000; padding: 4px; position: relative;">
+      <div class="center bold upper" style="font-size: 9pt; margin-bottom: 4px; background: #000; color: #fff; padding: 2px 0;">
+        *** DATOS DEL PEDIDO ***
+      </div>
+      ${filaPedido('CLIENTE', ticket.customer_name || '---')}
+      ${filaPedido('TIPO', tipo)}
+      <div class="row" style="margin-top: 2px;">
+        <span class="small">ENTREGA:</span>
+        <span class="upper">${fechaEntregaProgramada(ticket.committed_at)}</span>
+      </div>
+      <div class="row" style="margin-top: 2px;">
+        <span class="small">EMPAQUE:</span>
+        <span class="upper">${empaque}</span>
+      </div>
+      ${direccion}
+      ${notas}
+      <div class="center bold upper" style="margin-top: 6px; font-size: 8.5pt; border-top: 1.5px solid #000; padding-top: 3px;">
+        ${estado}
+      </div>
+      ${rotuloCopia}
+    </div>
+  `;
+}
+
+/**
+ * Genera el HTML térmico de un ticket de venta o de pedido.
+ *
+ * F12.2 — Acepta `copyLabel` (como el viejo POS): cuando es 'CLIENTE' o
+ * 'COMERCIO', estampa el rótulo `--- COPIA: … ---` dentro de la sección de
+ * PEDIDO. Para venta directa se llama sin `copyLabel` (copia única).
+ *
  * @param {Object} ticket - Datos del ticket (account_num, total, lineas, terminal_id, ...).
+ * @param {string|null} [copyLabel] - 'CLIENTE' | 'COMERCIO' | null.
  * @returns {string} Documento HTML autosuficiente listo para imprimir.
  */
-export function generarTicketHTML(ticket = {}) {
+export function generarTicketHTML(ticket = {}, copyLabel = null) {
   const lineas = ticket.lineas || ticket.items || [];
   const cuenta = ticket.account_num || ticket.folio || '---';
   const terminal = ticket.terminal_id || 'T1';
@@ -207,6 +312,7 @@ export function generarTicketHTML(ticket = {}) {
       <span>TOTAL</span><span>${moneda(ticket.total)}</span>
     </div>
     ${bloquePagos(ticket.payment_details)}
+    ${seccionDatosPedido(ticket, copyLabel)}
     <div class="audit">
       <div class="row bold"><span>CAPTURÓ:</span><span>${capturo}</span></div>
       <div class="row bold"><span>COBRÓ:</span><span>${cobro}</span></div>
@@ -216,6 +322,34 @@ export function generarTicketHTML(ticket = {}) {
       Cuenta con 3 días a partir de la fecha de compra para realizar cualquier aclaración
     </div>
     <div class="center xsmall" style="margin-top: 2px;">¡¡¡Gracias por su compra, disfrute su pan!!!</div>
+  `;
+  return documentoTermico(cuerpo);
+}
+
+/**
+ * Combina DOS copias del ticket de un PEDIDO en un solo documento (F12.2).
+ *
+ * Porta `combineOrderTicketsForPrint` del viejo POS
+ * (`apps/pos/utils/ticketGenerator.js:217`): genera la copia CLIENTE (para
+ * recoger el pedido) y la copia COMERCIO (respaldo físico por si cae el
+ * sistema) y las une con `.ticket-copy { page-break-after: always; }` para que
+ * la impresora térmica corte entre ambas.
+ *
+ * @param {Object} ticket - Datos del ticket de PEDIDO.
+ * @returns {string} Documento HTML autosuficiente con las dos copias.
+ */
+export function combinarCopiasPedido(ticket = {}) {
+  const clienteHTML = generarTicketHTML(ticket, 'CLIENTE');
+  const comercioHTML = generarTicketHTML(ticket, 'COMERCIO');
+
+  const extraerCuerpo = (html) => {
+    const coincidencia = html.match(/<body>([\s\S]*)<\/body>/);
+    return coincidencia ? coincidencia[1] : html;
+  };
+
+  const cuerpo = `
+    <div class="ticket-copy">${extraerCuerpo(clienteHTML)}</div>
+    <div class="ticket-copy">${extraerCuerpo(comercioHTML)}</div>
   `;
   return documentoTermico(cuerpo);
 }
@@ -286,4 +420,4 @@ export function generarCorteHTML(corte = {}) {
   return documentoTermico(cuerpo);
 }
 
-export default { generarTicketHTML, generarCorteHTML };
+export default { generarTicketHTML, generarCorteHTML, combinarCopiasPedido };

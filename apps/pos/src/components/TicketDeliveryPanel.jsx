@@ -34,7 +34,7 @@ import React, { useCallback, useRef, useState } from 'react';
 
 import { encolarTicket } from '../services/notificationsService.js';
 import { imprimirTicket } from '../services/printService.js';
-import { generarTicketHTML } from '../utils/ticketGenerator.js';
+import { generarTicketHTML, combinarCopiasPedido } from '../utils/ticketGenerator.js';
 
 /** Formatea un precio numérico como moneda mexicana. */
 function formatearPrecio(valor) {
@@ -82,6 +82,7 @@ function mensajeDeEnvio(reason) {
  * @param {Function} [props.servicioNotificaciones] - Inyectable (tests).
  * @param {Function} [props.servicioImpresion] - Inyectable (tests).
  * @param {Function} [props.generadorTicket] - Inyectable (tests).
+ * @param {Function} [props.generadorDobleCopia] - Inyectable (tests). F12.2.
  */
 export default function TicketDeliveryPanel({
   ticket,
@@ -93,6 +94,7 @@ export default function TicketDeliveryPanel({
   servicioNotificaciones = encolarTicket,
   servicioImpresion = imprimirTicket,
   generadorTicket = generarTicketHTML,
+  generadorDobleCopia = combinarCopiasPedido,
 }) {
   // Precarga del contacto desde el CRM (RN-92). Si el cliente está
   // identificado, el teléfono/correo vienen ya puestos.
@@ -119,11 +121,22 @@ export default function TicketDeliveryPanel({
     return folio ? `ticket:${folio}` : '';
   }, [eventoId]);
 
-  /** Imprime el ticket. SIEMPRE disponible (RN-87). */
+  /**
+   * Imprime el ticket. SIEMPRE disponible (RN-87).
+   *
+   * F12.2 — Hereda la operación del viejo POS (§6.8): un PEDIDO se imprime
+   * DOBLE (copia CLIENTE para recoger + copia COMERCIO como respaldo físico
+   * por si cae el sistema) en un solo trabajo de impresión; una VENTA DIRECTA
+   * se imprime en copia única. El disparador es `order_type === 'PEDIDO'`,
+   * igual que en `apps/pos/hooks/useTicketActions.js:89` (viejo POS).
+   */
   const manejarImprimir = useCallback(() => {
     const actual = ticketRef.current;
     if (!actual) return;
-    const html = generadorTicket(actual);
+    const html =
+      actual.order_type === 'PEDIDO'
+        ? generadorDobleCopia(actual)
+        : generadorTicket(actual);
     const resultado = servicioImpresion(html);
     if (resultado && resultado.outcome === 'ok') {
       setAviso({ tipo: 'ok', texto: 'Ticket enviado a la impresora.' });
@@ -134,7 +147,7 @@ export default function TicketDeliveryPanel({
       });
     }
     onImprimirRef.current?.(resultado);
-  }, [generadorTicket, servicioImpresion]);
+  }, [generadorTicket, generadorDobleCopia, servicioImpresion]);
 
   /**
    * Encola el envío por el canal pedido (contrato #27).
