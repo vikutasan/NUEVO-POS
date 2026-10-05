@@ -209,8 +209,13 @@ function filaPedido(etiqueta, valor) {
  * Porta FIELMENTE la sección del viejo POS (`apps/pos/utils/ticketGenerator.js:142-189`):
  * el recuadro con borde que imprime los datos operativos del pedido — quién lo
  * recoge, cuándo, con qué empaque, a qué dirección, con qué notas, y el estado
- * "PAGADO - PENDIENTE DE RECOLECCIÓN/ENTREGA". Sin esta sección, el cliente no
- * sabe cuándo recoger y el negocio no sabe qué preparar.
+ * de pago.
+ *
+ * P5/Opción C — Estado de pago condicional:
+ *   - Si el pago cubre el 100%: muestra simplemente "✅ PAGADO AL 100%".
+ *   - Si el pago cubre < 100%: muestra el desglose de porcentaje cubierto,
+ *     monto pagado, porcentaje restante y monto pendiente.
+ *   El porcentaje se lee de `ticket.payment_covered_pct` (default 100).
  *
  * Devuelve '' si el ticket NO es un PEDIDO (venta directa).
  *
@@ -225,9 +230,11 @@ function seccionDatosPedido(ticket, copyLabel) {
   const tipo = esPickup ? '🏪 RECOLECCIÓN (PICKUP)' : '🚗 ENTREGA A DOMICILIO';
   const empaque =
     ticket.packaging_type === 'PROPIO' ? '🛍️ TRAE SU EMPAQUE' : '📦 EMPAQUE PAGADO';
-  const estado = esPickup
-    ? 'PAGADO - PENDIENTE DE RECOLECCION'
-    : 'PAGADO - PENDIENTE DE ENTREGA';
+
+  // P5/Opción C — Estado de pago condicional.
+  const pctCubierto = Number(ticket.payment_covered_pct ?? 100);
+  const totalNum = Number(ticket.total ?? 0);
+  const estadoPago = bloqueEstadoPagoPedido(pctCubierto, totalNum, esPickup);
 
   const direccion = ticket.delivery_address
     ? `
@@ -269,10 +276,58 @@ function seccionDatosPedido(ticket, copyLabel) {
       </div>
       ${direccion}
       ${notas}
+      ${estadoPago}
+      ${rotuloCopia}
+    </div>
+  `;
+}
+
+/**
+ * P5/Opción C — Bloque de estado de pago del pedido.
+ *
+ * - Si el porcentaje cubierto es >= 100%: muestra "✅ PAGADO AL 100%" + estado
+ *   de recolección/entrega (sin ruido de porcentajes).
+ * - Si el porcentaje cubierto es < 100%: muestra un desglose claro con el
+ *   porcentaje cubierto, monto pagado, porcentaje restante y monto pendiente.
+ *
+ * @param {number} pctCubierto - Porcentaje cubierto (0–100+).
+ * @param {number} total - Monto total del ticket.
+ * @param {boolean} esPickup - Si es pickup o domicilio.
+ * @returns {string} HTML del bloque de estado de pago.
+ */
+function bloqueEstadoPagoPedido(pctCubierto, total, esPickup) {
+  if (pctCubierto >= 100) {
+    const estado = esPickup
+      ? 'PAGADO AL 100% - PENDIENTE DE RECOLECCION'
+      : 'PAGADO AL 100% - PENDIENTE DE ENTREGA';
+    return `
       <div class="center bold upper" style="margin-top: 6px; font-size: 8.5pt; border-top: 1.5px solid #000; padding-top: 3px;">
         ${estado}
       </div>
-      ${rotuloCopia}
+    `;
+  }
+
+  // Pago parcial: desglose visible.
+  const montoPagado = total * (pctCubierto / 100);
+  const pctRestante = 100 - pctCubierto;
+  const montoRestante = total - montoPagado;
+
+  return `
+    <div style="margin-top: 6px; border-top: 1.5px solid #000; padding-top: 3px;">
+      <div class="center bold upper" style="font-size: 8.5pt; margin-bottom: 2px;">
+        ⚠️ PAGO PARCIAL
+      </div>
+      <div class="row bold" style="font-size: 8pt;">
+        <span>CUBIERTO (${pctCubierto}%):</span>
+        <span>${moneda(montoPagado)}</span>
+      </div>
+      <div class="row bold" style="font-size: 9pt; margin-top: 1px;">
+        <span>RESTANTE (${pctRestante}%):</span>
+        <span>${moneda(montoRestante)}</span>
+      </div>
+      <div class="center bold upper" style="font-size: 8pt; margin-top: 3px; border-top: 1px dashed #000; padding-top: 2px;">
+        ${esPickup ? 'COBRAR RESTANTE AL RECOGER' : 'COBRAR RESTANTE AL ENTREGAR'}
+      </div>
     </div>
   `;
 }
