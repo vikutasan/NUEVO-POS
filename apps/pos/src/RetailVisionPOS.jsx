@@ -168,6 +168,10 @@ export default function RetailVisionPOS({
   // turno de caja abierto. No bloquea (el backend sigue siendo la autoridad
   // vía RN-49); solo explica el porqué y ofrece abrir el gestor.
   const [avisoCaja, setAvisoCaja] = useState(false);
+  // P1 — Guardia de empaque (Capa 2: modal de advertencia al cobrar).
+  // Se enciende cuando el cajero intenta cobrar un PEDIDO con "Vender Empaque"
+  // marcado pero sin ningún producto EMPAQUE en el carrito.
+  const [avisoEmpaque, setAvisoEmpaque] = useState(false);
   // F12.4 — Carta/catálogo en PDF (F6.3). Visibilidad del selector de categorías
   // y bandera de "generando" para deshabilitar el botón mientras se arma el PDF.
   // Esta función es NUEVA del nuevo POS (no existe en el viejo POS).
@@ -452,6 +456,32 @@ export default function RetailVisionPOS({
 
   useBarcodeScanner({ alEscanear });
 
+  // ── P1 — Guardia de empaque (valores computados) ──────────────────────────
+  // `empaqueRequerido`: el bloque de pedido marca packaging_type !== 'PROPIO'.
+  // `empaqueEnCarrito`: hay al menos un producto con nature === 'EMPAQUE' en el carrito.
+  const empaqueRequerido = Boolean(
+    bloquePedido &&
+    bloquePedido.packaging_type &&
+    bloquePedido.packaging_type !== 'PROPIO',
+  );
+  const empaqueEnCarrito = (carrito.lineas || []).some(
+    (l) => l.nature === 'EMPAQUE',
+  );
+
+  /**
+   * P1 — Abre el checkout CON guardia de empaque (Capa 2).
+   * Si se marcó "Vender Empaque" pero no hay empaque en el carrito,
+   * se muestra el modal de advertencia en vez de abrir el checkout.
+   * El cajero puede elegir continuar sin empaque o volver a agregar uno.
+   */
+  const abrirCheckoutConGuardia = useCallback(() => {
+    if (empaqueRequerido && !empaqueEnCarrito) {
+      setAvisoEmpaque(true);
+      return;
+    }
+    setCheckoutAbierto(true);
+  }, [empaqueRequerido, empaqueEnCarrito]);
+
   // ── Cobro: paga el ticket OPEN ya existente (RN-14..RN-27, RN-62/63) ───────
   // (D-12) El ticket nace al primer ítem y sus líneas ya están persistidas por
   // los contratos 18–20. El cobro NO reenvía los ítems: solo paga. Si por
@@ -615,6 +645,9 @@ export default function RetailVisionPOS({
         onAbrirPizarron={() => setPizarronAbierto(true)}
         cuentasAbiertas={cuentasAbiertas}
         turnoCaja={turnoCaja}
+        // P1 — Capa 1: badge de empaque en el header.
+        empaqueRequerido={empaqueRequerido}
+        empaqueEnCarrito={empaqueEnCarrito}
       />
 
       {error ? (
@@ -685,7 +718,7 @@ export default function RetailVisionPOS({
             onIncrementar={incrementar}
             onDecrementar={decrementar}
             onQuitar={quitar}
-            onCobrar={() => setCheckoutAbierto(true)}
+            onCobrar={abrirCheckoutConGuardia}
             cobrando={acciones.enviando}
             terminalId={terminalEfectiva}
             banner={banner}
@@ -715,7 +748,7 @@ export default function RetailVisionPOS({
               onQuitar={quitar}
               onCobrar={() => {
                 setTicketAbierto(false);
-                setCheckoutAbierto(true);
+                abrirCheckoutConGuardia();
               }}
               cobrando={acciones.enviando}
               terminalId={terminalEfectiva}
@@ -974,6 +1007,51 @@ export default function RetailVisionPOS({
                 className="min-h-tactil rounded-2xl border border-white/15 px-5 py-3 font-semibold text-zinc-300 hover:bg-white/5"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* P1 — Capa 2: Modal de advertencia de empaque.
+          Se muestra cuando el cajero intenta cobrar un PEDIDO con "Vender Empaque"
+          marcado pero sin ningún producto EMPAQUE en el carrito. El cajero puede
+          volver a agregar un empaque o continuar sin él. NO bloquea: es una
+          advertencia, no una prohibición. */}
+      {avisoEmpaque ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Sin empaque en la cuenta"
+        >
+          <div className="bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 text-center">
+            <div className="text-5xl mb-3" aria-hidden="true">📦</div>
+            <h2 className="text-xl font-bold text-peligro mb-2">
+              Sin empaque en la cuenta
+            </h2>
+            <p className="text-sm text-zinc-400 mb-6">
+              Marcaste <strong className="text-crema-ticket">"Vender Empaque"</strong> en
+              la programación del pedido, pero no hay ningún producto de empaque
+              en la cuenta. ¿Quieres agregar uno antes de cobrar?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => setAvisoEmpaque(false)}
+                className="min-h-tactil rounded-2xl bg-acento px-5 py-3 font-semibold text-fondo-profundo hover:opacity-90"
+              >
+                Volver y agregar empaque
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAvisoEmpaque(false);
+                  setCheckoutAbierto(true);
+                }}
+                className="min-h-tactil rounded-2xl border border-white/15 px-5 py-3 font-semibold text-zinc-300 hover:bg-white/5"
+              >
+                Cobrar sin empaque
               </button>
             </div>
           </div>

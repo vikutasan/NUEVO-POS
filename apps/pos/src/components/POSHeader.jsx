@@ -83,6 +83,11 @@ export default function POSHeader({
   cuentasAbiertas = 0,
   // D1 — El turno de caja activo determina si el pizarrón muestra TOTALES o MÍAS.
   turnoCaja = null,
+  // P1 — Guardia de empaque (Capa 1: badge pasivo).
+  // `empaqueRequerido`: el pedido programado marcó "Vender Empaque" (packaging_type !== PROPIO).
+  // `empaqueEnCarrito`: hay al menos un producto con nature === 'EMPAQUE' en el carrito.
+  empaqueRequerido = false,
+  empaqueEnCarrito = false,
 }) {
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
   const nombreTerminal =
@@ -154,11 +159,19 @@ export default function POSHeader({
               {tipoVenta}
             </span>
           ) : null}
-          {/* F12.1 — Badge de pedido tentativo (UX heredada del viejo POS). */}
+          {/* F12.1 — Badge de pedido tentativo (UX heredada del viejo POS).
+              P1 — Capa 1: si se marcó "Vender Empaque" pero no hay empaque en
+              el carrito, el badge cambia a advertencia para recordar al cajero. */}
           {pedidoProgramado ? (
-            <span className="text-[8px] font-black uppercase text-acento tracking-widest mt-0.5">
-              📦 Pedido tentativo
-            </span>
+            empaqueRequerido && !empaqueEnCarrito ? (
+              <span className="text-[8px] font-black uppercase text-peligro tracking-widest mt-0.5 animate-pulse">
+                📦 ⚠️ Sin empaque
+              </span>
+            ) : (
+              <span className="text-[8px] font-black uppercase text-acento tracking-widest mt-0.5">
+                📦 Pedido tentativo
+              </span>
+            )
           ) : null}
         </div>
 
