@@ -68,7 +68,11 @@ function etiquetaMetodo(metodo) {
   return metodo;
 }
 
-export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesando, error }) {
+export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesando, error, montoMinimo }) {
+  // P5 — El monto mínimo para confirmar. Default: total (pago completo).
+  const minimo = (montoMinimo != null && montoMinimo > 0 && montoMinimo < total)
+    ? montoMinimo
+    : total;
   const [metodo, setMetodo] = useState('EFECTIVO');
   const [recibido, setRecibido] = useState('');
   const [montoAbono, setMontoAbono] = useState('');
@@ -81,11 +85,11 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
   const montoRecibido = Number(recibido) || 0;
   const esEfectivo = metodo === 'EFECTIVO';
   const cambio = esEfectivo ? montoRecibido - total : 0;
-  const faltante = esEfectivo ? Math.max(total - montoRecibido, 0) : 0;
+  const faltante = esEfectivo ? Math.max(minimo - montoRecibido, 0) : 0;
 
   // ¿Hay abonos agregados? Si no, el flujo es el de un solo pago (regresión).
   const hayAbonos = abonos.length > 0;
-  const puedeCobrar = hayAbonos ? cuadra : !esEfectivo || montoRecibido >= total;
+  const puedeCobrar = hayAbonos ? cuadra : !esEfectivo || montoRecibido >= minimo;
 
   const mensajeValidacion = useMemo(() => {
     if (hayAbonos) {
@@ -96,9 +100,9 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     }
     if (!esEfectivo) return null;
     if (montoRecibido === 0) return 'Captura el efectivo recibido.';
-    if (faltante > 0) return `Faltan ${formatearPrecio(faltante)} para cubrir el total.`;
+    if (faltante > 0) return `Faltan ${formatearPrecio(faltante)} para cubrir el mínimo (${formatearPrecio(minimo)}).`;
     return null;
-  }, [hayAbonos, resumen.faltante, esEfectivo, montoRecibido, faltante]);
+  }, [hayAbonos, resumen.faltante, esEfectivo, montoRecibido, faltante, minimo]);
 
   /** Método real que se envía al backend (TARJETA → DEBITO por defecto). */
   function metodoCanonico(m) {
@@ -157,8 +161,8 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     }
     onConfirmar({
       metodo: metodoCanonico(metodo),
-      recibido: esEfectivo ? montoRecibido : total,
-      cambio: esEfectivo ? Math.max(cambio, 0) : 0,
+      recibido: esEfectivo ? montoRecibido : (minimo < total ? minimo : total),
+      cambio: esEfectivo ? Math.max(montoRecibido - minimo, 0) : 0,
     });
   }
 

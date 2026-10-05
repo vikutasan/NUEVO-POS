@@ -807,6 +807,13 @@ export default function RetailVisionPOS({
           onCancelar={() => setCheckoutAbierto(false)}
           procesando={acciones.enviando}
           error={error}
+          // P5 — Monto mínimo para pedidos con política parcial.
+          // Solo aplica si es un PEDIDO con política < 100%.
+          montoMinimo={
+            bloquePedido && tipoPedido === 'PEDIDO' && politicaPagoPedido < 100
+              ? total * (politicaPagoPedido / 100)
+              : undefined
+          }
         />
       ) : null}
 
@@ -965,14 +972,34 @@ export default function RetailVisionPOS({
           Imprimir SIEMPRE está disponible (RN-87); WhatsApp/Email encolan por el
           contrato #27 (RN-86) y, si la cola está caída, la venta NO se revierte
           (DT-07). El contacto se precarga desde el CRM (RN-92). */}
-      {entregaAbierta && acciones.ticket ? (
-        <TicketDeliveryPanel
-          ticket={acciones.ticket}
-          cliente={cliente}
-          onOmitir={() => setEntregaAbierta(false)}
-          onEnviado={() => setEntregaAbierta(false)}
-        />
-      ) : null}
+      {/* P5/Gap2 — Inyectar payment_covered_pct al ticket para que el
+          generador de ticket imprima el estado de pago correcto. Se calcula
+          como el porcentaje del total que cubren los pagos recibidos. */}
+      {entregaAbierta && acciones.ticket ? (() => {
+        const t = acciones.ticket;
+        const totalTicket = Number(t.total) || 0;
+        let pagado = 0;
+        if (t.payment_details) {
+          const pagos = Array.isArray(t.payment_details.pagos)
+            ? t.payment_details.pagos
+            : t.payment_details.metodo ? [t.payment_details] : [];
+          pagado = pagos.reduce(
+            (sum, p) => sum + (Number(p.monto ?? p.recibido) || 0), 0,
+          );
+        }
+        const pctCubierto = totalTicket > 0
+          ? Math.min(Math.round((pagado / totalTicket) * 100), 100)
+          : 100;
+        const ticketConPct = { ...t, payment_covered_pct: pctCubierto };
+        return (
+          <TicketDeliveryPanel
+            ticket={ticketConPct}
+            cliente={cliente}
+            onOmitir={() => setEntregaAbierta(false)}
+            onEnviado={() => setEntregaAbierta(false)}
+          />
+        );
+      })() : null}
 
       {/* NOTA (F7.6.2): la visión ya NO se monta aquí como overlay suelto.
           Es un MODO DE VISTA (`viewMode === 'CAMERA'`) que reemplaza el cuerpo,
