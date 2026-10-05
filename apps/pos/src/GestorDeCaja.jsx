@@ -26,6 +26,12 @@
  * @see PLAN_DE_ABORDAJE_FASE_4_POR_PARTES.md §7 (Sub-fase 4.3)
  * @see FICHA_F4_2_CASH_SERVICE.md (el servicio que consume)
  *
+ * FASE 12.7 — Cierre de brechas B1..B4 (evaluación del 5 Oct 2026).
+ *   B1: El default del tipo de movimiento es SALIDA (lo más frecuente).
+ *   B2: La apertura del turno tiene confirmación de 2 pasos.
+ *   B3: El cierre del turno tiene confirmación de 2 pasos (acción irreversible).
+ *   B4: Tras cerrar, se ofrece "Iniciar Nuevo Turno" sin salir del gestor.
+ *
  * FASE 10.4 — Contexto diario post-corte (contrato 28, `pos.contexto_diario`).
  * Al confirmar el cierre del turno se abre `DailyContextModal` para registrar
  * clima / atípico / notas del día. Es NO crítico: si falla, el corte ya quedó
@@ -113,8 +119,13 @@ export default function GestorDeCaja({
   // Campos del formulario de apertura.
   const [fondoInicial, setFondoInicial] = useState('');
 
+  // B2 — Confirmación de 2 pasos al abrir turno.
+  const [confirmandoFondo, setConfirmandoFondo] = useState(false);
+
   // Campos del formulario de movimiento.
-  const [tipoMov, setTipoMov] = useState('ENTRADA');
+  // B1 — Default SALIDA: en una panadería las salidas de efectivo (cambio,
+  // compras menores) son más frecuentes que las entradas.
+  const [tipoMov, setTipoMov] = useState('SALIDA');
   const [montoMov, setMontoMov] = useState('');
   const [motivoMov, setMotivoMov] = useState('');
 
@@ -123,6 +134,8 @@ export default function GestorDeCaja({
   const [conteoCredito, setConteoCredito] = useState('');
   const [conteoDebito, setConteoDebito] = useState('');
   const [diferencia, setDiferencia] = useState(null);
+  // B3 — Confirmación de 2 pasos al cerrar turno (acción irreversible).
+  const [confirmandoCierre, setConfirmandoCierre] = useState(false);
 
   // FASE 10.6.1 — máquina de foco del teclado táctil. `campoActivo` es el nombre
   // del campo que el teclado está editando (null = ninguno). El teclado solo
@@ -245,8 +258,23 @@ export default function GestorDeCaja({
     if (estado === ESTADOS.ABIERTO && turno) refrescarResumen();
   }, [estado, turno, refrescarResumen]);
 
-  /** Abre el turno con el fondo capturado (RN-49, RN-50). */
+  /**
+   * B2 — Paso 1: valida el fondo y pide confirmación.
+   * El cajero ve el monto que va a registrar y decide si procede.
+   */
+  const alPedirConfirmacionFondo = useCallback(() => {
+    const monto = Number(fondoInicial);
+    if (Number.isNaN(monto) || monto < 0) {
+      setError('Ingrese un monto válido para el fondo inicial.');
+      return;
+    }
+    setError(null);
+    setConfirmandoFondo(true);
+  }, [fondoInicial]);
+
+  /** B2 — Paso 2: abre el turno con el fondo confirmado (RN-49, RN-50). */
   const alAbrirTurno = useCallback(async () => {
+    setConfirmandoFondo(false);
     setError(null);
     setOcupado(true);
     const r = await servicio.abrirTurno({
@@ -313,8 +341,18 @@ export default function GestorDeCaja({
     [servicio, refrescarResumen],
   );
 
-  /** Cierra el turno con los conteos físicos (RN-54, RN-55). */
+  /**
+   * B3 — Paso 1: pide confirmación antes de cerrar (acción irreversible).
+   * El cajero ve los conteos capturados y el descuadre en vivo.
+   */
+  const alPedirConfirmacionCierre = useCallback(() => {
+    setError(null);
+    setConfirmandoCierre(true);
+  }, []);
+
+  /** B3 — Paso 2: cierra el turno con los conteos confirmados (RN-54, RN-55). */
   const alCerrarTurno = useCallback(async () => {
+    setConfirmandoCierre(false);
     setError(null);
     setOcupado(true);
     const r = await servicio.cerrarTurno({
@@ -333,6 +371,31 @@ export default function GestorDeCaja({
     // FASE 10.4 — el corte ya quedó cerrado; el contexto es NO crítico.
     setMostrarContexto(true);
   }, [servicio, turno, conteoEfectivo, conteoCredito, conteoDebito]);
+
+  /**
+   * B4 — Iniciar un nuevo turno sin salir del gestor.
+   * Resetea todo el estado de la pantalla al modo SIN_TURNO.
+   */
+  const alNuevoTurno = useCallback(() => {
+    setEstado(ESTADOS.SIN_TURNO);
+    setTurno(null);
+    setResumen(null);
+    setMovimientos([]);
+    setFondoInicial('');
+    setTipoMov('SALIDA');
+    setMontoMov('');
+    setMotivoMov('');
+    setConteoEfectivo('');
+    setConteoCredito('');
+    setConteoDebito('');
+    setDiferencia(null);
+    setConfirmandoFondo(false);
+    setConfirmandoCierre(false);
+    setMostrarContexto(false);
+    setContextoRegistrado(false);
+    setError(null);
+    setCampoActivo(null);
+  }, []);
 
   /** Cierra el modal de contexto diario (guardado u omitido). */
   const alCerrarContexto = useCallback((registrado = false) => {
@@ -451,14 +514,46 @@ export default function GestorDeCaja({
               }`}
             />
           </label>
+          {/* B2 — Botón dispara confirmación, NO abre directamente */}
           <button
             type="button"
-            onClick={alAbrirTurno}
+            onClick={alPedirConfirmacionFondo}
             disabled={ocupado}
             className="min-h-tactil rounded-canon35 bg-acento text-fondo-profundo font-semibold px-4 disabled:opacity-50"
           >
-            {ocupado ? 'Abriendo…' : 'Abrir turno'}
+            Abrir turno
           </button>
+
+          {/* B2 — Modal de confirmación del fondo */}
+          {confirmandoFondo ? (
+            <div
+              role="alertdialog"
+              aria-label="Confirmar fondo inicial"
+              className="rounded-canon35 bg-fondo-profundo border border-acento/40 p-4 flex flex-col gap-3"
+            >
+              <p className="text-crema-ticket font-semibold">
+                ¿Confirmar fondo inicial de{' '}
+                <strong className="text-acento">{formatearPrecio(Number(fondoInicial) || 0)}</strong>?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmandoFondo(false)}
+                  className="min-h-tactil flex-1 rounded-canon35 bg-fondo-panel text-crema-ticket border border-white/10 px-4"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={alAbrirTurno}
+                  disabled={ocupado}
+                  className="min-h-tactil flex-1 rounded-canon35 bg-acento text-fondo-profundo font-semibold px-4 disabled:opacity-50"
+                >
+                  {ocupado ? 'Abriendo…' : 'Sí, abrir turno'}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -756,22 +851,74 @@ export default function GestorDeCaja({
           ) : null}
 
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setEstado(ESTADOS.ABIERTO)}
-              className="min-h-tactil flex-1 rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 px-4"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={alCerrarTurno}
-              disabled={ocupado || Boolean(diferencia)}
-              className="min-h-tactil flex-1 rounded-canon35 bg-acento text-fondo-profundo font-semibold px-4 disabled:opacity-50"
-            >
-              {ocupado ? 'Cerrando…' : 'Confirmar cierre'}
-            </button>
+            {!diferencia ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEstado(ESTADOS.ABIERTO)}
+                  className="min-h-tactil flex-1 rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 px-4"
+                >
+                  Cancelar
+                </button>
+                {/* B3 — Paso 1: pide confirmación */}
+                <button
+                  type="button"
+                  onClick={alPedirConfirmacionCierre}
+                  disabled={ocupado}
+                  className="min-h-tactil flex-1 rounded-canon35 bg-peligro/80 text-crema-ticket font-semibold px-4 disabled:opacity-50"
+                >
+                  Cerrar turno
+                </button>
+              </>
+            ) : (
+              /* B4 — Botón para iniciar nuevo turno sin salir del gestor */
+              <button
+                type="button"
+                onClick={alNuevoTurno}
+                data-testid="nuevo-turno"
+                className="min-h-tactil flex-1 rounded-canon35 bg-acento text-fondo-profundo font-semibold px-4"
+              >
+                Iniciar Nuevo Turno
+              </button>
+            )}
           </div>
+
+          {/* B3 — Modal de confirmación del cierre (acción irreversible) */}
+          {confirmandoCierre ? (
+            <div
+              role="alertdialog"
+              aria-label="Confirmar cierre de turno"
+              className="rounded-canon35 bg-peligro/10 border border-peligro/40 p-4 flex flex-col gap-3"
+            >
+              <p className="text-crema-ticket font-semibold">
+                ⚠️ Esta acción es <strong className="text-peligro">irreversible</strong>.
+              </p>
+              <p className="text-sm text-crema-ticket/70">
+                ¿Confirmar cierre con descuadre de{' '}
+                <strong className={descuadreEnVivo === 0 ? 'text-acento' : 'text-peligro'}>
+                  {formatearPrecio(descuadreEnVivo)}
+                </strong>?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmandoCierre(false)}
+                  className="min-h-tactil flex-1 rounded-canon35 bg-fondo-panel text-crema-ticket border border-white/10 px-4"
+                >
+                  Volver
+                </button>
+                <button
+                  type="button"
+                  onClick={alCerrarTurno}
+                  disabled={ocupado}
+                  data-testid="confirmar-cierre-definitivo"
+                  className="min-h-tactil flex-1 rounded-canon35 bg-peligro text-white font-semibold px-4 disabled:opacity-50"
+                >
+                  {ocupado ? 'Cerrando…' : 'Sí, cerrar turno'}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
