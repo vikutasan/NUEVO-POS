@@ -87,6 +87,8 @@ import { descargarCatalogoPDF } from './components/CatalogoPDF.jsx';
 // viejo POS (§6.8): el pizarrón se abre desde el header y recupera al carrito.
 import OpenAccountsCorkboard from './components/OpenAccountsCorkboard.jsx';
 import { listarCuentasAbiertas } from './services/openAccountsService.js';
+// P5 — Política de pago mínimo para pedidos (Vista General → POS).
+import { getSettingValue } from './api/client.js';
 
 /**
  * F7.7d — LA TERMINAL ES UN PROP, NO UNA CONSTANTE.
@@ -177,6 +179,11 @@ export default function RetailVisionPOS({
   // Esta función es NUEVA del nuevo POS (no existe en el viejo POS).
   const [selectorPDFAbierto, setSelectorPDFAbierto] = useState(false);
   const [exportandoPDF, setExportandoPDF] = useState(false);
+  // P5 — Política de pago mínimo para enviar pedidos a preparación.
+  // Se lee UNA vez al montar desde Vista General (key: `order_min_payment_pct`).
+  // Default seguro: 100 (pago completo). Si no hay conexión o el setting no
+  // existe, se aplica el default. El valor es un número entre 0 y 100.
+  const [politicaPagoPedido, setPoliticaPagoPedido] = useState(100);
   // F12.5 — Pizarrón de cuentas abiertas (F5.3). Visibilidad del overlay y el
   // conteo de cuentas abiertas de la terminal (para el badge del botón). El
   // conteo se refresca al abrir/cerrar el pizarrón; el pizarrón es la fuente
@@ -266,6 +273,15 @@ export default function RetailVisionPOS({
         setCategorias(catalogo.categorias || []);
         setProductos(catalogo.productos || []);
         setSesion(sesionActiva || null);
+
+        // P5 — Leer política de pago de pedidos (fail-safe: default 100%).
+        const pctRaw = await getSettingValue('order_min_payment_pct');
+        if (activo && pctRaw !== null) {
+          const pct = Number(pctRaw);
+          if (!isNaN(pct) && pct >= 0 && pct <= 100) {
+            setPoliticaPagoPedido(pct);
+          }
+        }
       } catch (causa) {
         if (activo) setError(causa.message || 'Error al cargar el catálogo');
       } finally {
@@ -498,6 +514,25 @@ export default function RetailVisionPOS({
         setCheckoutAbierto(false);
         setAvisoCaja(true);
         return;
+      }
+
+      // P5 — Guardia de política de pago para PEDIDOS.
+      // Si es un pedido programado, valida que el monto recibido cumpla con
+      // el porcentaje mínimo definido en Vista General (`order_min_payment_pct`).
+      // A 100% (default seguro), el checkout ya lo garantiza; a < 100%, esta
+      // guardia será la frontera cuando se implemente pago parcial de pedidos.
+      if (bloquePedido && tipoPedido === 'PEDIDO' && politicaPagoPedido > 0) {
+        const totalCuenta = carrito.total || 0;
+        const minimoRequerido = totalCuenta * (politicaPagoPedido / 100);
+        const montoRecibido = Array.isArray(pago?.abonos)
+          ? pago.abonos.reduce((sum, a) => sum + (Number(a.monto) || 0), 0)
+          : Number(pago?.recibido) || 0;
+        if (montoRecibido < minimoRequerido) {
+          setError(
+            `Para enviar este pedido a preparación se requiere al menos el ${politicaPagoPedido}% del total ($${minimoRequerido.toFixed(2)}). Monto recibido: $${montoRecibido.toFixed(2)}.`
+          );
+          return;
+        }
       }
 
       if (!ticketIdRef.current) {
@@ -863,6 +898,7 @@ export default function RetailVisionPOS({
           datosIniciales={bloquePedido}
           onGuardar={guardarPedido}
           onCerrar={() => setPedidoAbierto(false)}
+          porcentajePagoMinimo={politicaPagoPedido}
         />
       ) : null}
 

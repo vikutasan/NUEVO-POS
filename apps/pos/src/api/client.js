@@ -405,6 +405,24 @@ export function getPedidoDelTicket(ticketId) {
   return peticion(`/orders/by-ticket/${ticketId}`);
 }
 
+/**
+ * P5 — Lee un setting individual del módulo Vista General (`system_settings`).
+ *
+ * Fail-safe: si la petición falla (sin conexión, setting no existe, etc.),
+ * devuelve `null` en vez de lanzar. El consumidor aplica su default seguro.
+ *
+ * @param {string} key  Clave del setting (p. ej. `order_min_payment_pct`).
+ * @returns {Promise<string|null>}  El valor del setting, o null si falla.
+ */
+export async function getSettingValue(key) {
+  try {
+    const data = await peticion(`/settings/${encodeURIComponent(key)}`);
+    return data?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default {
   getCatalogo,
   getSesionActiva,
@@ -429,5 +447,6 @@ export default {
   getPedidoDelTicket,
   getBeneficiosParaTicket,
   encolarTicket,
+  getSettingValue,
   ApiError,
 };

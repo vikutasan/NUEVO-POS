@@ -137,6 +137,9 @@ export default function OrderProgrammingModal({
   datosIniciales = null,
   onGuardar,
   onCerrar,
+  // P5 — Porcentaje mínimo de pago para enviar el pedido a preparación.
+  // Se lee desde Vista General; default 100 si no se proporciona.
+  porcentajePagoMinimo = 100,
 }) {
   const [tipoEntrega, setTipoEntrega] = useState(
     datosIniciales?.delivery_type || TIPOS_ENTREGA.PICKUP,
@@ -220,7 +223,9 @@ export default function OrderProgrammingModal({
           <p className="text-sm text-crema-ticket/70 leading-relaxed">
             El sistema procesará el pedido{' '}
             <strong className="text-acento">
-              solo cuando el pago sea recibido al 100%.
+              {porcentajePagoMinimo >= 100
+                ? 'solo cuando el pago sea recibido al 100%.'
+                : `cuando se cubra al menos el ${porcentajePagoMinimo}% del total.`}
             </strong>
             <br />
             <br />
