@@ -31,10 +31,11 @@ const ETIQUETAS_ESTADO = Object.freeze({
  * @param {string} [props.estado='NUEVA_VENTA'] - NUEVA_VENTA | COBRANDO | PAGADA.
  * @param {string} [props.tipoVenta] - canal de la venta (RN-13).
  * @param {boolean} [props.sesionAbierta=false] - ¿hay sesión de terminal activa?
- * @param {boolean} [props.enLinea=true] - indicador de red.
+ * @param {string} [props.estadoRed='good'] - semáforo de red: 'good'|'slow'|'down'.
+ * @param {string} [props.etiquetaRed] - texto pre-formateado ("RED OK 9ms").
+ * @param {string} [props.colorRed='green'] - color del semáforo.
  * @param {string} [props.modo] - modo de layout (R-03).
  * @param {() => void} [props.onCambiarEstacion] - abre el selector de terminal.
- * @param {() => void} [props.onAbrirTema] - abre el panel de tema (F7.5).
  * @param {() => void} [props.onAbrirVoz] - abre el panel de voz (F7.5).
  * @param {() => void} [props.onAbrirCliente] - abre el panel de identificación
  *   del cliente (F8.6). Es la UX heredada del viejo POS (§6.8): el botón vive
@@ -55,7 +56,9 @@ export default function POSHeader({
   estado = 'NUEVA_VENTA',
   tipoVenta,
   sesionAbierta = false,
-  enLinea = true,
+  estadoRed = 'good',
+  etiquetaRed = 'RED OK',
+  colorRed = 'green',
   modo,
   onCambiarEstacion,
   onAbrirTema,
@@ -78,6 +81,8 @@ export default function POSHeader({
   // (13ª instancia de §10.6). Muestra el número de cuentas abiertas si se pasa.
   onAbrirPizarron,
   cuentasAbiertas = 0,
+  // D1 — El turno de caja activo determina si el pizarrón muestra TOTALES o MÍAS.
+  turnoCaja = null,
 }) {
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
   const nombreTerminal =
@@ -85,7 +90,7 @@ export default function POSHeader({
 
   return (
     <header className="w-full flex items-center justify-between px-4 py-3 bg-fondo-profundo-alt border-b border-white/5 z-20">
-      {/* IZQUIERDA: Terminal */}
+      {/* IZQUIERDA: Terminal + indicador de red (sub-línea, como el viejo POS) */}
       <button
         type="button"
         onClick={onCambiarEstacion}
@@ -97,6 +102,24 @@ export default function POSHeader({
           </p>
           <p className="text-[14px] font-black text-acento uppercase tracking-tighter leading-none">
             Cambiar Estación
+          </p>
+          {/* Indicador de red con latencia — reubicado aquí desde el span suelto
+              del header. Asocia visualmente la salud de la red con la terminal.
+              Semáforo de 3 colores: verde (good), amarillo (slow), rojo (down). */}
+          <p className={`text-[10px] md:text-xs font-black uppercase tracking-widest leading-none mt-1 flex items-center gap-1 ${
+            colorRed === 'green' ? 'text-green-400'
+            : colorRed === 'yellow' ? 'text-yellow-400'
+            : 'text-red-500'
+          }`}>
+            <span
+              aria-hidden="true"
+              className={`inline-block w-1.5 h-1.5 rounded-full ${
+                colorRed === 'green' ? 'bg-green-400'
+                : colorRed === 'yellow' ? 'bg-yellow-400'
+                : 'bg-red-500 animate-pulse'
+              }`}
+            />
+            {etiquetaRed}
           </p>
         </div>
       </button>
@@ -203,123 +226,80 @@ export default function POSHeader({
 
       {/* DERECHA: Acciones de IA (F7.5/F7.6) + Sesión + Red + Modo */}
       <div className="flex items-center gap-2">
-        {/* F4.5.1 — Gestor de Caja (UX heredada del viejo POS, §6.8). Es el
-            punto de entrada al turno de caja: sin él, RN-49 impide cobrar.
-            F12.3 — Se restaura la ESTÉTICA del viejo POS: el botón muestra el
-            rótulo "Caja" y su ESTADO ("● Activa" / "○ Habilitar"), en lugar de
-            un icono 💰 que no comunica nada. Se conserva el resaltado cuando
-            hay un turno de caja ABIERTO. */}
+        {/* ── DERECHA: Voz → Caja → Pizarrón ──────────────────────────────
+            Orden y estilo heredados del viejo POS (§6.8): cada botón es un
+            rectángulo con TÍTULO GRANDE arriba + ESTADO/ACCIÓN abajo en acento.
+            El viejo POS usaba este patrón en los 3 botones; el nuevo lo adopta
+            para mantener coherencia visual. */}
+
+        {/* VOZ — dictado por voz al carrito (F7.5.2) */}
+        <button
+          type="button"
+          id="btn-dictado-voz"
+          onClick={() => onAbrirVoz?.()}
+          disabled={!vozDisponible}
+          className={`min-h-tactil border rounded-xl px-3 md:px-5 py-2 flex items-center transition-all shadow-xl ${
+            vozDisponible
+              ? 'bg-fondo-profundo border-acento/40 hover:bg-acento/20 hover:border-acento'
+              : 'bg-fondo-profundo/40 border-white/5 cursor-not-allowed opacity-40'
+          }`}
+          title={vozDisponible ? 'Dictar productos por voz' : 'Dictado por voz no disponible'}
+          aria-label="Dictado por voz"
+        >
+          <div className="text-left">
+            <p className="hidden md:block text-[18px] font-black uppercase text-crema-ticket tracking-widest leading-none mb-1">
+              Voz
+            </p>
+            <p className={`text-xs md:text-[14px] font-black uppercase tracking-tighter leading-none ${
+              vozDisponible ? 'text-acento' : 'text-acento/40'
+            }`}>
+              🎙️ <span className="hidden sm:inline">Dictar</span>
+            </p>
+          </div>
+        </button>
+
+        {/* CAJA — gestor de caja (F4.5.1) */}
         <button
           type="button"
           onClick={() => onAbrirCaja?.()}
-          className={`min-h-tactil border rounded-xl px-4 flex items-center transition-all ${
+          className={`min-h-tactil border rounded-xl px-3 md:px-5 py-2 flex items-center transition-all shadow-xl ${
             cajaAbierta
-              ? 'bg-acento text-fondo-profundo border-acento'
-              : 'bg-fondo-profundo border-white/5 hover:bg-fondo-panel'
+              ? 'bg-fondo-profundo border-acento/40 hover:bg-acento/20 hover:border-acento'
+              : 'bg-fondo-profundo border-acento/40 hover:bg-acento/20 hover:border-acento'
           }`}
           title={cajaAbierta ? 'Gestionar Caja (Activa)' : 'Habilitar como Caja'}
           aria-label="Gestor de caja"
         >
           <div className="text-left">
-            <p className="text-[18px] font-black uppercase tracking-widest leading-none mb-1">
+            <p className="hidden md:block text-[18px] font-black uppercase text-crema-ticket tracking-widest leading-none mb-1">
               Caja
             </p>
-            <p
-              className={`text-[14px] font-black uppercase tracking-tighter leading-none ${
-                cajaAbierta ? 'text-fondo-profundo' : 'text-acento/60'
-              }`}
-            >
+            <p className={`text-xs md:text-[14px] font-black uppercase tracking-tighter leading-none ${
+              cajaAbierta ? 'text-acento' : 'text-acento/60'
+            }`}>
               {cajaAbierta ? '● Activa' : '○ Habilitar'}
             </p>
           </div>
         </button>
-        {/* F12.5 — Pizarrón de cuentas abiertas (F5.3). Punto de entrada al
-            pizarrón: sin este botón, `OpenAccountsCorkboard` era inalcanzable
-            (13ª instancia de §10.6). Muestra el conteo de cuentas abiertas. */}
+
+        {/* PIZARRÓN — cuentas abiertas (F12.5) */}
         <button
           type="button"
           onClick={() => onAbrirPizarron?.()}
-          className={`min-h-tactil border rounded-xl px-4 flex items-center transition-all ${
-            cuentasAbiertas > 0
-              ? 'bg-acento text-fondo-profundo border-acento'
-              : 'bg-fondo-profundo border-white/5 hover:bg-fondo-panel'
-          }`}
+          className="min-h-tactil border rounded-xl px-3 md:px-5 py-2 flex items-center transition-all shadow-xl bg-[#2d1e13] border-orange-900/40 hover:bg-[#3d2b1f] hover:border-orange-500/50"
           title="Pizarrón de cuentas abiertas"
           aria-label="Pizarrón de cuentas abiertas"
         >
           <div className="text-left">
-            <p className="text-[18px] font-black uppercase tracking-widest leading-none mb-1">
+            <p className="hidden md:block text-[18px] font-black uppercase text-crema-ticket tracking-widest leading-none mb-1">
               Pizarrón
             </p>
-            <p
-              className={`text-[14px] font-black uppercase tracking-tighter leading-none ${
-                cuentasAbiertas > 0 ? 'text-fondo-profundo' : 'text-acento/60'
-              }`}
-            >
-              {cuentasAbiertas > 0 ? `● ${cuentasAbiertas} abierta(s)` : '○ Sin cuentas'}
+            <p className="text-xs md:text-[14px] font-black text-orange-500 uppercase tracking-tighter leading-none">
+              {cuentasAbiertas} {turnoCaja ? 'totales' : 'mías'}
             </p>
           </div>
         </button>
-        {/* Acciones de IA: tema (overlay nuevo) y voz (overlay con gate).
-            R-04: target ≥44px. La visión NO vive aquí: es un modo de vista
-            que se conmuta desde la CategoryBar (UX heredada del viejo POS). */}
 
-
-        <button
-          type="button"
-          onClick={() => onAbrirTema?.()}
-          className="min-h-tactil min-w-tactil bg-fondo-profundo border border-white/5 rounded-xl px-3 flex items-center justify-center hover:bg-fondo-panel transition-all"
-          title="Cambiar tema"
-          aria-label="Cambiar tema"
-        >
-          <span aria-hidden="true">🎨</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onAbrirVoz?.()}
-          disabled={!vozDisponible}
-          className={`min-h-tactil min-w-tactil border border-white/5 rounded-xl px-3 flex items-center justify-center transition-all ${
-            vozDisponible
-              ? 'bg-fondo-profundo hover:bg-fondo-panel'
-              : 'bg-fondo-profundo/40 opacity-40 cursor-not-allowed'
-          }`}
-          title={vozDisponible ? 'Dictado por voz' : 'Dictado por voz no disponible'}
-          aria-label="Dictado por voz"
-        >
-          <span aria-hidden="true">🎤</span>
-        </button>
-
-        <span
-          className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
-            sesionAbierta
-              ? 'bg-acento text-fondo-profundo shadow-lg'
-              : 'bg-peligro text-crema-ticket'
-          }`}
-        >
-          {sesionAbierta ? 'Sesión abierta' : 'Sin sesión'}
-        </span>
-
-        {/* Indicador de red (punto + etiqueta) */}
-        <span
-          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-fondo-profundo border border-white/5"
-          title={enLinea ? 'En línea' : 'Sin conexión'}
-        >
-          <span
-            aria-hidden="true"
-            className={`w-2.5 h-2.5 rounded-full ${
-              enLinea ? 'bg-acento' : 'bg-peligro animate-pulse'
-            }`}
-          />
-          <span className="hidden sm:inline text-[9px] font-black uppercase tracking-widest text-crema-ticket/70">
-            {enLinea ? 'En línea' : 'Sin red'}
-          </span>
-        </span>
-
-        {modo ? (
-          <span className="hidden sm:inline text-[9px] font-black text-crema-ticket/50 uppercase tracking-widest">
-            Modo: {modo}
-          </span>
-        ) : null}
       </div>
     </header>
   );

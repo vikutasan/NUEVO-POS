@@ -43,6 +43,7 @@ import { useTicketActions } from './hooks/useTicketActions.js';
 import { useTerminalLocking } from './hooks/useTerminalLocking.js';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner.js';
 import { useNetworkHealth } from './hooks/useNetworkHealth.js';
+import { useBeforeUnload } from './hooks/useBeforeUnload.js';
 // F7.5 — Integración de los entregables de la Fase 7 en la pantalla real.
 import { useTheme } from './hooks/useTheme.js';
 import { useVoiceCart } from './hooks/useVoiceCart.js';
@@ -115,7 +116,7 @@ export default function RetailVisionPOS({
   // de los tests que montan la pantalla sin props.
   const terminalEfectiva = terminalId || CONFIG.TERMINAL_ID;
   const { modo, esMovil } = useModo();
-  const { enLinea } = useNetworkHealth();
+  const red = useNetworkHealth();
 
   // ── Estado de la pantalla (solo lo que NO vive en un hook) ─────────────────
   const [categorias, setCategorias] = useState([]);
@@ -128,11 +129,10 @@ export default function RetailVisionPOS({
   const [ticketAbierto, setTicketAbierto] = useState(false);
   const [banner, setBanner] = useState(null);
   // F7.5/F7.6 — Visibilidad de los paneles de IA.
-  //   - Tema: overlay nuevo (no existía en el viejo POS).
+  //   - Tema: reubicado a la landing (TerminalSelector) — es preferencia, no acción.
   //   - Voz: overlay abierto desde el header, con gate de disponibilidad.
   //   - Visión: NO es un overlay; es un MODO DE VISTA (`viewMode`) que
   //     reemplaza el cuerpo (grid ↔ visor), como en el viejo POS (F7.6.2).
-  const [temaAbierto, setTemaAbierto] = useState(false);
   const [vozAbierta, setVozAbierta] = useState(false);
   const [viewMode, setViewMode] = useState('GRID'); // 'GRID' | 'CAMERA'
   // F7.5.6 — Modal de programación de pedido (puente POS → Pedidos).
@@ -205,6 +205,47 @@ export default function RetailVisionPOS({
   const tema = useTheme();
   const voz = useVoiceCart(productos);
   const vision = useVision(productos);
+
+  // ── Protección al cerrar pestaña (B1 — HALLAZGOS_AUDITORIA_BRECHAS_POS.md §3) ──
+  //
+  // Dos instancias del mismo hook genérico:
+  //   1. Emergency save: envía el ticket + carrito por sendBeacon al cerrar.
+  //      Muestra el diálogo nativo "¿seguro?" si hay ítems sin persistir.
+  //   2. Lock release: libera el candado de terminal para evitar locks huérfanos
+  //      (cicatriz OMEGA). El TTL del heartbeat lo limpia igual, pero esto es
+  //      una liberación anticipada por cortesía.
+
+  // 1) Emergency save + diálogo nativo de confirmación
+  useBeforeUnload({
+    url: `${CONFIG.API_BASE_URL}/pos/tickets/emergency-save`,
+    confirmar: true,
+    activo: carrito.lineas.length > 0,
+    obtenerPayload: () => {
+      const idTicket = ticketIdRef.current;
+      if (!idTicket || carrito.lineas.length === 0) return null;
+      return {
+        ticket_id: idTicket,
+        terminal_id: terminalEfectiva,
+        items: carrito.lineas.map(l => ({
+          item_id: l.item_id,
+          product_id: l.product_id,
+          quantity: l.quantity,
+        })),
+        emergency_save: true,
+      };
+    },
+  });
+
+  // 2) Lock release (anticipada, por cortesía — el TTL limpia igual)
+  useBeforeUnload({
+    url: `${CONFIG.API_BASE_URL}/pos/terminals/${terminalEfectiva}/unlock`,
+    activo: locking.esDueno,
+    obtenerPayload: () => {
+      const uid = sesion?.employee_id;
+      if (!uid) return null;
+      return { occupier_id: String(uid) };
+    },
+  });
 
   // ── Carga inicial: catálogo + sesión activa ────────────────────────────────
   useEffect(() => {
@@ -548,10 +589,12 @@ export default function RetailVisionPOS({
         estado={estadoCuenta}
         tipoVenta={CONFIG.CANAL}
         sesionAbierta={Boolean(sesion)}
-        enLinea={enLinea}
+        estadoRed={red.estado}
+        etiquetaRed={red.etiqueta}
+        colorRed={red.color}
         modo={modo}
         onCambiarEstacion={intentarSalir}
-        onAbrirTema={() => setTemaAbierto(true)}
+
         onAbrirVoz={() => setVozAbierta(true)}
         vozDisponible={voz.disponible}
         onAbrirPedido={() => setPedidoAbierto(true)}
@@ -571,6 +614,7 @@ export default function RetailVisionPOS({
         // inalcanzable (13ª instancia de §10.6). El conteo alimenta el badge.
         onAbrirPizarron={() => setPizarronAbierto(true)}
         cuentasAbiertas={cuentasAbiertas}
+        turnoCaja={turnoCaja}
       />
 
       {error ? (
@@ -700,7 +744,7 @@ export default function RetailVisionPOS({
 
       {/* F9.0.3 — Aviso fijo de red caída (cicatriz v6.1 $453). Solo estado de
           red: el nuevo POS no tiene cola local, así que no hay conteo. */}
-      <OfflineBanner visible={!enLinea} />
+      <OfflineBanner visible={red.bannerVisible} />
 
       <OverlayExito
         ticket={acciones.ticket && acciones.ticket.status === 'PAID' ? acciones.ticket : null}
@@ -730,34 +774,7 @@ export default function RetailVisionPOS({
           camino que el grid de productos (`carrito.anadirLinea`), de modo que la
           persistencia atómica por ítem (contratos 18–20) siga operando igual. */}
 
-      {/* Tema (F7.5.1) */}
-      {temaAbierto ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Selector de tema"
-        >
-          <div className="bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
-            <h2 className="text-xl font-black uppercase tracking-widest text-white">
-              🎨 Tema
-            </h2>
-            <ThemeSelector
-              tema={tema.tema}
-              temas={tema.temas}
-              ofreceSelector={tema.ofreceSelector}
-              onCambiarTema={tema.cambiarTema}
-            />
-            <button
-              type="button"
-              onClick={() => setTemaAbierto(false)}
-              className="w-full min-h-tactil bg-fondo-panel text-crema-ticket rounded-xl"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      ) : null}
+      {/* Tema (F7.5.1) — reubicado a la landing (TerminalSelector). */}
 
       {/* Voz (F7.5.2) */}
       {vozAbierta ? (
@@ -843,6 +860,7 @@ export default function RetailVisionPOS({
         >
           <OpenAccountsCorkboard
             terminalId={terminalEfectiva}
+            cajaHabilitada={Boolean(turnoCaja)}
             onRecuperar={recuperarCuentaAlCarrito}
             onCerrar={() => {
               setPizarronAbierto(false);

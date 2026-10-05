@@ -324,16 +324,21 @@ export function enviarContextoDiario(cuerpo) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * GET /pos/open-accounts — las cuentas OPEN de una terminal (contrato 23).
+ * GET /pos/open-accounts — las cuentas OPEN (contrato 23).
  *
- * Devuelve una PROYECCIÓN ligera (5 campos por cuenta), no la tabla `tickets`.
- * El pizarrón (F5.3) usa esto para descubrir qué cuentas están "en el corcho".
+ * Si `terminalId` se omite o es vacío, devuelve TODAS las cuentas OPEN
+ * (para modo CAJA, que necesita ver cuentas de todas las terminales).
+ * Si se proporciona, filtra por esa terminal (RN-31).
  *
- * @param {string} terminalId
+ * @param {string} [terminalId]
  */
 export function listarCuentasAbiertas(terminalId) {
-  const qs = new URLSearchParams({ terminal_id: terminalId });
-  return peticion(`/pos/open-accounts?${qs.toString()}`);
+  const id = typeof terminalId === 'string' ? terminalId.trim() : '';
+  if (id) {
+    const qs = new URLSearchParams({ terminal_id: id });
+    return peticion(`/pos/open-accounts?${qs.toString()}`);
+  }
+  return peticion('/pos/open-accounts');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

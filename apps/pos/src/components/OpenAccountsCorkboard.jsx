@@ -4,46 +4,38 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * QUÉ ES
  * ─────────────────────────────────────────────────────────────────────────────
- * El pizarrón de corcho con post-its que muestra las cuentas OPEN de la
- * terminal en curso. Es la versión nueva del `OpenAccountsCorkboard` del viejo
- * POS: la INTEGRACIÓN se hereda (§6.8), la IMPLEMENTACIÓN se reescribe.
+ * El pizarrón de corcho con post-its que muestra las cuentas OPEN. Es la
+ * versión nueva del `OpenAccountsCorkboard` del viejo POS: la INTEGRACIÓN se
+ * hereda (§6.8), la IMPLEMENTACIÓN se reescribe.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * POR QUÉ (F12.6 — PARIDAD DE PRESENTACIÓN)
+ * D1 — CAJA VE TODAS LAS CUENTAS (5 Oct 2026)
  * ─────────────────────────────────────────────────────────────────────────────
- * El pizarrón de F5.3 era un modal plano que solo mostraba folio + total. El
- * viejo POS mostraba un corcho con post-its que llevaban, además: terminal,
- * tipo de pedido, cliente, teléfono, capturista y hora. F12.6 cierra esa
- * brecha: estética (corcho + post-it + pin + rotación) Y datos completos.
- *
- * Los datos viajan por el contrato 23 (`CuentaAbiertaSalida`), que en F12.6 se
- * amplió de 5 a 12 campos escalares. El POS NO lee tablas ajenas (A-02): el
- * nombre del capturista llega ya resuelto y congelado en el ticket.
+ * Cuando `cajaHabilitada === true`, el pizarrón muestra TODAS las cuentas
+ * OPEN de TODAS las terminales. El viejo POS hacía esto: cuando la terminal
+ * era CAJA, el header decía "X TOTALES" y listaba todo. El nuevo POS portó
+ * este comportamiento pasando `todasLasTerminales: true` al hook.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * CONTRATO DE PROPS
  * ─────────────────────────────────────────────────────────────────────────────
- *   terminalId      — la terminal en curso (RN-31: solo sus cuentas OPEN).
- *   servicioCuentas — el servicio del contrato 23 (`listarCuentasAbiertas`).
- *   clienteApi      — el cliente del POS (`leerTicket`) para recuperar.
- *   onRecuperar     — callback con el ticket recuperado.
- *   onCerrar        — callback opcional para cerrar el pizarrón.
+ *   terminalId       — la terminal en curso (RN-31: solo sus cuentas OPEN).
+ *   cajaHabilitada   — si true, ignora el filtro y muestra TODAS las cuentas.
+ *   servicioCuentas  — el servicio del contrato 23 (`listarCuentasAbiertas`).
+ *   clienteApi       — el cliente del POS (`leerTicket`) para recuperar.
+ *   onRecuperar      — callback con el ticket recuperado.
+ *   onCerrar         — callback opcional para cerrar el pizarrón.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * REGLAS QUE GOBIERNAN ESTE COMPONENTE
  * ─────────────────────────────────────────────────────────────────────────────
- *   RN-31  — el pizarrón lista SOLO las cuentas OPEN de su terminal.
+ *   RN-31  — el pizarrón lista SOLO las cuentas OPEN de su terminal (o TODAS
+ *            si es CAJA — ver D1 arriba).
  *   RN-78  — los instantes viajan en UTC; aquí se formatean a hora local.
  *   R-01   — sin anchos fijos (`w-full max-w-[1000px]`, nunca `w-[Npx]`).
+ *   R-03   — 3 modos explícitos (grid cols: 1 → sm:2 → lg:3).
  *   R-04   — objetivo táctil ≥ 44px (`min-h-tactil`).
- *   Regla 15 — "respuesta ligera" = proyección de campos escalares explícitos.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * EL CONTRATO `{outcome, reason}` (PROHIBICIÓN #2)
- * ─────────────────────────────────────────────────────────────────────────────
- * El POS NUNCA usa try/catch para decidir. El hook devuelve `{outcome, reason}`
- * y aquí se decide con `outcome === 'ok'`. El error se traduce a un mensaje
- * humano con `mensajeDeError(reason)`.
+ *   DT-09  — tokens semánticos, no colores hardcodeados.
  */
 
 import React from 'react';
@@ -95,10 +87,6 @@ function colorDe(terminal) {
 
 /**
  * Formatea un instante UTC a hora local (RN-78).
- *
- * POR QUÉ: el backend guarda y transporta en UTC; la conversión a la zona del
- * usuario es responsabilidad de la capa de presentación. Devuelve '—' si el
- * instante no es válido, para no romper la tarjeta.
  */
 function formatearHora(instante) {
   if (!instante) return '—';
@@ -112,10 +100,6 @@ function formatearHora(instante) {
 
 /**
  * Formatea el total como moneda MXN.
- *
- * POR QUÉ: el total viaja como string decimal (para no perder precisión en el
- * transporte); aquí se convierte a número solo para presentarlo. Si no es
- * numérico, se muestra el valor crudo en vez de 'NaN'.
  */
 function formatearTotal(valor) {
   const numero = Number(valor);
@@ -128,9 +112,6 @@ function formatearTotal(valor) {
 
 /**
  * Traduce el `reason` del contrato a un mensaje humano.
- *
- * POR QUÉ: el `reason` es un código estable para la máquina; el usuario merece
- * una frase. El mapa es explícito para que un `reason` nuevo no pase inadvertido.
  */
 function mensajeDeError(reason) {
   const mapa = {
@@ -139,9 +120,6 @@ function mensajeDeError(reason) {
     datos_invalidos: 'Los datos recibidos no son válidos.',
   };
   if (mapa[reason]) return mapa[reason];
-  // Un `reason` no mapeado se muestra VERBATIM: puede ser el mensaje crudo de
-  // un error de red (p. ej. "red caída"). Tragárselo con un texto genérico
-  // escondería el diagnóstico que el cajero necesita para reportar la falla.
   if (typeof reason === 'string' && reason.trim()) return reason;
   return 'No se pudieron cargar las cuentas abiertas.';
 }
@@ -151,30 +129,29 @@ function mensajeDeError(reason) {
  *
  * @param {object} props
  * @param {string} [props.terminalId]
- * @param {object} props.servicioCuentas
- * @param {object} props.clienteApi
+ * @param {boolean} [props.cajaHabilitada]
+ * @param {object} [props.servicioCuentas]
+ * @param {object} [props.clienteApi]
  * @param {(ticket: object) => void} [props.onRecuperar]
  * @param {() => void} [props.onCerrar]
  */
 export default function OpenAccountsCorkboard({
   terminalId = '',
+  cajaHabilitada = false,
   servicioCuentas,
   clienteApi,
   onRecuperar,
   onCerrar,
 }) {
-  const { cuentas, cargando, error, recuperarCuenta } = useOpenAccounts({
+  const { cuentas, cargando, error, refrescar, recuperarCuenta } = useOpenAccounts({
     terminalId,
+    todasLasTerminales: cajaHabilitada,
     servicioCuentas,
     clienteApi,
   });
 
   /**
    * Recupera una cuenta y entrega el ticket al padre.
-   *
-   * POR QUÉ se decide con `outcome`: el contrato `{outcome, reason}` es la
-   * única vía de decisión (PROHIBICIÓN #2). Si la recuperación falla, no se
-   * llama al padre: el error ya lo pinta el hook.
    */
   async function manejarRecuperar(id) {
     const resultado = await recuperarCuenta(id);
@@ -187,44 +164,66 @@ export default function OpenAccountsCorkboard({
     }
   }
 
+  // D1 — Leyenda del encabezado: CAJA ve TOTALES, terminal normal ve "de esta terminal".
+  const leyendaAlcance = cajaHabilitada
+    ? `${cuentas.length} cuentas — TODAS las terminales`
+    : `${cuentas.length} cuentas — Terminal ${terminalId || '—'}`;
+
   return (
-    <div className="w-full max-w-[1000px] mx-auto p-4">
+    <div className="w-full max-w-[1100px] mx-auto p-4">
       {/* ── El corcho ───────────────────────────────────────────────────── */}
       <div
-        className="rounded-canon40 border-[20px] border-madera-veta bg-madera-panel p-6 shadow-2xl"
+        className="rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 20% 30%, rgb(var(--madera) / 0.35) 0%, transparent 45%), radial-gradient(circle at 75% 65%, rgb(var(--madera) / 0.30) 0%, transparent 50%)',
+            'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0), radial-gradient(circle at 10px 10px, rgba(255,255,255,0.05) 1px, transparent 0)',
+          backgroundSize: '15px 15px, 40px 40px',
         }}
       >
         {/* ── Encabezado ──────────────────────────────────────────────── */}
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-6 flex flex-col sm:flex-row items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-crema">
-              Cuentas en Espera
+            <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tighter italic text-crema">
+              Cuentas en <span className="opacity-40">Espera</span>
             </h2>
-            <p className="text-sm text-crema/70">
+            <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.3em] text-crema/70">
               Pizarrón de Control R de Rico
             </p>
+            {/* D1 — Alcance: TOTALES (caja) o terminal */}
+            <p className="text-xs md:text-sm font-bold text-crema/50 mt-1">
+              {leyendaAlcance}
+            </p>
           </div>
-          {typeof onCerrar === 'function' && (
+          <div className="flex gap-2">
+            {/* D4 — Botón refrescar manual */}
             <button
               type="button"
-              onClick={onCerrar}
-              aria-label="Cerrar"
-              title="Cerrar"
-              className="min-h-tactil min-w-tactil rounded-canon35 bg-peligro/80 px-4 font-bold text-crema hover:bg-peligro"
+              onClick={refrescar}
+              aria-label="Refrescar"
+              title="Refrescar cuentas"
+              className="min-h-tactil min-w-tactil rounded-[35px] bg-crema/10 px-4 font-bold text-crema hover:bg-crema/20 transition-all"
             >
-              ✕
+              🔄
             </button>
-          )}
+            {typeof onCerrar === 'function' && (
+              <button
+                type="button"
+                onClick={onCerrar}
+                aria-label="Cerrar"
+                title="Cerrar"
+                className="min-h-tactil min-w-tactil rounded-[35px] bg-peligro/80 px-4 font-bold text-crema hover:bg-peligro transition-all"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Error ───────────────────────────────────────────────────── */}
         {error && (
           <div
             role="alert"
-            className="mb-4 rounded-canon35 border border-peligro bg-peligro/15 px-4 py-3 text-crema"
+            className="mb-4 rounded-[35px] border border-peligro bg-peligro/15 px-4 py-3 text-crema"
           >
             {mensajeDeError(error)}
           </div>
@@ -237,84 +236,111 @@ export default function OpenAccountsCorkboard({
 
         {/* ── Vacío ───────────────────────────────────────────────────── */}
         {!cargando && !error && cuentas.length === 0 && (
-          <p className="py-8 text-center text-crema/80">
-            No hay cuentas abiertas.
-          </p>
+          <div className="py-16 flex flex-col items-center justify-center space-y-4">
+            <span className="text-6xl md:text-9xl italic font-black text-crema/20">VACÍO</span>
+            <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.5em] text-crema/20">
+              No hay cuentas pendientes en el pizarrón
+            </p>
+          </div>
         )}
 
         {/* ── Los post-its ────────────────────────────────────────────── */}
         {!cargando && cuentas.length > 0 && (
-          <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
             {cuentas.map((cuenta, indice) => (
               <li
                 key={cuenta.id}
-                className={`relative min-h-tactil rounded-canon35 p-4 shadow-lg transition-transform hover:rotate-0 ${colorDe(
+                className={`group relative aspect-square min-h-tactil rounded-sm p-4 lg:p-6 shadow-[5px_15px_30px_-5px_rgba(0,0,0,0.3)] hover:shadow-[10px_25px_50px_-10px_rgba(0,0,0,0.4)] hover:-translate-y-2 hover:rotate-0 transition-all cursor-pointer flex flex-col justify-between ${colorDe(
                   cuenta.terminal_id,
                 )} ${rotacionDe(indice)}`}
+                onClick={() => manejarRecuperar(cuenta.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    manejarRecuperar(cuenta.id);
+                  }
+                }}
               >
                 {/* El pin que sujeta el post-it al corcho. */}
                 <span
                   aria-hidden="true"
-                  className="absolute -top-3 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-red-600 shadow"
-                />
+                  className="absolute -top-3 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-red-600 shadow-inner border border-red-700 z-20"
+                >
+                  <span className="absolute top-1 left-1 w-1.5 h-1.5 bg-white/40 rounded-full" />
+                </span>
 
                 {/* Folio + terminal */}
-                <div className="mb-2 flex items-center justify-between">
-                  <span
-                    data-testid={`folio-${cuenta.id}`}
-                    className="font-mono text-lg font-bold text-gray-900"
-                  >
-                    {cuenta.account_num}
-                  </span>
-                  {cuenta.terminal_id && (
-                    <span className="rounded-full bg-black/10 px-2 py-0.5 text-xs font-semibold text-gray-800">
-                      {cuenta.terminal_id}
+                <div className="text-[#3d2b1f]">
+                  <div className="flex items-start justify-between mb-2 lg:mb-4">
+                    <span
+                      data-testid={`folio-${cuenta.id}`}
+                      className="text-3xl lg:text-5xl font-black font-mono text-gray-900"
+                    >
+                      #{(cuenta.account_num || '').slice(-3)}
                     </span>
-                  )}
-                </div>
-
-                {/* Tipo de pedido + cliente + teléfono */}
-                {cuenta.order_type === 'PEDIDO' && (
-                  <div className="mb-2 text-sm text-gray-800">
-                    <p className="font-semibold">
-                      📦 PEDIDO
-                      {cuenta.delivery_type
-                        ? ` · ${cuenta.delivery_type}`
-                        : ''}
-                    </p>
-                    {cuenta.customer_name && (
-                      <p className="truncate">👤 {cuenta.customer_name}</p>
-                    )}
-                    {cuenta.customer_phone && (
-                      <p className="truncate">📞 {cuenta.customer_phone}</p>
+                    {cuenta.terminal_id && (
+                      <span className="text-[10px] md:text-sm font-black bg-black/5 px-2 py-1 rounded-md uppercase tracking-widest opacity-60">
+                        {cuenta.terminal_id}
+                      </span>
                     )}
                   </div>
-                )}
 
-                {/* Capturista + hora */}
-                <div className="mb-3 space-y-0.5 text-xs text-gray-700">
-                  {cuenta.captured_by_name && (
-                    <p className="truncate">📝 {cuenta.captured_by_name}</p>
+                  {/* Tipo de pedido + cliente */}
+                  {cuenta.order_type === 'PEDIDO' ? (
+                    <div className="mb-2 lg:mb-4">
+                      <span className="inline-block bg-orange-600 text-white text-[10px] md:text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded shadow-sm mb-1">
+                        📦 PEDIDO
+                        {cuenta.delivery_type
+                          ? ` · ${cuenta.delivery_type}`
+                          : ''}
+                      </span>
+                      {cuenta.customer_name && (
+                        <h4 className="text-sm md:text-xl font-black uppercase tracking-tighter leading-none mb-1 text-black truncate">
+                          {cuenta.customer_name}
+                        </h4>
+                      )}
+                      {cuenta.customer_phone && (
+                        <p className="text-[10px] md:text-xs font-bold text-orange-900 uppercase truncate">
+                          📞 {cuenta.customer_phone}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <h4 className="text-sm md:text-lg font-black uppercase tracking-tight leading-tight mb-2 lg:mb-4 opacity-35">
+                      CLIENTE LOCAL
+                    </h4>
                   )}
-                  <p>🕒 {formatearHora(cuenta.created_at)}</p>
+
+                  {/* Capturista + hora */}
+                  <div className="space-y-0.5 opacity-50 mt-auto">
+                    {cuenta.captured_by_name && (
+                      <p className="text-[10px] md:text-xs font-black uppercase truncate flex items-center gap-1">
+                        📝 {cuenta.captured_by_name}
+                      </p>
+                    )}
+                    <p className="text-[10px] md:text-xs font-bold italic uppercase flex items-center gap-1">
+                      🕒 {formatearHora(cuenta.created_at)}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Total */}
-                <p
-                  data-testid={`total-${cuenta.id}`}
-                  className="mb-3 text-right text-xl font-bold text-gray-900"
-                >
-                  {formatearTotal(cuenta.total)}
-                </p>
+                {/* Total + label */}
+                <div className="mt-2 lg:mt-4 pt-2 lg:pt-4 border-t border-[#3d2b1f]/10 flex justify-between items-end">
+                  <span
+                    data-testid={`total-${cuenta.id}`}
+                    className="text-lg lg:text-xl font-black font-mono tracking-tighter text-[#3d2b1f] opacity-45"
+                  >
+                    {formatearTotal(cuenta.total)}
+                  </span>
+                  <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest opacity-30">
+                    Ver Cuenta →
+                  </span>
+                </div>
 
-                {/* Recuperar */}
-                <button
-                  type="button"
-                  onClick={() => manejarRecuperar(cuenta.id)}
-                  className="min-h-tactil w-full rounded-canon35 bg-acento px-4 font-bold text-crema hover:brightness-110"
-                >
-                  Recuperar
-                </button>
+                {/* Esquina doblada (efecto papel) */}
+                <div className="absolute bottom-0 right-0 w-6 h-6 lg:w-8 lg:h-8 bg-gradient-to-br from-black/0 to-black/5 rounded-br-sm" />
               </li>
             ))}
           </ul>

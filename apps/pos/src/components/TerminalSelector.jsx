@@ -14,7 +14,8 @@
 
 import React, { useState } from 'react';
 import { useTerminals } from '../hooks/useTerminals.js';
-
+import { useTheme } from '../hooks/useTheme.js';
+import ThemeSelector from './ThemeSelector.jsx';
 const PRESET_ICONS = [
   { label: 'Monitor', value: '🖥️' },
   { label: 'Laptop', value: '💻' },
@@ -71,9 +72,6 @@ const styles = {
     marginBottom: '2rem',
   },
   managerBtn: {
-    position: 'absolute',
-    top: '1.5rem',
-    right: '1.5rem',
     background: '#ea580c',
     color: '#fff',
     border: 'none',
@@ -146,11 +144,14 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   } = useTerminals(currentUser);
 
   const [showManager, setShowManager] = useState(false);
+  const [showTheme, setShowTheme] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [editIcon, setEditIcon] = useState('');
   const [toast, setToast] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const tema = useTheme();
 
   const canManage = currentUser?.role === 'ADMIN'
     || currentUser?.permissions?.access_terminal_manager === 'full';
@@ -422,11 +423,72 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   return (
     <div style={styles.page}>
 
-      {/* Manager button — top right como el POS viejo */}
-      {canManage && (
-        <button onClick={() => setShowManager(true)} style={styles.managerBtn}>
-          ⚙️ Gestor de Terminales
+      {/* Rincón de configuración — top right */}
+      <div style={{
+        position: 'absolute', top: '1.5rem', right: '1.5rem',
+        display: 'flex', gap: '0.75rem', alignItems: 'center',
+      }}>
+        {/* Tema — reubicado aquí desde el header del POS (es una preferencia,
+            no una acción transaccional). */}
+        <button
+          onClick={() => setShowTheme(prev => !prev)}
+          style={{
+            background: 'rgba(30, 30, 30, 0.85)',
+            color: '#fff',
+            border: '2px solid rgba(255,255,255,0.1)',
+            borderRadius: '1rem',
+            padding: '0.75rem 1.25rem',
+            fontWeight: 800,
+            fontSize: '0.75rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            transition: 'all 0.3s ease',
+          }}
+          title="Cambiar tema visual"
+          aria-label="Cambiar tema"
+        >
+          🎨 Tema
         </button>
+
+        {/* Gestor de terminales */}
+        {canManage && (
+          <button onClick={() => setShowManager(true)} style={styles.managerBtn}>
+            ⚙️ Gestor de Terminales
+          </button>
+        )}
+      </div>
+
+      {/* Overlay del selector de tema */}
+      {showTheme && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 50,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowTheme(false); }}
+        >
+          <div style={{
+            background: 'rgba(30, 30, 30, 0.95)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '1.5rem',
+            padding: '1.5rem',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
+          }}>
+            <ThemeSelector
+              temaActivo={tema.temaActivo}
+              temas={tema.temas}
+              onCambiar={(id) => { tema.cambiarTema(id); setShowTheme(false); }}
+              onCerrar={() => setShowTheme(false)}
+            />
+          </div>
+        </div>
       )}
 
       {/* Header */}

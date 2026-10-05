@@ -28,6 +28,7 @@ nunca leyendo su código ni su base de datos.
 | **Ingeniería inversa sobre** | `fe9f6ed` (tag `v22-estable-fe9f6ed`) |
 | **Ancla dual (IA)** | `c0c66fe` (v26.1) — ver [`ACTA_DE_RECONCILIACION_IA.md`](../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/07-ia-local/ACTA_DE_RECONCILIACION_IA.md:1) |
 | **Fase actual** | **F0 — Andamiaje** |
+| **Auditoría de brechas** | [`HALLAZGOS_AUDITORIA_BRECHAS_POS.md`](../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/HALLAZGOS_AUDITORIA_BRECHAS_POS.md:1) — **LECTURA OBLIGATORIA** antes de "rescatar" funcionalidad del viejo POS |
 
 Cualquier divergencia posterior del ERP es una decisión consciente, no un accidente.
 

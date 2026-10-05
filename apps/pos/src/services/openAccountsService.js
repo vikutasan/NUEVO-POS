@@ -64,6 +64,24 @@ export function listarCuentasAbiertas(terminalId) {
   );
 }
 
+/**
+ * GET /pos/open-accounts — TODAS las cuentas OPEN sin filtro de terminal.
+ *
+ * Se usa cuando la terminal está habilitada como CAJA (punto de cobro central).
+ * El cajero necesita ver las cuentas de TODAS las terminales para poder cobrar
+ * las que le traigan de T2, T3, T4, etc.
+ *
+ * El viejo POS (`posService.getOpenTickets()`) siempre listaba todas; el nuevo
+ * filtraba por terminal (RN-31). Esta función restaura la vista global para CAJA.
+ */
+export function listarTodasLasCuentasAbiertas() {
+  return aOutcome(
+    () => withRetries(() => cliente.listarCuentasAbiertas('')),
+    motivo
+  );
+}
+
 export default {
   listarCuentasAbiertas,
+  listarTodasLasCuentasAbiertas,
 };

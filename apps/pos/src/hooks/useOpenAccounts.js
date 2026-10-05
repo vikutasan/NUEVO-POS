@@ -52,6 +52,7 @@ import { aOutcome, esOk } from '../utils/outcome.js';
 export function useOpenAccounts(opciones = {}) {
   const {
     terminalId = '',
+    todasLasTerminales = false,
     servicioCuentas = servicio,
     clienteApi = cliente,
   } = opciones;
@@ -63,6 +64,8 @@ export function useOpenAccounts(opciones = {}) {
   // Refs: los callbacks asíncronos leen de aquí, no del estado cerrado.
   const terminalRef = useRef(terminalId);
   terminalRef.current = terminalId;
+  const todasLasTerminalesRef = useRef(todasLasTerminales);
+  todasLasTerminalesRef.current = todasLasTerminales;
   const servicioRef = useRef(servicioCuentas);
   servicioRef.current = servicioCuentas;
   const clienteRef = useRef(clienteApi);
@@ -91,7 +94,10 @@ export function useOpenAccounts(opciones = {}) {
     }
 
     setCargando(true);
-    const r = await servicioRef.current.listarCuentasAbiertas(id);
+    // D1 — CAJA ve TODAS las cuentas; terminal normal solo las suyas (RN-31).
+    const r = todasLasTerminalesRef.current
+      ? await servicioRef.current.listarTodasLasCuentasAbiertas()
+      : await servicioRef.current.listarCuentasAbiertas(id);
     if (!vivoRef.current) return;
 
     if (esOk(r)) {
@@ -116,10 +122,10 @@ export function useOpenAccounts(opciones = {}) {
     return aOutcome(() => clienteRef.current.leerTicket(id));
   }, []);
 
-  // Carga inicial y recarga al cambiar de terminal (H1: dep primitiva).
+  // Carga inicial y recarga al cambiar de terminal o modo (H1: dep primitiva).
   useEffect(() => {
     refrescar();
-  }, [terminalId, refrescar]);
+  }, [terminalId, todasLasTerminales, refrescar]);
 
   return { cuentas, cargando, error, refrescar, recuperarCuenta };
 }
