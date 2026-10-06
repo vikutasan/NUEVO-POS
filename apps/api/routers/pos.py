@@ -76,6 +76,7 @@ from schemas import (
     CuentasAbiertasSalida,
     LineaAtomicaSalida,
     LineaSalida,
+    LineasTicketSalida,
     QuitarItemEntrada,
     SesionActiva,
     TicketAtomicoSalida,
@@ -668,6 +669,34 @@ async def verificar_envio(
         existe=True,
         item_ids_persistidos=item_ids_persistidos,
         faltantes=faltantes,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Contrato 30 — GET /pos/tickets/{id}/items
+# ---------------------------------------------------------------------------
+
+@router.get("/tickets/{ticket_id}/items", response_model=LineasTicketSalida)
+async def leer_lineas(
+    ticket_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> LineasTicketSalida:
+    """Lee las LÍNEAS de un ticket (contrato 30, FASE 12.10).
+
+    Cierra el hueco A-02 que dejó abierto la Regla 15: el contrato 21 devuelve
+    EXACTAMENTE 5 campos escalares y NO las líneas, así que recuperar una cuenta
+    del pizarrón no podía hidratar el carrito. Este contrato es de SOLO LECTURA
+    y devuelve una PROYECCIÓN (O-23): nunca la tabla `ticket_items`.
+
+    Devuelve además `version` y `total` para que el cliente adopte la identidad
+    completa de la cuenta (concurrencia optimista, RN-25) al hidratar el carrito.
+    """
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+    return LineasTicketSalida(
+        ticket_id=ticket.id,
+        version=ticket.version,
+        total=ticket.total,
+        lineas=_lineas_atomicas(ticket),
     )
 
 

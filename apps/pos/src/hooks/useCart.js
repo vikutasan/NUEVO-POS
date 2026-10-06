@@ -258,6 +258,43 @@ export function useCart(opciones = {}) {
     }
   }, []);
 
+  /**
+   * Hidrata el carrito con las líneas de un ticket existente (F12.10).
+   *
+   * Cierra el hueco A-02 de la Regla 15: recuperar una cuenta del pizarrón
+   * adoptaba la identidad (`id`) pero NO las líneas, porque el contrato 21
+   * devuelve EXACTAMENTE 5 campos escalares. El contrato 30 (`pos.leer_lineas`)
+   * devuelve las líneas; este método las instala en el carrito y adopta la
+   * `version` del servidor para que la siguiente escritura encadene con
+   * concurrencia optimista (RN-25).
+   *
+   * Reemplaza las líneas (no las suma): es una ADOPCIÓN de una cuenta, no una
+   * operación de añadir. Normaliza cada línea a la forma del carrito local.
+   *
+   * @param {Array<{item_id: string, product_id: string, name?: string, quantity: number, unit_price: number|string}>} lineasServidor
+   * @param {number} [versionServidor] - versión optimista del ticket (RN-25).
+   * @returns {{outcome: 'ok', reason: null, data: {hidratadas: number}}}
+   */
+  const hidratarLineas = useCallback((lineasServidor, versionServidor) => {
+    const normalizadas = (Array.isArray(lineasServidor) ? lineasServidor : []).map((l) => ({
+      item_id: l.item_id,
+      product_id: l.product_id,
+      name: l.name ?? null,
+      quantity: Number(l.quantity ?? 1),
+      unit_price: Number(l.unit_price ?? 0),
+    }));
+
+    setLineas(normalizadas);
+    lineasRef.current = normalizadas;
+
+    if (Number.isInteger(versionServidor) && versionServidor >= 0) {
+      setVersionActual(versionServidor);
+      versionRef.current = versionServidor;
+    }
+
+    return { outcome: 'ok', reason: null, data: { hidratadas: normalizadas.length } };
+  }, []);
+
   return {
     lineas,
     total,
@@ -267,6 +304,7 @@ export function useCart(opciones = {}) {
     cambiarCantidad,
     quitarLinea,
     clearCart,
+    hidratarLineas,
   };
 }
 

@@ -39,6 +39,7 @@ import { CONFIG } from '../../shared/config.js';
 import * as api from './api/client.js';
 import { useModo } from './hooks/useModo.js';
 import { useCart } from './hooks/useCart.js';
+import { aOutcome, esOk } from './utils/outcome.js';
 import { useTicketActions } from './hooks/useTicketActions.js';
 import { useTerminalLocking } from './hooks/useTerminalLocking.js';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner.js';
@@ -334,21 +335,38 @@ export default function RetailVisionPOS({
   // cuenta (`ticketId` + `version`) para que el operador siga trabajando sobre
   // la cuenta REAL y no sobre una copia vieja.
   //
-  // ALCANCE HONESTO (Regla 15 / contrato 21): `leerTicket` devuelve EXACTAMENTE
-  // 5 campos escalares y NO las líneas — leer las líneas es de otro contrato.
-  // Por eso aquí NO se hidrata el carrito con líneas inventadas: se adopta la
-  // cuenta y se cierra el pizarrón. Hidratar las líneas del carrito es una
-  // operación aparte (fuera del alcance de F12.5, que es hacer ALCANZABLE el
-  // pizarrón, 13ª instancia de §10.6).
-  const recuperarCuentaAlCarrito = useCallback((cuenta) => {
-    if (!cuenta) return;
-    if (cuenta.id) setTicketId(cuenta.id);
-    setPizarronAbierto(false);
-    setBanner({
-      tipo: 'exito',
-      mensaje: `Cuenta ${cuenta.account_num || ''} recuperada`.trim(),
-    });
-  }, []);
+  // F12.10 — HIDRATACIÓN DEL CARRITO (18ª instancia de §10.6): F12.5 adoptaba
+  // la identidad pero NO las líneas, porque el contrato 21 devuelve EXACTAMENTE
+  // 5 campos escalares (Regla 15). El operador recuperaba la cuenta y veía el
+  // carrito VACÍO. La corrección es leer las líneas por el contrato 30
+  // (`pos.leer_lineas`, `GET /pos/tickets/{id}/items`) y hidratar el carrito
+  // con ellas + la `version` del servidor (RN-25). Si la lectura falla, NO se
+  // adopta la cuenta: se avisa y se deja el carrito como estaba (no se inventa
+  // estado).
+  const recuperarCuentaAlCarrito = useCallback(
+    async (cuenta) => {
+      if (!cuenta || !cuenta.id) return;
+
+      const resultado = await aOutcome(() => api.leerLineas(cuenta.id));
+      if (!esOk(resultado)) {
+        setBanner({
+          tipo: 'error',
+          mensaje: `No se pudo recuperar la cuenta: ${resultado.reason || 'error'}`,
+        });
+        return;
+      }
+
+      const datos = resultado.data || {};
+      carrito.hidratarLineas(datos.lineas, datos.version);
+      setTicketId(cuenta.id);
+      setPizarronAbierto(false);
+      setBanner({
+        tipo: 'exito',
+        mensaje: `Cuenta ${cuenta.account_num || ''} recuperada`.trim(),
+      });
+    },
+    [carrito],
+  );
 
   const exportarCartaPDF = useCallback(
     (categoriasSeleccionadas) => {

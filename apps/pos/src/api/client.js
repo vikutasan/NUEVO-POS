@@ -177,6 +177,17 @@ export function leerTicket(ticketId) {
 }
 
 /**
+ * GET /pos/tickets/{id}/items — lee las LÍNEAS del ticket (contrato 30, F12.10).
+ * Cierra el hueco A-02 de la Regla 15: el contrato 21 no devuelve las líneas,
+ * así que recuperar una cuenta del pizarrón no podía hidratar el carrito.
+ * Devuelve `{ ticket_id, version, total, lineas }`.
+ * @param {string} ticketId
+ */
+export function leerLineas(ticketId) {
+  return peticion(`/pos/tickets/${ticketId}/items`);
+}
+
+/**
  * POST /pos/tickets/{id}/verify — verificación post-envío (contrato 22).
  * Confirma en BD que el ticket y sus ítems existen antes de limpiar el carrito.
  * @param {string} ticketId

@@ -1,4 +1,4 @@
-"""Registro de los 30 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario) + FASE 12.9.1 (Creación de ticket).
+"""Registro de los 31 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario) + FASE 12.9.1 (Creación de ticket) + FASE 12.10 (Lectura de líneas).
 
 Cada contrato se declara aquí con su firma completa (entrada/salida) y su
 proveedor. El registro es la fuente única de verdad: el test de la puerta F2
@@ -776,6 +776,38 @@ CONTRATOS: tuple[Contrato, ...] = (
         ),
         estado_hoy="FASE 10.6.2",
     ),
+    # ── §15 POS — Lectura de líneas (proveedor: POS — FASE 12.10) ─────────
+    Contrato(
+        numero=30,
+        nombre="pos.leer_lineas",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="GET /pos/tickets/{id}/items",
+        entrada={
+            "ticket_id": "UUID (path)",
+        },
+        salida={
+            "ticket_id": "UUID",
+            "version": "Integer",
+            "total": "Numeric(12,2)",
+            "lineas": "List[LineaAtomicaSalida]",
+        },
+        garantias=(
+            "Cierra el hueco A-02 que dejó abierto la Regla 15: el contrato 21 "
+            "devuelve EXACTAMENTE 5 campos escalares y NO las líneas, así que "
+            "recuperar una cuenta del pizarrón no podía hidratar el carrito.",
+            "Es de SOLO LECTURA: no escribe ni modifica el ticket.",
+            "Devuelve una PROYECCIÓN de las líneas, nunca la tabla `ticket_items` (O-23).",
+            "Devuelve `version` y `total` para que el cliente adopte la identidad "
+            "completa de la cuenta al hidratar el carrito (RN-25).",
+            "El `item_id` de cada línea es la clave de idempotencia que el cliente "
+            "envió (contrato 18); se deriva del `product_id` (deuda D-9).",
+        ),
+        errores=(
+            "404 si el ticket no existe.",
+        ),
+        estado_hoy="FASE 12.10",
+    ),
     # ── §15 POS — Creación de ticket (proveedor: POS — FASE 12.9.1) ────────
     Contrato(
         numero=29,
@@ -856,5 +888,5 @@ CONTRATOS: tuple[Contrato, ...] = (
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 30 contratos del registro."""
+    """Devuelve los 31 contratos del registro."""
     return CONTRATOS

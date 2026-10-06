@@ -292,6 +292,25 @@ class TicketLigeroSalida(BaseModel):
     version: int
 
 
+class LineasTicketSalida(BaseModel):
+    """Salida del contrato 30: las líneas de un ticket (FASE 12.10).
+
+    Cierra el hueco A-02 que dejó abierto la Regla 15: el contrato 21 devuelve
+    EXACTAMENTE 5 campos escalares y NO las líneas, así que recuperar una cuenta
+    del pizarrón no podía hidratar el carrito. Este contrato es de SOLO LECTURA
+    y devuelve una PROYECCIÓN (O-23): nunca la tabla `ticket_items`.
+
+    `item_id` es la clave de idempotencia que el cliente envió (contrato 18).
+    Como el modelo `TicketItem` no la persiste todavía (deuda D-9), se deriva
+    del `product_id` de forma determinista — igual que `_lineas_atomicas`.
+    """
+
+    ticket_id: UUID
+    version: int
+    total: Decimal
+    lineas: list[LineaAtomicaSalida] = Field(default_factory=list)
+
+
 class VerificarEnvioEntrada(BaseModel):
     """Entrada del contrato 22: verificar que el ticket y sus ítems existen.
 

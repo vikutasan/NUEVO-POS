@@ -1,26 +1,28 @@
 /**
- * Puerta de FASE 12.5 — EL PIZARRÓN DE CUENTAS ABIERTAS (integración en la
- * pantalla viva).
+ * Puerta de FASE 12.10 — RECUPERAR UNA CUENTA HIDRATA EL CARRITO.
  *
  * Este test monta la PANTALLA REAL (`RetailVisionPOS`) con un cliente `api`
- * simulado y verifica que el pizarrón de cuentas abiertas quedó CABLEADO
- * end-to-end:
+ * simulado y verifica que recuperar una cuenta desde el pizarrón NO solo adopta
+ * su identidad (`ticketId`), sino que ADEMÁS HIDRATA el carrito con sus líneas:
  *
- *   - El header expone el botón "Pizarrón" (F12.5).
- *   - Tocar "Pizarrón" abre el overlay `OpenAccountsCorkboard` (F5.3), que
- *     descarga la lista por el contrato 23 (`listarCuentasAbiertas`).
- *   - Recuperar una cuenta adopta su identidad (`ticketId`) y cierra el
- *     pizarrón (contrato 21, `leerTicket`).
- *   - "Cerrar" cierra el pizarrón SIN recuperar (no llama a `leerTicket`).
- *   - Un fallo del pizarrón NO tumba el POS (el catálogo sigue pintado).
+ *   - Recuperar una cuenta llama al contrato 30 (`leerLineas`) con el id de la
+ *     cuenta.
+ *   - Las líneas devueltas por el contrato 30 aparecen en el carrito (el
+ *     `SalesReceipt` pinta los productos recuperados).
+ *   - El total del carrito refleja las líneas recuperadas.
+ *   - El pizarrón se cierra tras hidratar.
+ *   - Si el contrato 30 falla, el POS NO se tumba y avisa por banner.
  *
- * POR QUÉ EXISTE ESTA COMPUERTA (13ª instancia de §10.6):
- * `OpenAccountsCorkboard` (F5.3) + `useOpenAccounts` (F5.2) +
- * `openAccountsService` (F5.1) existían y pasaban sus tests AISLADOS, pero la
- * pantalla NUNCA los montaba y `POSHeader` no tenía botón para abrirlos. Es
- * decir: el componente existía y pasaba su test, pero el usuario NO podía
- * llegar a él (la lección de F4.5, repetida). Esta compuerta cierra ese hueco:
- * prueba la INTEGRACIÓN, no la unidad.
+ * POR QUÉ EXISTE ESTA COMPUERTA (18ª instancia de §10.6):
+ * `recuperarCuentaAlCarrito` (F12.5) adoptaba la identidad de la cuenta
+ * (`setTicketId`) y cerraba el pizarrón, pero NUNCA hidrataba el carrito. El
+ * usuario recuperaba una cuenta y veía el carrito VACÍO. La causa raíz era un
+ * hueco A-02: NINGÚN contrato devolvía las líneas (el contrato 21 es
+ * deliberadamente ligero — Regla 15: EXACTAMENTE 5 campos escalares, sin
+ * líneas). F12.10 cierra ese hueco con el contrato 30 (`pos.leer_lineas`,
+ * `GET /pos/tickets/{id}/items`) y cablea la hidratación end-to-end. Esta
+ * compuerta prueba la INTEGRACIÓN (¿la pantalla hidrata el carrito?), no la
+ * unidad (ya cubierta por `test_f12_10_leer_lineas.py` en el backend).
  *
  * Se ejecuta con Vitest (jsdom): `npm run test` en apps/pos.
  */
@@ -48,9 +50,7 @@ const apiSimulada = vi.hoisted(() => ({
   listarCuentasAbiertas: vi.fn(),
   // Contrato 21 — versión fresca de una cuenta (5 campos escalares, sin líneas).
   leerTicket: vi.fn(),
-  // Contrato 30 — las LÍNEAS de un ticket (F12.10). Recuperar una cuenta
-  // hidrata el carrito con estas líneas; sin este mock, `api.leerLineas` no
-  // existe y el handler falla antes de cerrar el pizarrón.
+  // Contrato 30 — las LÍNEAS de un ticket (F12.10). Cierra el hueco A-02.
   leerLineas: vi.fn(),
 }));
 
@@ -60,11 +60,10 @@ vi.mock('./api/client.js', () => apiSimulada);
 // POR QUÉ: `openAccountsService` hace `import * as cliente from '../api/client.js'`
 // y llama `cliente.listarCuentasAbiertas(id)`. Al simular el cliente con un
 // objeto plano, la interop ESM/CJS de Vitest no garantiza que el namespace
-// `cliente` exponga la función (el error real fue
-// `cuentasAbiertas.listarCuentasAbiertas is not a function`). Simular el
-// SERVICIO con la MISMA forma `{ outcome, reason, data }` que produce el real
-// aísla la compuerta de INTEGRACIÓN (¿la pantalla monta y cablea el pizarrón?)
-// de la unidad del servicio (ya cubierta por `openAccountsService.f5_1.test.jsx`).
+// `cliente` exponga la función. Simular el SERVICIO con la MISMA forma
+// `{ outcome, reason, data }` que produce el real aísla la compuerta de
+// INTEGRACIÓN de la unidad del servicio (ya cubierta por
+// `openAccountsService.f5_1.test.jsx`).
 vi.mock('./services/openAccountsService.js', () => ({
   listarCuentasAbiertas: vi.fn(async (terminalId) => {
     const id = typeof terminalId === 'string' ? terminalId.trim() : '';
@@ -140,6 +139,33 @@ const CUENTA_2 = {
   version: 1,
 };
 
+// Contrato 30 — las LÍNEAS de la cuenta-1 (F12.10). Dos líneas: una concha y
+// un café. El total (45.5) coincide con el de la cuenta para que la hidratación
+// sea coherente.
+const LINEAS_CUENTA_1 = {
+  ticket_id: 'cuenta-1',
+  version: 3,
+  total: 45.5,
+  lineas: [
+    {
+      item_id: 'item-1',
+      product_id: 'prod-A',
+      name: 'Concha de Vainilla',
+      quantity: 1,
+      unit_price: 18.5,
+      subtotal: 18.5,
+    },
+    {
+      item_id: 'item-2',
+      product_id: 'prod-B',
+      name: 'Café Americano',
+      quantity: 2,
+      unit_price: 13.5,
+      subtotal: 27.0,
+    },
+  ],
+};
+
 /** Configura el cliente simulado con respuestas felices por defecto. */
 function sembrarApiFeliz() {
   apiSimulada.getCatalogo.mockResolvedValue({
@@ -182,23 +208,8 @@ function sembrarApiFeliz() {
   });
   // Contrato 21 — recuperar devuelve la versión fresca (5 campos, sin líneas).
   apiSimulada.leerTicket.mockResolvedValue({ ...CUENTA_1 });
-  // Contrato 30 — recuperar hidrata el carrito con las líneas (F12.10). La
-  // cuenta-1 se recupera con una línea; el resto de cuentas, sin líneas.
-  apiSimulada.leerLineas.mockResolvedValue({
-    ticket_id: 'cuenta-1',
-    version: 3,
-    total: 45.5,
-    lineas: [
-      {
-        item_id: 'item-1',
-        product_id: 'prod-A',
-        name: 'Concha de Vainilla',
-        quantity: 1,
-        unit_price: 18.5,
-        subtotal: 18.5,
-      },
-    ],
-  });
+  // Contrato 30 — las líneas de la cuenta-1 (F12.10).
+  apiSimulada.leerLineas.mockResolvedValue({ ...LINEAS_CUENTA_1 });
 }
 
 /** Espera a que el catálogo termine de cargar y aparezcan los productos. */
@@ -211,6 +222,16 @@ function botonPizarron() {
   return screen.getByLabelText('Pizarrón de cuentas abiertas');
 }
 
+/** Abre el pizarrón y recupera la PRIMERA cuenta (cuenta-1). */
+async function recuperarPrimeraCuenta() {
+  fireEvent.click(botonPizarron());
+  const dialogo = await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
+  await screen.findByTestId('folio-cuenta-1');
+  const postIts = within(dialogo).getAllByRole('button', { name: /Ver Cuenta/i });
+  fireEvent.click(postIts[0]);
+  return dialogo;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   sembrarApiFeliz();
@@ -221,79 +242,63 @@ afterEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Criterio 1 — El botón "Pizarrón" es ALCANZABLE desde el header.
+// Criterio 1 — Recuperar una cuenta llama al contrato 30 (`leerLineas`).
 // ─────────────────────────────────────────────────────────────────────────────
-describe('F12.5 · Criterio 1 — el botón "Pizarrón" es alcanzable', () => {
-  it('el header pinta el botón "Pizarrón" (antes era inalcanzable)', async () => {
+describe('F12.10 · Criterio 1 — recuperar llama al contrato 30', () => {
+  it('recuperar una cuenta pide sus líneas por el contrato 30', async () => {
     render(<RetailVisionPOS />);
     await esperarCatalogo();
 
-    expect(botonPizarron()).toBeTruthy();
-  });
+    await recuperarPrimeraCuenta();
 
-  it('el botón "Pizarrón" respeta el objetivo táctil mínimo (R-04)', async () => {
-    render(<RetailVisionPOS />);
-    await esperarCatalogo();
-
-    expect(botonPizarron().className).toMatch(/min-h-tactil/);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Criterio 2 — El botón ABRE el pizarrón y éste lista las cuentas (contrato 23).
-// ─────────────────────────────────────────────────────────────────────────────
-describe('F12.5 · Criterio 2 — el botón abre el pizarrón', () => {
-  it('tocar "Pizarrón" monta el diálogo "Cuentas abiertas"', async () => {
-    render(<RetailVisionPOS />);
-    await esperarCatalogo();
-
-    fireEvent.click(botonPizarron());
-
-    expect(
-      await screen.findByRole('dialog', { name: /Cuentas abiertas/i })
-    ).toBeTruthy();
-  });
-
-  it('el pizarrón lista las cuentas abiertas por el contrato 23', async () => {
-    render(<RetailVisionPOS />);
-    await esperarCatalogo();
-
-    fireEvent.click(botonPizarron());
-    await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
-
-    // Las dos cuentas sembradas aparecen en el corcho. El folio se muestra
-    // CORTO (`#` + últimos 3 dígitos), como en el viejo POS.
-    expect(await screen.findByTestId('folio-cuenta-1')).toBeTruthy();
-    expect(await screen.findByTestId('folio-cuenta-2')).toBeTruthy();
-    expect(screen.getByTestId('folio-cuenta-1').textContent).toBe('#001');
-    expect(screen.getByTestId('folio-cuenta-2').textContent).toBe('#002');
-    expect(apiSimulada.listarCuentasAbiertas).toHaveBeenCalled();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Criterio 3 — Recuperar una cuenta adopta su identidad y cierra el pizarrón.
-// ─────────────────────────────────────────────────────────────────────────────
-describe('F12.5 · Criterio 3 — recuperar una cuenta', () => {
-  it('recuperar llama al contrato 21 y cierra el pizarrón', async () => {
-    render(<RetailVisionPOS />);
-    await esperarCatalogo();
-
-    fireEvent.click(botonPizarron());
-    const dialogo = await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
-    await screen.findByTestId('folio-cuenta-1');
-
-    // El post-it entero es el elemento clickeable (role="button"): el primero
-    // corresponde a la primera tarjeta (cuenta-1).
-    const postIts = within(dialogo).getAllByRole('button', { name: /Ver Cuenta/i });
-    fireEvent.click(postIts[0]);
-
-    // El pizarrón pide la versión FRESCA por el contrato 21.
+    // El handler pide las LÍNEAS de la cuenta recuperada (contrato 30).
     await waitFor(() => {
-      expect(apiSimulada.leerTicket).toHaveBeenCalledWith('cuenta-1');
+      expect(apiSimulada.leerLineas).toHaveBeenCalledWith('cuenta-1');
     });
+  });
+});
 
-    // Y el pizarrón se cierra (el diálogo desaparece).
+// ─────────────────────────────────────────────────────────────────────────────
+// Criterio 2 — Las líneas del contrato 30 HIDRATAN el carrito.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('F12.10 · Criterio 2 — las líneas hidratan el carrito', () => {
+  it('las líneas recuperadas aparecen en el carrito (SalesReceipt)', async () => {
+    render(<RetailVisionPOS />);
+    await esperarCatalogo();
+
+    await recuperarPrimeraCuenta();
+
+    // Las dos líneas de la cuenta-1 aparecen en el carrito. El nombre del
+    // producto recuperado ("Café Americano") NO está en el catálogo sembrado,
+    // así que su presencia prueba que vino del contrato 30, no del catálogo.
+    expect(await screen.findByText('Café Americano')).toBeTruthy();
+    // "Concha de Vainilla" está en el catálogo Y en el carrito: se acota la
+    // búsqueda a que exista al menos una coincidencia (el carrito la pinta).
+    expect(screen.getAllByText('Concha de Vainilla').length).toBeGreaterThan(0);
+  });
+
+  it('el carrito refleja el total de las líneas recuperadas', async () => {
+    render(<RetailVisionPOS />);
+    await esperarCatalogo();
+
+    await recuperarPrimeraCuenta();
+
+    // El total del carrito (45.5) se pinta formateado. Se busca el valor
+    // formateado en es-MX ("45.50").
+    expect(await screen.findByText(/45\.50/)).toBeTruthy();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Criterio 3 — Recuperar cierra el pizarrón tras hidratar.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('F12.10 · Criterio 3 — recuperar cierra el pizarrón', () => {
+  it('tras hidratar, el pizarrón se cierra', async () => {
+    render(<RetailVisionPOS />);
+    await esperarCatalogo();
+
+    await recuperarPrimeraCuenta();
+
     await waitFor(() => {
       expect(
         screen.queryByRole('dialog', { name: /Cuentas abiertas/i })
@@ -303,51 +308,21 @@ describe('F12.5 · Criterio 3 — recuperar una cuenta', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Criterio 4 — "Cerrar" cierra el pizarrón SIN recuperar.
+// Criterio 4 — Un fallo del contrato 30 NO tumba el POS.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('F12.5 · Criterio 4 — cerrar sin recuperar', () => {
-  it('"Cerrar" cierra el pizarrón y NO llama al contrato 21', async () => {
-    render(<RetailVisionPOS />);
-    await esperarCatalogo();
-
-    fireEvent.click(botonPizarron());
-    const dialogo = await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
-
-    // El botón "Cerrar" del pizarrón se busca ACOTADO al diálogo: el POS tiene
-    // sus propios botones "Cerrar" (p. ej. el de la sesión de caja).
-    fireEvent.click(within(dialogo).getByRole('button', { name: /^Cerrar$/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('dialog', { name: /Cuentas abiertas/i })
-      ).toBeNull();
-    });
-    expect(apiSimulada.leerTicket).not.toHaveBeenCalled();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Criterio 5 — Un fallo del pizarrón NO tumba el POS.
-// ─────────────────────────────────────────────────────────────────────────────
-describe('F12.5 · Criterio 5 — un fallo del pizarrón no tumba el POS', () => {
-  it('si el contrato 23 falla, el pizarrón muestra error y el POS sigue vivo', async () => {
-    apiSimulada.listarCuentasAbiertas.mockRejectedValue(new Error('red caída'));
+describe('F12.10 · Criterio 4 — un fallo del contrato 30 no tumba el POS', () => {
+  it('si el contrato 30 falla, el POS sigue vivo y avisa por banner', async () => {
+    apiSimulada.leerLineas.mockRejectedValue(new Error('red caída'));
 
     render(<RetailVisionPOS />);
     await esperarCatalogo();
 
-    fireEvent.click(botonPizarron());
+    await recuperarPrimeraCuenta();
 
-    // El pizarrón se abre y muestra un error persistente (Regla 19).
-    // NOTA: el POS también pinta su propio banner de "sin conexión" (role=alert),
-    // así que NO se usa `findByRole('alert')` (habría varios). Se busca el texto
-    // del error del pizarrón, que es el que prueba ESTA compuerta.
-    expect(
-      await screen.findByRole('dialog', { name: /Cuentas abiertas/i })
-    ).toBeTruthy();
-    expect(await screen.findByText(/red caída/i)).toBeTruthy();
-
-    // Y el POS sigue vivo: el catálogo sigue pintado.
+    // El POS sigue vivo: el catálogo sigue pintado.
     expect(screen.getByText('Concha de Vainilla')).toBeTruthy();
+
+    // Y avisa del fallo por banner (el handler pinta un banner de error).
+    expect(await screen.findByText(/No se pudo recuperar la cuenta/i)).toBeTruthy();
   });
 });
