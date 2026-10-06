@@ -1,4 +1,4 @@
-"""Registro de los 29 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario) + FASE 12.9.1 (Creación de ticket).
+"""Registro de los 30 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario) + FASE 12.9.1 (Creación de ticket).
 
 Cada contrato se declara aquí con su firma completa (entrada/salida) y su
 proveedor. El registro es la fuente única de verdad: el test de la puerta F2
@@ -856,5 +856,5 @@ CONTRATOS: tuple[Contrato, ...] = (
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 29 contratos del registro."""
+    """Devuelve los 30 contratos del registro."""
     return CONTRATOS
