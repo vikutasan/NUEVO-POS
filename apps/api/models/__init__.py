@@ -14,6 +14,7 @@ paquete, y las FK necesitan que las tablas referenciadas ya estén declaradas.
 
 from __future__ import annotations
 
+from .audit import PosAuditLog
 from .cash import CashMovement, CashSession
 from .catalog import Category, Product, ProductTechnicalSheet
 from .heladeria import HeladeriaProductConfig, TicketItemComponent
@@ -54,4 +55,6 @@ __all__ = [
     # Heladería
     "HeladeriaProductConfig",
     "TicketItemComponent",
+    # Auditoría (FASE 13.0 — RN-75/76/77)
+    "PosAuditLog",
 ]

@@ -25,6 +25,11 @@ Puerta de salida (§6.3):
 
 from __future__ import annotations
 
+from .audit import (
+    AsientoAuditoria,
+    LogDeAuditoria,
+    SinTerminalEnAuditoria,
+)
 from .guardians import (
     GUARDIANES_CRITICOS,
     Guardia,
@@ -60,4 +65,8 @@ __all__ = [
     "folio_no_es_identidad",
     "identidad_es_uuid",
     "separar_identidad_de_folio",
+    # FASE 13.0 — Log de auditoría (RN-75/76/77)
+    "AsientoAuditoria",
+    "LogDeAuditoria",
+    "SinTerminalEnAuditoria",
 ]
