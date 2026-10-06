@@ -4,6 +4,7 @@
 > **Fase:** 12 — Portar funcionalidades del POS viejo al POS nuevo
 > **Estado:** ✅ CERRADA — gate backend 9/9 en verde, gate componente 5/5 en verde, CI completo en verde, guards 7/7 en verde
 > **Fecha:** 2026-10-06
+> **Commit:** `2df05f4` — F12.10: recuperar una cuenta hidrata el carrito (contrato 30 pos.leer_lineas)
 > **Plan rector:** §6.8 (UX heredada) + §10.6 (lecciones por clase de fallo) + A-02 (frontera por contratos)
 
 ---
