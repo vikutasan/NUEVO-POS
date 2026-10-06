@@ -24,6 +24,37 @@ import { withRetries } from '../utils/withRetries.js';
 import { buildResetPatch, aplicarReset } from '../state/sessionReset.js';
 
 /**
+ * F12.12 — ¿Es un error de NEGOCIO (no de red)?
+ *
+ * REGLA 18 (v7.0.2): el checkout debe reintentar errores de RED, pero NUNCA
+ * errores de lógica de negocio. Reintentar un 409 (conflicto de versión) o un
+ * "ya ha sido pagado" es inútil y peligroso: el auto-heal / la condición
+ * terminal ya los manejan.
+ *
+ * El `ApiError` del cliente expone el código HTTP en `.codigo` (0 = red caída).
+ * Un 409 es SIEMPRE de negocio (RN-25/RN-26). Un 400 con "ya ha sido pagado"
+ * (RN-23) también es terminal.
+ *
+ * @param {Error & {codigo?: number}} err
+ * @returns {boolean}
+ */
+export function esErrorDeNegocio(err) {
+  if (!err) return false;
+  if (err.codigo === 409) return true;
+  const mensaje = String(err.message || '').toLowerCase();
+  return mensaje.includes('ya ha sido pagado') || mensaje.includes('conflicto de versión');
+}
+
+/**
+ * F12.12 — ¿Es un conflicto de versión (409)?
+ * @param {Error & {codigo?: number}} err
+ * @returns {boolean}
+ */
+export function esConflictoDeVersion(err) {
+  return Boolean(err) && err.codigo === 409;
+}
+
+/**
  * @param {object} [opciones]
  * @param {object} [opciones.api] - cliente con `crearVenta` y `cobrarTicket`.
  * @param {string} [opciones.terminalId]
@@ -93,16 +124,19 @@ export function useTicketActions(opciones = {}) {
     setEnviando(true);
     try {
       const resultado = await aOutcome(() =>
-        withRetries(() =>
-          cliente.crearVenta({
-            terminal_id: terminalRef.current,
-            channel: channelRef.current,
-            items,
-            // Solo se adjunta el bloque si trae campos (no se mandan `{}`).
-            ...(bloquePedido && Object.keys(bloquePedido).length > 0
-              ? bloquePedido
-              : {}),
-          })
+        withRetries(
+          () =>
+            cliente.crearVenta({
+              terminal_id: terminalRef.current,
+              channel: channelRef.current,
+              items,
+              // Solo se adjunta el bloque si trae campos (no se mandan `{}`).
+              ...(bloquePedido && Object.keys(bloquePedido).length > 0
+                ? bloquePedido
+                : {}),
+            }),
+          // F12.12 / REGLA 18: no reintentar errores de negocio (409, ya pagado).
+          { debeReintentar: (err) => !esErrorDeNegocio(err) }
         )
       );
 
@@ -137,12 +171,22 @@ export function useTicketActions(opciones = {}) {
     enviandoRef.current = true;
     setEnviando(true);
     try {
+      // F12.12 / REGLA 18: se captura el error crudo para distinguir un 409
+      // (conflicto de versión) de un fallo de red. Un 409 NO se reintenta.
+      let errorCrudo = null;
       const resultado = await aOutcome(() =>
-        withRetries(() =>
-          cliente.cobrarTicket(actual.id, {
-            payment_details: paymentDetails,
-            version: actual.version,
-          })
+        withRetries(
+          () =>
+            cliente.cobrarTicket(actual.id, {
+              payment_details: paymentDetails,
+              version: actual.version,
+            }),
+          {
+            debeReintentar: (err) => {
+              errorCrudo = err;
+              return !esErrorDeNegocio(err);
+            },
+          }
         )
       );
 
@@ -150,6 +194,19 @@ export function useTicketActions(opciones = {}) {
         setTicket(resultado.data);
         ticketRef.current = resultado.data;
         if (typeof alCobrarRef.current === 'function') alCobrarRef.current(resultado.data);
+      } else if (esConflictoDeVersion(errorCrudo)) {
+        // F12.12 — Auto-heal: el ticket sigue siendo VÁLIDO, solo está
+        // desactualizado (otro vendedor lo modificó). NO se limpian los refs:
+        // la pantalla descargará la versión fresca y re-hidratará el carrito
+        // (REGLA 9). Se devuelve un `reason` distinguible para que la pantalla
+        // dispare el auto-heal en vez de mostrar un error genérico.
+        const r = {
+          outcome: 'error',
+          reason: 'version_conflict',
+          data: { ticket_id: actual.id },
+        };
+        setUltimoOutcome(r);
+        return r;
       } else {
         // Simetría: el fallo limpia los MISMOS refs que el éxito.
         limpiarRefs();

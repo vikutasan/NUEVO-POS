@@ -649,6 +649,35 @@ export default function RetailVisionPOS({
       }
 
       const pagado = await acciones.cobrar(paymentDetails);
+
+      // F12.12 — AUTO-HEAL de conflicto de versión (409).
+      // Otro vendedor modificó la cuenta entre que se abrió el checkout y se
+      // cobró. En vez de mostrar un error críptico, se descarga la versión
+      // fresca del servidor y se re-hidrata el carrito (REGLA 9: `hidratarLineas`
+      // sincroniza los refs ANTES de `setState`). El ticket sigue siendo VÁLIDO:
+      // solo estaba desactualizado. Se reabre el checkout para reintentar.
+      if (pagado.reason === 'version_conflict') {
+        const fresco = await aOutcome(() => api.leerLineas(ticketIdRef.current));
+        if (esOk(fresco)) {
+          const datos = fresco.data || {};
+          carrito.hidratarLineas(
+            Array.isArray(datos.lineas) ? datos.lineas : [],
+            datos.version,
+          );
+          setBanner({
+            tipo: 'aviso',
+            mensaje:
+              '⚠️ ¡Atención! Otro vendedor modificó esta cuenta. Totales actualizados.',
+          });
+          setCheckoutAbierto(true);
+        } else {
+          setError(
+            'Otro vendedor modificó esta cuenta y no se pudo descargar la versión fresca. Reintenta.',
+          );
+        }
+        return;
+      }
+
       if (pagado.outcome !== 'ok') {
         setError(pagado.reason || 'Error al cobrar el ticket');
         return;
