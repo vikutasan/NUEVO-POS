@@ -321,6 +321,66 @@ async def test_verificacion_post_envio(entorno):
         await _limpiar(entorno)
 
 
+@pytest.mark.asyncio
+async def test_verificacion_cuenta_recuperada_del_pizarron(entorno):
+    """F12.18 — Recuperar una cuenta del pizarrón y enviarla NO debe fallar.
+
+    Bug runtime: al recuperar una cuenta, `leer_lineas` (contrato 30) devuelve
+    las líneas con `item_id = str(product_id)` (ver `_lineas_atomicas`), NO la
+    intención original del contrato 18. Esos `item_id` NUNCA estuvieron en el
+    ledger `payment_details["_item_ids"]`, así que `verificar_envio` marcaba
+    TODA la cuenta como `faltantes` → modal "hay productos sin guardar".
+
+    Este test reproduce el escenario: un ticket con líneas REALES en
+    `ticket_items` pero SIN ledger (como una cuenta creada por otra vía o por
+    una sesión anterior). La verificación con `item_id = str(product_id)` debe
+    reportar el ítem como persistido (rama (b) del fix).
+    """
+    await _limpiar(entorno)
+    p1, _ = await _sembrar(entorno)
+    try:
+        async with _cliente() as cliente:
+            # Ticket con una línea REAL (contrato 3 con items). Esta vía NO
+            # escribe el ledger `_item_ids` (solo lo hace `anadir_item`).
+            res_ticket = await cliente.post(
+                "/pos/tickets",
+                json={
+                    "terminal_id": TERMINAL_ID,
+                    "channel": "PANADERIA",
+                    "items": [{"product_id": str(p1), "quantity": 2}],
+                },
+            )
+            assert res_ticket.status_code == 201, res_ticket.text
+            ticket_id = res_ticket.json()["id"]
+
+            # `leer_lineas` (contrato 30) devuelve `item_id = str(product_id)`.
+            res_lineas = await cliente.get(f"/pos/tickets/{ticket_id}/items")
+            assert res_lineas.status_code == 200, res_lineas.text
+            lineas = res_lineas.json()["lineas"]
+            assert len(lineas) == 1, lineas
+            item_id_recuperado = lineas[0]["item_id"]
+            assert item_id_recuperado == str(p1), (
+                "El contrato 30 debe devolver item_id = str(product_id)"
+            )
+
+            # El operador envía la cuenta recuperada: verifica con esos item_id.
+            res = await cliente.post(
+                f"/pos/tickets/{ticket_id}/verify",
+                json={"item_ids": [item_id_recuperado]},
+            )
+            assert res.status_code == 200, res.text
+            cuerpo = res.json()
+
+            assert cuerpo["existe"] is True
+            assert cuerpo["faltantes"] == [], (
+                "Una cuenta recuperada del pizarrón NO debe reportar faltantes "
+                f"(bug F12.18). Respuesta: {cuerpo}"
+            )
+            assert item_id_recuperado in cuerpo["item_ids_persistidos"]
+    finally:
+        await _limpiar(entorno)
+
+
 # ---------------------------------------------------------------------------
 # Criterio 6 — Anti-degradación (RN-37)
 # ---------------------------------------------------------------------------

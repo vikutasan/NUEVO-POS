@@ -665,13 +665,33 @@ async def verificar_envio(
     `product_id` (como se hacía antes) marcaba TODOS los ítems como faltantes
     y bloqueaba el envío de la cuenta al pizarrón. La verificación correcta es
     contra ese ledger.
+
+    F12.18 — El ledger SOLO cubre los ítems añadidos en ESTA sesión. Cuando el
+    operador RECUPERA una cuenta del pizarrón, `leer_lineas` (contrato 30)
+    devuelve las líneas con `item_id = str(product_id)` (ver `_lineas_atomicas`),
+    NO la intención original. Esos `item_id` NUNCA estuvieron en el ledger, así
+    que comparar solo contra `_item_ids` marcaba TODA la cuenta recuperada como
+    `faltantes` y disparaba el modal "hay productos sin guardar en el servidor".
+
+    La verificación correcta es DOBLE: un `item_id` está persistido si
+    (a) está en el ledger de idempotencia (ítems añadidos en esta sesión), O
+    (b) coincide con el `product_id` de una línea REAL en `ticket_items`
+    (ítems recuperados del pizarrón). Ambas son pruebas de que la línea existe
+    en la BD; ninguna escribe.
     """
     ticket = await _ticket_con_items_o_404(db, ticket_id)
 
     detalles = dict(ticket.payment_details or {})
-    persistidos = {str(i) for i in detalles.get("_item_ids", [])}
-    item_ids_persistidos = [i for i in entrada.item_ids if i in persistidos]
-    faltantes = [i for i in entrada.item_ids if i not in persistidos]
+    ledger = {str(i) for i in detalles.get("_item_ids", [])}
+    # (b) F12.18 — `product_id` de las líneas REALES del ticket. `leer_lineas`
+    # devuelve `item_id = str(product_id)` para las cuentas recuperadas.
+    product_ids_reales = {str(item.product_id) for item in ticket.items}
+
+    def _persistido(item_id: str) -> bool:
+        return item_id in ledger or item_id in product_ids_reales
+
+    item_ids_persistidos = [i for i in entrada.item_ids if _persistido(i)]
+    faltantes = [i for i in entrada.item_ids if not _persistido(i)]
 
     return VerificarEnvioSalida(
         existe=True,
