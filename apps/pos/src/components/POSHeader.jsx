@@ -271,16 +271,21 @@ export default function POSHeader({
           </div>
         </button>
 
-        {/* CAJA — gestor de caja (F4.5.1) */}
+        {/* CAJA — gestor de caja (F4.5.1).
+            F12.8 — El estado "● Activa / ○ Habilitar" refleja el TURNO DE CAJA
+            REAL (`turnoCaja`), no la visibilidad del overlay (`cajaAbierta`).
+            Antes, abrir el gestor pintaba "● Activa" aunque no hubiera turno
+            abierto: dos fuentes de verdad para el mismo concepto. El viejo POS
+            usaba una sola (`isCashEnabled`); aquí se unifica en `turnoCaja`. */}
         <button
           type="button"
           onClick={() => onAbrirCaja?.()}
           className={`min-h-tactil border rounded-xl px-3 md:px-5 py-2 flex items-center transition-all shadow-xl ${
-            cajaAbierta
+            turnoCaja
               ? 'bg-fondo-profundo border-acento/40 hover:bg-acento/20 hover:border-acento'
               : 'bg-fondo-profundo border-acento/40 hover:bg-acento/20 hover:border-acento'
           }`}
-          title={cajaAbierta ? 'Gestionar Caja (Activa)' : 'Habilitar como Caja'}
+          title={turnoCaja ? 'Gestionar Caja (Activa)' : 'Habilitar como Caja'}
           aria-label="Gestor de caja"
         >
           <div className="text-left">
@@ -288,9 +293,9 @@ export default function POSHeader({
               Caja
             </p>
             <p className={`text-xs md:text-[14px] font-black uppercase tracking-tighter leading-none ${
-              cajaAbierta ? 'text-acento' : 'text-acento/60'
+              turnoCaja ? 'text-acento' : 'text-acento/60'
             }`}>
-              {cajaAbierta ? '● Activa' : '○ Habilitar'}
+              {turnoCaja ? '● Activa' : '○ Habilitar'}
             </p>
           </div>
         </button>

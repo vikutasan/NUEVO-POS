@@ -137,8 +137,16 @@ function botonProducto() {
   });
 }
 
-/** Agrega el producto al carrito y abre el modal de pago, sin confirmar. */
-async function agregarYAbrirPago() {
+/**
+ * Agrega el producto al carrito y abre el modal de pago, sin confirmar.
+ *
+ * F12.8 — El botón "ENVIAR CUENTA" está gateado por la caja habilitada
+ * (§6.8, paridad de operación con el viejo POS). Por eso este helper SOLO
+ * puede abrir el modal cuando hay turno de caja abierto (`conCaja: true`).
+ * Sin caja, el botón está deshabilitado y el modal es inalcanzable: ese es
+ * precisamente el comportamiento corregido que verifica F4.5.3.
+ */
+async function agregarYAbrirPago({ conCaja = false } = {}) {
   fireEvent.click(botonProducto());
   await waitFor(() => {
     expect(apiSimulada.crearVenta).toHaveBeenCalled();
@@ -147,8 +155,13 @@ async function agregarYAbrirPago() {
     name: /ENVIAR CUENTA/i,
   });
   await waitFor(() => {
-    expect(enviarCuenta.disabled).toBe(false);
+    expect(enviarCuenta.disabled).toBe(!conCaja);
   });
+  if (!conCaja) {
+    // Sin caja habilitada no se puede abrir el modal: se devuelve el botón
+    // bloqueado para que el test verifique el gate.
+    return enviarCuenta;
+  }
   fireEvent.click(enviarCuenta);
   // El modal arranca en EFECTIVO; se elige "Tarjeta" para habilitar el botón
   // "CONFIRMAR PAGO" sin capturar efectivo.
@@ -189,36 +202,34 @@ describe('F4.5 — Montaje del Gestor de Caja', () => {
     expect(dialogo).toBeTruthy();
   });
 
-  it('F4.5.3 — sin turno abierto, el cobro NO se dispara y avisa (RN-49)', async () => {
+  it('F4.5.3 — sin turno abierto, el botón de cobro está BLOQUEADO (F12.8)', async () => {
     // `getSesionCajaActiva` ya devuelve `null` por defecto: no hay turno.
+    // F12.8 — Paridad de operación (§6.8): sin caja habilitada, el botón
+    // "ENVIAR CUENTA" está deshabilitado y el modal de pago es inalcanzable.
+    // El usuario NO puede ni siquiera intentar cobrar. La guarda RN-49 sigue
+    // existiendo como defensa en profundidad (probada en SalesReceipt.f12_8).
     render(<RetailVisionPOS />);
     await esperarCatalogo();
-    const confirmar = await agregarYAbrirPago();
-    fireEvent.click(confirmar);
-    // El aviso proactivo aparece…
-    expect(
-      await screen.findByText(/Abre la caja antes de cobrar/i)
-    ).toBeTruthy();
-    // …y el cobro NUNCA llegó al backend.
+    const enviarCuenta = await agregarYAbrirPago({ conCaja: false });
+    expect(enviarCuenta.disabled).toBe(true);
+    // El cobro NUNCA llegó al backend.
     expect(apiSimulada.cobrarTicket).not.toHaveBeenCalled();
   });
 
-  it('F4.5.3 — el aviso ofrece abrir el gestor en un clic', async () => {
+  it('F4.5.3 — sin turno abierto, el rótulo guía a habilitar la caja (F12.8)', async () => {
     render(<RetailVisionPOS />);
     await esperarCatalogo();
-    const confirmar = await agregarYAbrirPago();
-    fireEvent.click(confirmar);
-    const abrir = await screen.findByRole('button', { name: /^Abrir caja$/i });
-    fireEvent.click(abrir);
-    // Se abre el gestor y el aviso se cierra.
-    expect(
-      await screen.findByRole('dialog', { name: /Gestor de caja/i })
-    ).toBeTruthy();
-    expect(screen.queryByText(/Abre la caja antes de cobrar/i)).toBeNull();
+    await agregarYAbrirPago({ conCaja: false });
+    // El rótulo del footer cambia a "Caja no habilitada" y el title guía.
+    expect(screen.getByText('Caja no habilitada')).toBeTruthy();
+    const enviarCuenta = screen.getByRole('button', { name: /ENVIAR CUENTA/i });
+    expect(enviarCuenta.getAttribute('title')).toBe(
+      'Presione "🏦 CAJA" para habilitar el cobro',
+    );
   });
 
   it('F4.5.3 — con turno abierto, el cobro SÍ se dispara', async () => {
-    // Ahora sí hay turno: la guarda deja pasar el cobro.
+    // Ahora sí hay turno: el gate F12.8 deja pasar el cobro.
     apiSimulada.getSesionCajaActiva.mockResolvedValue(TURNO_ABIERTO);
     render(<RetailVisionPOS />);
     await esperarCatalogo();
@@ -226,7 +237,7 @@ describe('F4.5 — Montaje del Gestor de Caja', () => {
     await waitFor(() => {
       expect(apiSimulada.getSesionCajaActiva).toHaveBeenCalled();
     });
-    const confirmar = await agregarYAbrirPago();
+    const confirmar = await agregarYAbrirPago({ conCaja: true });
     fireEvent.click(confirmar);
     await waitFor(() => {
       expect(apiSimulada.cobrarTicket).toHaveBeenCalled();

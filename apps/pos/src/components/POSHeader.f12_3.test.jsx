@@ -20,6 +20,16 @@
  *   5. El `title` describe la acción (Habilitar / Gestionar).
  *
  * §6.8 — la INTEGRACIÓN se hereda; solo la IMPLEMENTACIÓN se reescribe.
+ *
+ * F12.8 — CORRECCIÓN DE LA FUENTE DE VERDAD
+ * -----------------------------------------
+ * La versión original de esta compuerta afirmaba el estado con `cajaAbierta`
+ * (la VISIBILIDAD del overlay del gestor de caja). Eso era un error de
+ * traducción: el viejo POS usaba UNA sola fuente (`isCashEnabled`, el turno
+ * real). El nuevo POS tenía DOS (`cajaAbierta` para el rótulo, `turnoCaja`
+ * para los totales), y abrir el gestor pintaba "● Activa" aunque no hubiera
+ * turno abierto. F12.8 unifica la fuente de verdad en `turnoCaja` (el turno
+ * de caja REAL). Esta compuerta ahora afirma con `turnoCaja`.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -42,22 +52,30 @@ describe('F12.3 — el botón CAJA muestra su rótulo y su estado', () => {
   });
 
   it('sin turno abierto muestra "○ Habilitar"', () => {
-    montar({ cajaAbierta: false });
+    montar({ turnoCaja: null });
     expect(screen.getByText('○ Habilitar')).toBeTruthy();
   });
 
   it('con turno abierto muestra "● Activa"', () => {
-    montar({ cajaAbierta: true });
+    montar({ turnoCaja: { id: 'TURNO-1' } });
     expect(screen.getByText('● Activa')).toBeTruthy();
   });
 
-  it('el estado cambia al alternar cajaAbierta', () => {
-    const { rerender } = montar({ cajaAbierta: false });
+  it('el estado cambia al alternar turnoCaja', () => {
+    const { rerender } = montar({ turnoCaja: null });
     expect(screen.getByText('○ Habilitar')).toBeTruthy();
 
-    rerender(<POSHeader terminalId="TERM-01" cajaAbierta />);
+    rerender(<POSHeader terminalId="TERM-01" turnoCaja={{ id: 'TURNO-1' }} />);
     expect(screen.getByText('● Activa')).toBeTruthy();
     expect(screen.queryByText('○ Habilitar')).toBeNull();
+  });
+
+  it('F12.8: abrir el overlay (cajaAbierta) NO pinta "● Activa" sin turno real', () => {
+    // La visibilidad del gestor de caja no es el estado de la caja. Solo un
+    // turno REAL (`turnoCaja`) habilita el rótulo "● Activa".
+    montar({ cajaAbierta: true, turnoCaja: null });
+    expect(screen.getByText('○ Habilitar')).toBeTruthy();
+    expect(screen.queryByText('● Activa')).toBeNull();
   });
 
   it('ya NO usa el icono 💰 como única señal', () => {
@@ -75,10 +93,10 @@ describe('F12.3 — el botón CAJA sigue siendo el punto de entrada', () => {
   });
 
   it('el title describe la acción según el estado', () => {
-    const { rerender } = montar({ cajaAbierta: false });
+    const { rerender } = montar({ turnoCaja: null });
     expect(botonCaja().getAttribute('title')).toBe('Habilitar como Caja');
 
-    rerender(<POSHeader terminalId="TERM-01" cajaAbierta />);
+    rerender(<POSHeader terminalId="TERM-01" turnoCaja={{ id: 'TURNO-1' }} />);
     expect(botonCaja().getAttribute('title')).toBe('Gestionar Caja (Activa)');
   });
 

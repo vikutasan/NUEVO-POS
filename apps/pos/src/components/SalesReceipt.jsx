@@ -40,9 +40,18 @@ export default function SalesReceipt({
   cobrando,
   terminalId,
   banner,
+  // F12.8 — Paridad de operación con el viejo POS (§6.8): el cobro SOLO se
+  // habilita cuando la terminal está habilitada como caja (turno abierto).
+  // Sin caja, el único camino válido es enviar la cuenta al pizarrón. El viejo
+  // POS deshabilitaba el botón con `cashEnabled`; aquí se replica con
+  // `cajaHabilitada`. El backend sigue siendo la autoridad final (RN-49).
+  cajaHabilitada = false,
 }) {
   const total = calcularTotal(lineas);
   const vacio = lineas.length === 0;
+  // El botón COBRAR se bloquea si el ticket está vacío, si ya se está cobrando
+  // o si la caja NO está habilitada (F12.8).
+  const cobroBloqueado = vacio || cobrando || !cajaHabilitada;
 
   return (
     <aside className="w-full max-w-[420px] flex flex-col bg-crema-ticket text-fondo-profundo shadow-2xl relative border-l border-fondo-profundo/10 overflow-visible transition-all duration-500 font-mono z-50">
@@ -145,20 +154,27 @@ export default function SalesReceipt({
         )}
       </div>
 
-      {/* Footer: Total + COBRAR */}
+      {/* Footer: Total + COBRAR (F12.8 — gate por caja habilitada) */}
       <footer className="px-6 py-4 border-t-2 border-dashed border-fondo-profundo/30 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase text-fondo-profundo/40 tracking-widest">Caja de Habilitada</span>
+            <span className="text-[9px] font-black uppercase text-fondo-profundo/40 tracking-widest">
+              {cajaHabilitada ? 'Total a Pagar' : 'Caja no habilitada'}
+            </span>
             <span className="text-xl font-black uppercase">COBRAR</span>
           </div>
           <span className="text-3xl font-black font-mono tracking-tight">{formatearPrecio(total)}</span>
         </div>
         <button
           type="button"
-          disabled={vacio || cobrando}
+          disabled={cobroBloqueado}
           onClick={onCobrar}
-          className="w-full min-h-[60px] rounded-canon35 bg-acento text-fondo-profundo font-black text-xl uppercase tracking-widest hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-xl active:scale-95"
+          title={!cajaHabilitada ? 'Presione "🏦 CAJA" para habilitar el cobro' : ''}
+          className={`w-full min-h-[60px] rounded-canon35 font-black text-xl uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+            cajaHabilitada
+              ? 'bg-acento text-fondo-profundo hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed'
+              : 'bg-fondo-profundo/15 text-fondo-profundo/40 cursor-not-allowed'
+          }`}
         >
           {cobrando ? '⏳ Cobrando…' : '💰 ENVIAR CUENTA'}
         </button>

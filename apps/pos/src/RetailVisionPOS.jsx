@@ -757,6 +757,9 @@ export default function RetailVisionPOS({
             cobrando={acciones.enviando}
             terminalId={terminalEfectiva}
             banner={banner}
+            // F12.8 — Paridad de operación (§6.8): el cobro solo se habilita con
+            // turno de caja abierto. Sin caja, el único camino es enviar al pizarrón.
+            cajaHabilitada={Boolean(turnoCaja)}
           />
         </div>
       </main>
@@ -788,6 +791,8 @@ export default function RetailVisionPOS({
               cobrando={acciones.enviando}
               terminalId={terminalEfectiva}
               banner={banner}
+              // F12.8 — Mismo gate que el panel lateral (paridad de operación).
+              cajaHabilitada={Boolean(turnoCaja)}
             />
             <button
               type="button"
