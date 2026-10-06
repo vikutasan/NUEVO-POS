@@ -170,6 +170,14 @@ se conserva intacta.
 4. **El síntoma (el modal) reaparece por causas distintas.** F12.17 y F12.18 producen el
    MISMO modal desde rutas diferentes. No basta con "el modal ya no sale en mi prueba":
    hay que recorrer TODAS las rutas que llegan a `clearCart`.
+5. **Un test verde + `inspect.getsource` NO prueban que el proceso EN EJECUCIÓN sirva el
+   fix.** El contenedor `nuevo_pos_api` monta `./apps/api:/app` como volumen, pero uvicorn
+   corre SIN `--reload`: editar el `.py` en disco NO afecta al proceso vivo. Peor aún,
+   `inspect.getsource()` lee el archivo en disco, así que muestra el fix aunque el proceso
+   sirva código viejo — una señal engañosa. Tras editar backend hay que ejecutar
+   `docker restart nuevo_pos_api` y verificar contra el endpoint VIVO (no contra el archivo).
+   Este fue el motivo real de "aún no se corrige": el fix ya estaba en disco y en git, pero
+   el proceso en memoria tenía el módulo anterior.
 
 ---
 
@@ -180,3 +188,8 @@ se conserva intacta.
 | `apps/api/routers/pos.py` | `verificar_envio` — prueba doble (ledger O `ticket_items`) |
 | `apps/api/tests/test_f3_atomico.py` | + `test_verificacion_cuenta_recuperada_del_pizarron` |
 | `docs/05-plan-de-construccion/FICHA_F12_18_VERIFY_CUENTA_RECUPERADA.md` | Esta ficha |
+
+> **⚠️ Operativo (obligatorio tras editar backend):** el contenedor `nuevo_pos_api` NO
+> recarga en caliente. Después de tocar cualquier `.py` hay que ejecutar
+> `docker restart nuevo_pos_api` y verificar contra el endpoint vivo. Sin este paso, el
+> proceso sigue sirviendo el módulo anterior aunque el archivo en disco ya tenga el fix.
