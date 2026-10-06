@@ -55,6 +55,41 @@ export function esConflictoDeVersion(err) {
 }
 
 /**
+ * F12.13 — Mutex de acciones de persistencia (REGLA 2).
+ *
+ * Cicatriz v7.0.3 (doble cobro): un doble clic en COBRAR podía disparar dos
+ * llamadas concurrentes a `cobrarTicket`. El viejo POS lo resolvía con un
+ * mutex de cadena de promesas que SERIALIZABA (la 2ª llamada esperaba a la
+ * 1ª). Eso evita el doble cobro, pero encola trabajo que el usuario ya no
+ * quiere: si el cajero hace doble clic, la 2ª intención es un error, no una
+ * petición legítima.
+ *
+ * El nuevo POS lo hace INFIEL a propósito: RECHAZA la 2ª llamada concurrente
+ * con `{ outcome: 'error', reason: 'accion_en_curso' }` en vez de encolarla.
+ * Es más seguro: nunca se emite un segundo `cobrarTicket` por accidente.
+ *
+ * El mutex es un `useRef` booleano (prohibición #3: los callbacks async leen
+ * refs, no estado cerrado). Se libera SIEMPRE en `finally`, de modo que un
+ * fallo no deja el candado pegado.
+ *
+ * @param {{current: boolean}} mutexRef
+ * @returns {boolean} `true` si se adquirió; `false` si ya había una acción en curso
+ */
+export function adquirirMutex(mutexRef) {
+  if (mutexRef.current) return false;
+  mutexRef.current = true;
+  return true;
+}
+
+/**
+ * F12.13 — Libera el mutex de acciones de persistencia.
+ * @param {{current: boolean}} mutexRef
+ */
+export function liberarMutex(mutexRef) {
+  mutexRef.current = false;
+}
+
+/**
  * @param {object} [opciones]
  * @param {object} [opciones.api] - cliente con `crearVenta` y `cobrarTicket`.
  * @param {string} [opciones.terminalId]
@@ -76,6 +111,9 @@ export function useTicketActions(opciones = {}) {
   const terminalRef = useRef(terminalId);
   const channelRef = useRef(channel);
   const alCobrarRef = useRef(alCobrar);
+  // F12.13 — Mutex de acciones de persistencia (REGLA 2). Rechaza la 2ª
+  // llamada concurrente en vez de encolarla (ver `adquirirMutex`).
+  const mutexRef = useRef(false);
 
   ticketRef.current = ticket;
   apiRef.current = api;
@@ -120,6 +158,14 @@ export function useTicketActions(opciones = {}) {
       return r;
     }
 
+    // F12.13 — Mutex (REGLA 2): rechazar la 2ª llamada concurrente. Un doble
+    // clic en "Enviar Cuenta" no debe crear dos tickets.
+    if (!adquirirMutex(mutexRef)) {
+      const r = { outcome: 'error', reason: 'accion_en_curso', data: null };
+      setUltimoOutcome(r);
+      return r;
+    }
+
     enviandoRef.current = true;
     setEnviando(true);
     try {
@@ -151,6 +197,8 @@ export function useTicketActions(opciones = {}) {
     } finally {
       enviandoRef.current = false;
       setEnviando(false);
+      // F12.13 — Liberar SIEMPRE el mutex (éxito, fallo o excepción).
+      liberarMutex(mutexRef);
     }
   }, [limpiarRefs]);
 
@@ -164,6 +212,14 @@ export function useTicketActions(opciones = {}) {
     const actual = ticketRef.current;
     if (!cliente || !actual) {
       const r = { outcome: 'error', reason: 'sin_ticket_o_api', data: null };
+      setUltimoOutcome(r);
+      return r;
+    }
+
+    // F12.13 — Mutex (REGLA 2): rechazar la 2ª llamada concurrente. Un doble
+    // clic en "CONFIRMAR PAGO" no debe cobrar dos veces (RN-23).
+    if (!adquirirMutex(mutexRef)) {
+      const r = { outcome: 'error', reason: 'accion_en_curso', data: null };
       setUltimoOutcome(r);
       return r;
     }
@@ -216,6 +272,8 @@ export function useTicketActions(opciones = {}) {
     } finally {
       enviandoRef.current = false;
       setEnviando(false);
+      // F12.13 — Liberar SIEMPRE el mutex (éxito, fallo o excepción).
+      liberarMutex(mutexRef);
     }
   }, [limpiarRefs]);
 

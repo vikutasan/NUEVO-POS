@@ -466,6 +466,10 @@ export default function RetailVisionPOS({
       if (ticketIdRef.current) return ticketIdRef.current;
 
       const creado = await acciones.crearTicket([], bloque);
+      // F12.13 — Mutex (REGLA 2): si ya hay una creación en curso (doble clic
+      // en un producto), NO es un error: se devuelve `null` y el llamador
+      // aborta en silencio. El primer clic creará el ticket.
+      if (creado.reason === 'accion_en_curso') return null;
       if (creado.outcome !== 'ok' || !creado.data?.id) {
         setError(creado.reason || 'No se pudo abrir el ticket');
         return null;
@@ -616,6 +620,10 @@ export default function RetailVisionPOS({
           quantity: l.quantity,
         }));
         const creado = await acciones.crearTicket(items);
+        // F12.13 — Mutex (REGLA 2): si ya hay una acción de persistencia en
+        // curso (doble clic), NO es un error: se ignora silenciosamente. El
+        // primer clic sigue su camino y resolverá el cobro.
+        if (creado.reason === 'accion_en_curso') return;
         if (creado.outcome !== 'ok' || !creado.data?.id) {
           setError(creado.reason || 'Error al crear el ticket');
           return;
@@ -649,6 +657,11 @@ export default function RetailVisionPOS({
       }
 
       const pagado = await acciones.cobrar(paymentDetails);
+
+      // F12.13 — Mutex (REGLA 2): si ya hay un cobro en curso (doble clic en
+      // CONFIRMAR PAGO), la 2ª llamada se rechaza. NO es un error: el primer
+      // cobro sigue su camino. Se ignora silenciosamente para no alarmar.
+      if (pagado.reason === 'accion_en_curso') return;
 
       // F12.12 — AUTO-HEAL de conflicto de versión (409).
       // Otro vendedor modificó la cuenta entre que se abrió el checkout y se
