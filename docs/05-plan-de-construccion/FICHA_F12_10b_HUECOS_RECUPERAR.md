@@ -4,7 +4,7 @@
 > **Fase:** 12 — Portar funcionalidades del POS viejo al POS nuevo
 > **Estado:** ✅ CERRADA — gate componente 4/4 en verde, CI completo en verde, guards 7/7 en verde
 > **Fecha:** 2026-10-06
-> **Commit:** _(pendiente)_ — F12.10b: cerrar los 3 huecos de `recuperarCuentaAlCarrito`
+> **Commit:** `725f404` — F12.10b: cerrar los 3 huecos de `recuperarCuentaAlCarrito`
 > **Plan rector:** §6.8 (UX heredada) + §10.6 (lecciones por clase de fallo) + A-02 (frontera por contratos)
 
 ---
