@@ -4,7 +4,7 @@
 > **Fase:** 12 — Portar funcionalidades del POS viejo al POS nuevo
 > **Estado:** ✅ CERRADA — **BUG CORREGIDO** (bloqueaba ENVIAR CUENTA con `items_no_persistidos`)
 > **Fecha:** 2026-10-06
-> **Commit:** `PENDIENTE` — F12.16: corregir verificación post-envío (comparar contra el ledger de idempotencia, no contra product_id)
+> **Commit:** `419074b` — F12.16: corregir verificación post-envío (comparar contra el ledger de idempotencia, no contra product_id)
 > **Plan rector:** REGLA DURA 2 ("verificar, no asumir") + contrato 18 (idempotencia por `item_id`) + contrato 22 (verificación post-envío) + §6.8
 
 ---
