@@ -3,6 +3,7 @@
 **Fase:** 12.9 (Rescate de UX del viejo POS — paridad de operación, corrección de F12.8)
 **Estado:** ✅ CERRADA
 **Fecha:** 6 Oct 2026
+**Commit:** `ce259b6` (push a `main`)
 **Compuertas:** `SalesReceipt.f12_8.test.jsx` (12) + `RetailVisionPOS.f4_5.test.jsx` (5) + `RetailVisionPOS.f12_5.test.jsx` (7) + `OpenAccountsCorkboard.f5_3.test.jsx` (8) + `OpenAccountsCorkboard.f12_6.test.jsx` (12) + `RetailVisionPOS.f8_6.test.jsx` (7) = **51/51 verde**
 **CI:** `npm run ci` → guards 7/7 limpios · Vitest **648/648 verde** (0 fallos) · pytest PASS
 
