@@ -34,6 +34,69 @@ Cualquier divergencia posterior del ERP es una decisión consciente, no un accid
 
 ---
 
+## Operación del stack (Docker)
+
+El POS nuevo corre en **Docker Compose** ([`docker-compose.yml`](docker-compose.yml:1)), con **dos
+contenedores** y una base de datos **SEPARADA** de la del ERP instalado.
+
+| Contenedor | Imagen | Puerto host | Rol |
+|---|---|---|---|
+| `nuevo_pos_api` | `python:3.12-slim` | `5101` | API del POS (uvicorn, `main:app`) |
+| `nuevo_pos_db` | `postgres:15` | `5432` | Base de datos del POS nuevo (`nuevo_pos`) |
+
+- **Credenciales de la BD:** usuario `pos`, contraseña `pos`, base `nuevo_pos`.
+- **`DATABASE_URL`:** `postgresql+asyncpg://pos:pos@db:5432/nuevo_pos`.
+- El código del API se monta como volumen (`./apps/api:/app`), pero **uvicorn corre SIN `--reload`**.
+
+### ⚠️ Regla operativa crítica: reiniciar el API tras editar backend
+
+El contenedor `nuevo_pos_api` **NO recarga en caliente**. Editar un `.py` en disco **no** afecta al
+proceso vivo. Después de tocar cualquier archivo del backend hay que ejecutar:
+
+```bash
+docker restart nuevo_pos_api
+```
+
+y verificar contra el **endpoint vivo** (no contra el archivo en disco). Un test verde o
+`inspect.getsource()` **no** prueban que el proceso en ejecución sirva el fix — `inspect.getsource()`
+lee el archivo en disco, así que puede mostrar el fix aunque el proceso sirva código viejo.
+Este fue el motivo real del bug F12.18 ("aún no se corrige"): el fix ya estaba en disco y en git,
+pero el proceso en memoria tenía el módulo anterior. Ver
+[`FICHA_F12_18_VERIFY_CUENTA_RECUPERADA.md`](docs/05-plan-de-construccion/FICHA_F12_18_VERIFY_CUENTA_RECUPERADA.md:158).
+
+### Comandos habituales
+
+```bash
+# Levantar el stack (API + BD)
+docker compose up -d
+
+# Migraciones
+docker compose run --rm api alembic upgrade head
+
+# Tests del backend
+docker compose run --rm api pytest -v
+
+# Reiniciar SOLO el API tras editar backend (obligatorio)
+docker restart nuevo_pos_api
+
+# Ver estado
+docker ps --filter "name=nuevo_pos"
+```
+
+### Convivencia con el ERP viejo (DOS bases separadas)
+
+El stack del POS nuevo es **independiente** del ERP instalado. En la misma máquina conviven:
+
+| Stack | Contenedor BD | Puerto host | Datos |
+|---|---|---|---|
+| **NUEVO-POS** | `nuevo_pos_db` | `5432` | `nuevo_pos` |
+| ERP viejo | `rderico-db-dev` | `5433` | ERP R de Rico |
+
+Son **mundos separados**: el POS nuevo no comparte base con el ERP (regla dura de arriba). Si un dato
+"no aparece", la primera pregunta es **en cuál de las dos bases** se está mirando.
+
+---
+
 ## Las 7 fases de construcción
 
 El orden es **de adentro hacia afuera**. Ninguna fase empieza sin que la **puerta** de la
