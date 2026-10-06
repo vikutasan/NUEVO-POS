@@ -54,6 +54,12 @@ export default function SalesReceipt({
   // F12.8 — El COBRO solo se habilita cuando la terminal está habilitada como
   // caja (turno abierto). El backend sigue siendo la autoridad final (RN-49).
   cajaHabilitada = false,
+  // F12.14 — REGLA 13: sin conexión, el botón ENVIAR CUENTA se bloquea. El viejo
+  // POS bloqueaba este botón con `hasUnsavedItems` (derivado de `lastSaveStatus`)
+  // y el título "Verifique la conexión WiFi". El nuevo POS ya expone la señal
+  // equivalente (`useNetworkHealth().botonBloqueado` = `!enLinea`); aquí se
+  // cablea al botón. Es la 23ª instancia de §10.6 (de adentro hacia afuera).
+  sinRed = false,
 }) {
   const total = calcularTotal(lineas);
   const vacio = lineas.length === 0;
@@ -62,7 +68,8 @@ export default function SalesReceipt({
   const cobroBloqueado = vacio || cobrando || !cajaHabilitada;
   // F12.9 — El botón ENVIAR CUENTA NO depende de la caja: solo exige que haya
   // líneas y que no haya un envío en curso. Es el camino válido sin caja.
-  const envioBloqueado = vacio || enviandoCuenta;
+  // F12.14 — REGLA 13: además se bloquea si NO hay red (no se puede persistir).
+  const envioBloqueado = vacio || enviandoCuenta || sinRed;
 
   return (
     <aside className="w-full max-w-[420px] flex flex-col bg-crema-ticket text-fondo-profundo shadow-2xl relative border-l border-fondo-profundo/10 overflow-visible transition-all duration-500 font-mono z-50">
@@ -202,7 +209,13 @@ export default function SalesReceipt({
           type="button"
           disabled={envioBloqueado}
           onClick={onEnviarCuenta}
-          title={vacio ? 'Agregue al menos un producto para enviar la cuenta' : ''}
+          title={
+            sinRed
+              ? '⛔ No se puede enviar: sin conexión. Verifique la red WiFi.'
+              : vacio
+                ? 'Agregue al menos un producto para enviar la cuenta'
+                : ''
+          }
           className={`w-full min-h-[60px] rounded-canon35 font-black text-lg uppercase tracking-widest transition-all shadow-xl active:scale-95 border-2 border-fondo-profundo ${
             envioBloqueado
               ? 'bg-fondo-profundo/10 text-fondo-profundo/40 cursor-not-allowed'

@@ -927,6 +927,10 @@ export default function RetailVisionPOS({
             // F12.8 — Paridad de operación (§6.8): el cobro solo se habilita con
             // turno de caja abierto. Sin caja, el único camino es enviar al pizarrón.
             cajaHabilitada={Boolean(turnoCaja)}
+            // F12.14 — REGLA 13: sin conexión, el botón ENVIAR CUENTA se bloquea.
+            // `useNetworkHealth().botonBloqueado` (= `!enLinea`) ya existía pero
+            // estaba HUÉRFANO: se expone y nadie lo consumía. Aquí se cablea.
+            sinRed={red.botonBloqueado}
           />
         </div>
       </main>
@@ -967,6 +971,8 @@ export default function RetailVisionPOS({
               banner={banner}
               // F12.8 — Mismo gate que el panel lateral (paridad de operación).
               cajaHabilitada={Boolean(turnoCaja)}
+              // F12.14 — REGLA 13: mismo gate de red que el panel lateral.
+              sinRed={red.botonBloqueado}
             />
             <button
               type="button"
