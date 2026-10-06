@@ -215,7 +215,7 @@ CONTRATOS: tuple[Contrato, ...] = (
             "Es una cicatriz: ya existe y se conserva.",
         ),
         errores=("400 si el rango de fechas es inválido.",),
-        estado_hoy="Cicatriz",
+        estado_hoy="Implementado",
     ),
     # ── §5 Estadísticas (POS es PROVEEDOR) ─────────────────────────────────
     Contrato(

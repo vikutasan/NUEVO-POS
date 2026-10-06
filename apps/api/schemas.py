@@ -564,3 +564,36 @@ class PedidoDelTicketSalida(BaseModel):
     delivery_address: str | None = None
     delivery_fee: Decimal | None = None
     notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Auditoría — Contrato 5 (FASE 13.1)
+# ---------------------------------------------------------------------------
+
+class EventoAuditableSalida(BaseModel):
+    """Un evento auditable del POS (contrato 5).
+
+    Es una PROYECCIÓN, no la fila completa de `pos_audit_log` (O-23): expone
+    solo los 5 campos que Auditoría necesita para reconstruir qué pasó. NO
+    expone `id` (clave interna), `payload` crudo ni `extras` (internos del POS).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    tipo: str
+    ticket_id: str | None = None
+    usuario_id: str | None = None
+    timestamp: datetime
+    detalle: dict = Field(default_factory=dict)
+
+
+class EventosAuditablesSalida(BaseModel):
+    """La lista de eventos auditables en un rango (contrato 5).
+
+    El POS expone un RESUMEN de eventos, nunca su tabla `tickets` (garantía del
+    contrato 5). Es una cicatriz: ya existe y se conserva.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    eventos: list[EventoAuditableSalida] = Field(default_factory=list)

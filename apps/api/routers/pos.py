@@ -35,6 +35,7 @@ Reglas aplicadas, en orden:
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -44,7 +45,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.database import get_db
-from models import CashSession, Product, TerminalSession, Ticket, TicketItem
+from models import (
+    CashSession,
+    PosAuditLog,
+    Product,
+    TerminalSession,
+    Ticket,
+    TicketItem,
+)
 from rules import ReglaViolada
 from rules.registry import (
     rn10_formato_de_folio,
@@ -63,6 +71,7 @@ from rules.registry import (
     rn27_incrementar_version,
     rn37_umbral_anti_degradacion,
     rn49_una_sesion_caja_por_terminal,
+    rn78_timestamps_en_utc,
     rn94_suma_de_pagos_cuadra_total,
     rn95_metodos_de_pago_validos,
 )
@@ -74,6 +83,8 @@ from schemas import (
     CrearTicketEntrada,
     CuentaAbiertaSalida,
     CuentasAbiertasSalida,
+    EventoAuditableSalida,
+    EventosAuditablesSalida,
     LineaAtomicaSalida,
     LineaSalida,
     LineasTicketSalida,
@@ -248,6 +259,27 @@ def _normalizar_pagos(payment_details: dict, total: Decimal | None = None) -> di
     normalizado = {k: v for k, v in detalles.items() if k not in {"metodo", "recibido", "cambio", "monto"}}
     normalizado["pagos"] = [pago]
     return normalizado
+
+
+def _evento_auditable(fila: PosAuditLog) -> EventoAuditableSalida:
+    """Proyecta una fila de `pos_audit_log` al resumen del contrato 5 (O-23).
+
+    Expone solo los 5 campos que Auditoría necesita. NO expone `id` (clave
+    interna), `payload` crudo ni `extras` (internos del POS). El `tipo` se
+    deriva del `endpoint` auditado; el `detalle` se arma con el `codigo` y el
+    `payload` (que ya es un resumen, no la fila del ticket).
+    """
+    return EventoAuditableSalida(
+        tipo=fila.endpoint,
+        ticket_id=(fila.payload or {}).get("ticket_id"),
+        usuario_id=fila.usuario_id,
+        timestamp=fila.timestamp,
+        detalle={
+            "codigo": fila.codigo,
+            "payload": fila.payload or {},
+            "extras": fila.extras or {},
+        },
+    )
 
 
 def _recalcular_total(ticket: Ticket) -> Decimal:
@@ -765,4 +797,53 @@ async def cuentas_abiertas(
 
     return CuentasAbiertasSalida(
         cuentas=[CuentaAbiertaSalida.model_validate(t) for t in filas]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Contrato 5 — GET /pos/auditable-events?desde=&hasta=
+# ---------------------------------------------------------------------------
+
+@router.get("/auditable-events", response_model=EventosAuditablesSalida)
+async def eventos_auditables(
+    desde: datetime = Query(..., description="Inicio del rango (ISO-8601, UTC)"),
+    hasta: datetime = Query(..., description="Fin del rango (ISO-8601, UTC)"),
+    db: AsyncSession = Depends(get_db),
+) -> EventosAuditablesSalida:
+    """Expone un RESUMEN de los eventos auditables del POS (contrato 5, F13.1).
+
+    Es de SOLO LECTURA y devuelve una PROYECCIÓN (O-23): nunca la tabla
+    `tickets` ni la fila cruda de `pos_audit_log`. Cada evento expone solo los
+    5 campos que Auditoría necesita para reconstruir qué pasó (tipo, ticket_id,
+    usuario_id, timestamp, detalle).
+
+    Es una cicatriz: ya existe y se conserva (garantía del contrato 5).
+
+    Reglas aplicadas:
+      - RN-77  la consulta se filtra por rango de fechas.
+      - RN-78  los timestamps se normalizan a UTC antes de comparar.
+
+    Errores:
+      - 400 si el rango de fechas es inválido (desde > hasta).
+    """
+    desde_utc = rn78_timestamps_en_utc(desde)
+    hasta_utc = rn78_timestamps_en_utc(hasta)
+
+    if desde_utc > hasta_utc:
+        raise HTTPException(
+            status_code=400,
+            detail="El rango de fechas es inválido: 'desde' es posterior a 'hasta'.",
+        )
+
+    filas = (
+        await db.execute(
+            select(PosAuditLog)
+            .where(PosAuditLog.timestamp >= desde_utc)
+            .where(PosAuditLog.timestamp <= hasta_utc)
+            .order_by(PosAuditLog.timestamp.asc())
+        )
+    ).scalars().all()
+
+    return EventosAuditablesSalida(
+        eventos=[_evento_auditable(f) for f in filas]
     )
