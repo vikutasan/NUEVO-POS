@@ -3,7 +3,7 @@
 **Fase:** 12.9.1 (Rescate de UX del viejo POS — cierre del hueco A-02 del endpoint `POST /pos/tickets`)
 **Estado:** ✅ CERRADA
 **Fecha:** 6 Oct 2026
-**Commit:** `PENDIENTE` (push a `main`)
+**Commit:** `abb65f8` (push a `main`)
 **Compuertas:** `test_f12_9_ticket_vacio.py` (5) + `test_f2_frontera.py` (actualizada a 30 contratos) = **backend 289/289 verde**
 **CI:** `npm run ci` → guards 7/7 limpios · Vitest verde · pytest **289/289 verde**
 
