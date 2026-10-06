@@ -139,4 +139,4 @@ F12.11 es una auditoría: su compuerta es **documental**, no de código.
 
 ## 8. Commit
 
-_(pendiente)_
+`e31d463` — "F12.11: auditoria handler-por-handler (21 efectos; 3 OMITIDA + 1 INFIEL -> F12.12..F12.15)"
