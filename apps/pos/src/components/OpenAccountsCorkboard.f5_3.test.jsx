@@ -151,7 +151,14 @@ describe('F5.3 — criterio 3: recuperar con el id correcto', () => {
     await waitFor(() => {
       expect(clienteApi.leerTicket).toHaveBeenCalledWith('id-2');
     });
-    expect(onRecuperar).toHaveBeenCalledWith({ id: 'id-2', version: 9 });
+    // F12.10b — `onRecuperar` recibe DOS argumentos: (1) el ticket fresco del
+    // contrato 21 y (2) la cuenta rica del pizarrón (contrato 23), que es la
+    // ÚNICA que trae `order_type`/`delivery_type`/cliente para restaurar el
+    // contexto de un PEDIDO. El segundo argumento es la cuenta tocada.
+    expect(onRecuperar).toHaveBeenCalledWith(
+      { id: 'id-2', version: 9 },
+      expect.objectContaining({ id: 'id-2', account_num: 'T-0002' }),
+    );
   });
 });
 

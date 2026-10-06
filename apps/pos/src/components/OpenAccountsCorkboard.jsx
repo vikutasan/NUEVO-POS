@@ -151,16 +151,25 @@ export default function OpenAccountsCorkboard({
   });
 
   /**
-   * Recupera una cuenta y entrega el ticket al padre.
+   * Recupera una cuenta y entrega al padre DOS cosas (F12.10b):
+   *   1. `fresco` — la versión FRESCA del servidor (contrato 21, 5 escalares).
+   *   2. `postit` — el objeto RICO del pizarrón (contrato 23), que SÍ trae el
+   *      contexto de pedido (`order_type`, `delivery_type`, `customer_name`,
+   *      `customer_phone`) y el capturista (`captured_by_name`).
+   *
+   * El contrato 21 devuelve EXACTAMENTE 5 campos escalares (Regla 15), así que
+   * el contexto de pedido NO viaja en él. Sin el `postit`, recuperar un PEDIDO
+   * perdía su bloque de pedido (hueco F12.10b). El padre adopta la identidad
+   * fresca (`id` + `version`) y restaura el contexto desde el `postit`.
    */
-  async function manejarRecuperar(id) {
-    const resultado = await recuperarCuenta(id);
+  async function manejarRecuperar(cuenta) {
+    const resultado = await recuperarCuenta(cuenta.id);
     if (
       resultado &&
       resultado.outcome === 'ok' &&
       typeof onRecuperar === 'function'
     ) {
-      onRecuperar(resultado.data);
+      onRecuperar(resultado.data, cuenta);
     }
   }
 
@@ -253,13 +262,13 @@ export default function OpenAccountsCorkboard({
                 className={`group relative aspect-square min-h-tactil rounded-sm p-4 lg:p-6 shadow-[5px_15px_30px_-5px_rgba(0,0,0,0.3)] hover:shadow-[10px_25px_50px_-10px_rgba(0,0,0,0.4)] hover:-translate-y-2 hover:rotate-0 transition-all cursor-pointer flex flex-col justify-between ${colorDe(
                   cuenta.terminal_id,
                 )} ${rotacionDe(indice)}`}
-                onClick={() => manejarRecuperar(cuenta.id)}
+                onClick={() => manejarRecuperar(cuenta)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    manejarRecuperar(cuenta.id);
+                    manejarRecuperar(cuenta);
                   }
                 }}
               >

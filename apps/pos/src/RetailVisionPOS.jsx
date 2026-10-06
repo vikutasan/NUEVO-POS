@@ -58,6 +58,10 @@ import ThemeSelector from './components/ThemeSelector.jsx';
 import VoiceCartPanel from './components/VoiceCartPanel.jsx';
 import VisionVisor from './components/VisionVisor.jsx';
 import OrderProgrammingModal from './components/OrderProgrammingModal.jsx';
+// F12.10b — `construirBloquePedido` arma el bloque `order_*` (contrato 3) al
+// restaurar el contexto de un PEDIDO recuperado del pizarrón. Es la MISMA
+// función pura que usa el modal, para no duplicar la forma del bloque.
+import { construirBloquePedido } from './hooks/useOrderProgramming.js';
 // F8.6 — Integración con CRM y Notificaciones (lado POS).
 import CustomerIdentificationPanel from './components/CustomerIdentificationPanel.jsx';
 import TicketDeliveryPanel from './components/TicketDeliveryPanel.jsx';
@@ -330,10 +334,11 @@ export default function RetailVisionPOS({
     refrescarConteoCuentas();
   }, [refrescarConteoCuentas]);
 
-  // Recupera una cuenta abierta. El pizarrón entrega la versión FRESCA del
-  // servidor (contrato 21, lección v6.0): aquí se ADOPTA la identidad de la
-  // cuenta (`ticketId` + `version`) para que el operador siga trabajando sobre
-  // la cuenta REAL y no sobre una copia vieja.
+  // Recupera una cuenta abierta. El pizarrón entrega DOS cosas (F12.10b):
+  //   1. `cuenta` — la versión FRESCA del servidor (contrato 21, 5 escalares).
+  //   2. `postit` — el objeto RICO del pizarrón (contrato 23), que SÍ trae el
+  //      contexto de pedido (`order_type`, `delivery_type`, `customer_name`,
+  //      `customer_phone`) y el capturista (`captured_by_name`).
   //
   // F12.10 — HIDRATACIÓN DEL CARRITO (18ª instancia de §10.6): F12.5 adoptaba
   // la identidad pero NO las líneas, porque el contrato 21 devuelve EXACTAMENTE
@@ -343,8 +348,25 @@ export default function RetailVisionPOS({
   // con ellas + la `version` del servidor (RN-25). Si la lectura falla, NO se
   // adopta la cuenta: se avisa y se deja el carrito como estaba (no se inventa
   // estado).
+  //
+  // F12.10b — PARIDAD CON `handleRecoverAccount` DEL VIEJO POS (19ª instancia
+  // de §10.6): el viejo POS hacía SEIS cosas al recuperar; F12.10 hizo tres.
+  // Esta corrección cierra los huecos restantes:
+  //   (a) GUARDIA DE CUENTA VACÍA: si la cuenta no tiene líneas, NO se adopta
+  //       (el viejo POS avisaba "⚠️ Cuenta vacía." y salía sin tocar el carrito).
+  //   (b) CONTEXTO DE PEDIDO: si la cuenta es un PEDIDO, se restauran
+  //       `bloquePedido` + `tipoPedido` desde el `postit` (contrato 23). Sin
+  //       esto, recuperar un pedido perdía su bloque (empaque, política de pago,
+  //       datos del cliente) y el operador lo veía como venta directa.
+  //
+  // NOTA (hueco DESCARTADO, no cableado): el viejo POS adoptaba un "capturador
+  // original" (`originalCapturer`). El POS nuevo NO tiene ese estado: el
+  // capturador lo resuelve el BACKEND desde la sesión de terminal activa
+  // (RN-24) y el pizarrón solo lo MUESTRA (`captured_by_name`, contrato 23).
+  // Fabricar un estado de capturador en el cliente violaría A-02 (frontera por
+  // contratos). Por eso este hueco se clasifica DESCARTADA, no se cablea.
   const recuperarCuentaAlCarrito = useCallback(
-    async (cuenta) => {
+    async (cuenta, postit = null) => {
       if (!cuenta || !cuenta.id) return;
 
       const resultado = await aOutcome(() => api.leerLineas(cuenta.id));
@@ -357,8 +379,43 @@ export default function RetailVisionPOS({
       }
 
       const datos = resultado.data || {};
-      carrito.hidratarLineas(datos.lineas, datos.version);
+      const lineas = Array.isArray(datos.lineas) ? datos.lineas : [];
+
+      // (a) GUARDIA DE CUENTA VACÍA (paridad con el viejo POS): una cuenta sin
+      // líneas NO se adopta. Adoptarla dejaría al operador sobre una cuenta
+      // vacía creyendo que recuperó algo. Se avisa y se deja el carrito igual.
+      if (lineas.length === 0) {
+        setBanner({
+          tipo: 'error',
+          mensaje: '⚠️ Cuenta vacía.',
+        });
+        return;
+      }
+
+      carrito.hidratarLineas(lineas, datos.version);
       setTicketId(cuenta.id);
+
+      // (b) CONTEXTO DE PEDIDO: se restaura desde el `postit` (contrato 23),
+      // que es el ÚNICO objeto que trae `order_type`/`delivery_type`/cliente.
+      // El contrato 21 (fresco) NO los trae (Regla 15).
+      const esPedido = postit && postit.order_type === 'PEDIDO';
+      if (esPedido) {
+        setTipoPedido('PEDIDO');
+        setBloquePedido(
+          construirBloquePedido({
+            order_type: 'PEDIDO',
+            delivery_type: postit.delivery_type,
+            customer_name: postit.customer_name,
+            customer_phone: postit.customer_phone,
+          }),
+        );
+      } else {
+        // Venta directa: se limpia cualquier bloque de pedido previo (paridad
+        // con la rama `else` del viejo POS, que hacía `setOrderData(null)`).
+        setTipoPedido('VENTA_DIRECTA');
+        setBloquePedido(null);
+      }
+
       setPizarronAbierto(false);
       setBanner({
         tipo: 'exito',
