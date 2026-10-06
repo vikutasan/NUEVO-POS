@@ -353,6 +353,30 @@ export function listarCuentasAbiertas(terminalId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FASE 13.2a — Auditoría y Control (contrato 5)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /pos/auditable-events — los eventos auditables del POS en un rango
+ * (contrato 5, F13.1).
+ *
+ * Es una lectura de SOLO LECTURA que devuelve una PROYECCIÓN (O-23): nunca la
+ * tabla `tickets` ni la fila cruda de `pos_audit_log`. Cada evento expone solo
+ * 5 campos (`tipo`, `ticket_id`, `usuario_id`, `timestamp`, `detalle`).
+ *
+ * El backend exige AMBOS parámetros (`desde` y `hasta`, ISO-8601 UTC) y responde
+ * 400 si `desde > hasta` (RN-77/RN-78). La validación local vive en el servicio
+ * (`auditService.js`), no aquí: el cliente solo transporta.
+ *
+ * @param {string} desde  Inicio del rango (ISO-8601, UTC).
+ * @param {string} hasta  Fin del rango (ISO-8601, UTC).
+ */
+export function listarEventosAuditables(desde, hasta) {
+  const qs = new URLSearchParams({ desde, hasta });
+  return peticion(`/pos/auditable-events?${qs.toString()}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // FASE 8.2 — Notificaciones (contrato 27)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -455,6 +479,7 @@ export default {
   getReporteDiario,
   enviarContextoDiario,
   listarCuentasAbiertas,
+  listarEventosAuditables,
   getPedidoDelTicket,
   getBeneficiosParaTicket,
   encolarTicket,
