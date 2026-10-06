@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aOutcome, esOk } from '../utils/outcome.js';
 import { withRetries } from '../utils/withRetries.js';
 import { buildResetPatch, aplicarReset } from '../state/sessionReset.js';
+import { esErrorDeNegocio, esConflictoDeVersion } from './useTicketActions.js';
 
 /** Genera un `item_id` estable para una línea del carrito. */
 export function nuevoItemId() {
@@ -65,6 +66,42 @@ export function useCart(opciones = {}) {
   useEffect(() => {
     setVersionActual(version);
   }, [version]);
+
+  /**
+   * F12.17 — Auto-heal de conflicto de versión (409) para las escrituras por
+   * ítem (contratos 18–20).
+   *
+   * Cicatriz runtime: dos `anadirLinea` concurrentes (dos clics rápidos en
+   * productos, o un clic + un escaneo de código de barras) leían el MISMO
+   * `versionRef.current` antes de que la primera escritura confirmara. La
+   * primera avanzaba el `version` en el servidor; la segunda enviaba el
+   * `version` obsoleto y recibía 409. Como `anadirLinea` no filtraba el 409 en
+   * `withRetries`, reintentaba 3× con el mismo `version` obsoleto (3× 409 más) y
+   * el ítem NUNCA se persistía. El ledger de idempotencia quedaba vacío y
+   * `verificar_envio` (contrato 22) marcaba TODOS los ítems como faltantes →
+   * "No se pudo enviar: hay productos sin guardar en el servidor".
+   *
+   * La corrección es la MISMA que ya usa `cobrar` (F12.12): ante un 409, el
+   * ticket sigue siendo VÁLIDO, solo está desactualizado. Se descarga la versión
+   * fresca (contrato 21) y se re-sincroniza `versionRef` para que el reintento
+   * encadene (REGLA 9 — auto-heal).
+   *
+   * @returns {Promise<number|null>} la versión fresca, o `null` si no se pudo.
+   */
+  const sincronizarVersion = useCallback(async () => {
+    const cliente = apiRef.current;
+    const idTicket = ticketRef.current;
+    if (!cliente || !idTicket || typeof cliente.leerTicket !== 'function') return null;
+    const lectura = await aOutcome(() => cliente.leerTicket(idTicket));
+    if (!esOk(lectura) || !lectura.data) return null;
+    const fresca = lectura.data.version;
+    if (Number.isInteger(fresca) && fresca >= 0) {
+      setVersionActual(fresca);
+      versionRef.current = fresca;
+      return fresca;
+    }
+    return null;
+  }, []);
 
   useEffect(() => {
     ticketRef.current = ticketId;
@@ -117,22 +154,55 @@ export function useCart(opciones = {}) {
       return { outcome: 'ok', reason: null, data: { item_id: itemId, local: true } };
     }
 
-    const resultado = await aOutcome(() =>
-      withRetries(() =>
-        cliente.anadirItem(idTicket, {
-          item_id: itemId,
-          product_id: linea.product_id,
-          quantity: cantidad,
-          version: versionRef.current,
-        })
+    // F12.17 — Escritura con auto-heal de versión (REGLA 9 + REGLA 18).
+    //   1. `debeReintentar` NO reintenta un 409 (error de negocio): reintentar
+    //      con el mismo `version` obsoleto es inútil y multiplica los 409.
+    //   2. Ante un 409, se descarga la versión fresca y se reintenta UNA vez.
+    let errorCrudo = null;
+    let resultado = await aOutcome(() =>
+      withRetries(
+        () =>
+          cliente.anadirItem(idTicket, {
+            item_id: itemId,
+            product_id: linea.product_id,
+            quantity: cantidad,
+            version: versionRef.current,
+          }),
+        {
+          debeReintentar: (err) => {
+            errorCrudo = err;
+            return !esErrorDeNegocio(err);
+          },
+        }
       )
     );
 
+    if (!esOk(resultado) && esConflictoDeVersion(errorCrudo)) {
+      // Auto-heal: el ticket es válido, solo está desactualizado.
+      const fresca = await sincronizarVersion();
+      if (fresca !== null) {
+        errorCrudo = null;
+        resultado = await aOutcome(() =>
+          withRetries(
+            () =>
+              cliente.anadirItem(idTicket, {
+                item_id: itemId,
+                product_id: linea.product_id,
+                quantity: cantidad,
+                version: versionRef.current,
+              }),
+            { debeReintentar: (err) => !esErrorDeNegocio(err) }
+          )
+        );
+      }
+    }
+
     if (esOk(resultado) && resultado.data && typeof resultado.data.version === 'number') {
       setVersionActual(resultado.data.version);
+      versionRef.current = resultado.data.version;
     }
     return resultado;
-  }, []);
+  }, [sincronizarVersion]);
 
   /**
    * Cambia la cantidad de una línea (contrato 19, bloqueo optimista).
@@ -151,20 +221,46 @@ export function useCart(opciones = {}) {
       return { outcome: 'ok', reason: null, data: { item_id: itemId, local: true } };
     }
 
-    const resultado = await aOutcome(() =>
-      withRetries(() =>
-        cliente.cambiarCantidad(idTicket, itemId, {
-          quantity: Number(quantity),
-          version: versionRef.current,
-        })
+    let errorCrudo = null;
+    let resultado = await aOutcome(() =>
+      withRetries(
+        () =>
+          cliente.cambiarCantidad(idTicket, itemId, {
+            quantity: Number(quantity),
+            version: versionRef.current,
+          }),
+        {
+          debeReintentar: (err) => {
+            errorCrudo = err;
+            return !esErrorDeNegocio(err);
+          },
+        }
       )
     );
 
+    if (!esOk(resultado) && esConflictoDeVersion(errorCrudo)) {
+      const fresca = await sincronizarVersion();
+      if (fresca !== null) {
+        errorCrudo = null;
+        resultado = await aOutcome(() =>
+          withRetries(
+            () =>
+              cliente.cambiarCantidad(idTicket, itemId, {
+                quantity: Number(quantity),
+                version: versionRef.current,
+              }),
+            { debeReintentar: (err) => !esErrorDeNegocio(err) }
+          )
+        );
+      }
+    }
+
     if (esOk(resultado) && resultado.data && typeof resultado.data.version === 'number') {
       setVersionActual(resultado.data.version);
+      versionRef.current = resultado.data.version;
     }
     return resultado;
-  }, []);
+  }, [sincronizarVersion]);
 
   /**
    * Quita una línea (contrato 20, anti-degradación RN-37).
@@ -180,15 +276,38 @@ export function useCart(opciones = {}) {
       return { outcome: 'ok', reason: null, data: { item_id: itemId, local: true } };
     }
 
-    const resultado = await aOutcome(() =>
-      withRetries(() => cliente.quitarItem(idTicket, itemId, { version: versionRef.current }))
+    let errorCrudo = null;
+    let resultado = await aOutcome(() =>
+      withRetries(
+        () => cliente.quitarItem(idTicket, itemId, { version: versionRef.current }),
+        {
+          debeReintentar: (err) => {
+            errorCrudo = err;
+            return !esErrorDeNegocio(err);
+          },
+        }
+      )
     );
+
+    if (!esOk(resultado) && esConflictoDeVersion(errorCrudo)) {
+      const fresca = await sincronizarVersion();
+      if (fresca !== null) {
+        errorCrudo = null;
+        resultado = await aOutcome(() =>
+          withRetries(
+            () => cliente.quitarItem(idTicket, itemId, { version: versionRef.current }),
+            { debeReintentar: (err) => !esErrorDeNegocio(err) }
+          )
+        );
+      }
+    }
 
     if (esOk(resultado) && resultado.data && typeof resultado.data.version === 'number') {
       setVersionActual(resultado.data.version);
+      versionRef.current = resultado.data.version;
     }
     return resultado;
-  }, []);
+  }, [sincronizarVersion]);
 
   /**
    * Limpia el carrito SOLO tras HTTP 200 **+ verificación post-envío**.
