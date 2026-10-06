@@ -4,7 +4,7 @@
 > **Fase:** 12 — Portar funcionalidades del POS viejo al POS nuevo
 > **Estado:** ✅ CERRADA — **BUG CORREGIDO** (bloqueaba ENVIAR CUENTA tras recuperar del pizarrón)
 > **Fecha:** 2026-10-06
-> **Commit:** _(pendiente — se registra al cerrar)_
+> **Commit:** `98d130e` — F12.18: verificar_envio acepta la cuenta recuperada del pizarron (doble prueba: ledger O ticket_items)
 > **Plan rector:** contrato 22 (verificación post-envío) + contrato 30 (lectura de líneas) + contrato 18 (idempotencia por `item_id`) + Regla 15 (proyección de campos escalares) + RN-25 (bloqueo optimista)
 
 ---
