@@ -4,7 +4,7 @@
 > **Fase:** 12 — Portar funcionalidades del POS viejo al POS nuevo
 > **Estado:** ✅ CERRADA — gate componente 5/5 en verde, CI completo en verde, guards 7/7 en verde
 > **Fecha:** 2026-10-06
-> **Commit:** _(pendiente de registrar)_
+> **Commit:** `438935f` — F12.13: mutex de acciones de persistencia (rechazar 2a llamada concurrente, REGLA 2)
 > **Plan rector:** §6.8 (UX heredada) + §10.6 (lecciones por clase de fallo) + REGLA 2 + RN-23
 
 ---
