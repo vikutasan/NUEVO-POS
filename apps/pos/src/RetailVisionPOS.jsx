@@ -815,6 +815,13 @@ export default function RetailVisionPOS({
       <POSHeader
         terminalId={terminalEfectiva}
         estado={estadoCuenta}
+        // F12.19 — PARIDAD DE PRESENTACIÓN con el viejo POS (§6.8): el centro
+        // del header muestra `CTA {folio}` en cuanto la cuenta tiene folio, y
+        // el badge `📝 BORRADOR` mientras se captura y no se envió al pizarrón.
+        //   - `numeroCuenta`: el folio (`account_num`, RN-10) del ticket en curso.
+        //   - `cartLength`: líneas del carrito (para el badge BORRADOR).
+        numeroCuenta={acciones.ticket?.account_num || null}
+        cartLength={carrito.lineas.length}
         tipoVenta={CONFIG.CANAL}
         sesionAbierta={Boolean(sesion)}
         estadoRed={red.estado}

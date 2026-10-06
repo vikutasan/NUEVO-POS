@@ -54,6 +54,14 @@ const ETIQUETAS_ESTADO = Object.freeze({
 export default function POSHeader({
   terminalId,
   estado = 'NUEVA_VENTA',
+  // F12.19 — PARIDAD DE PRESENTACIÓN con el viejo POS (§6.8): el centro del
+  // header mostraba `CTA {folio}` (no "NUEVA VENTA") en cuanto la cuenta tenía
+  // folio, y un badge `📝 BORRADOR` mientras la cuenta estaba capturándose
+  // (folio + líneas) y aún NO se había enviado al pizarrón (sin pedido).
+  //   - `numeroCuenta`: el folio (`account_num`, RN-10) de la cuenta en curso.
+  //   - `cartLength`: número de líneas del carrito (para el badge BORRADOR).
+  numeroCuenta = null,
+  cartLength = 0,
   tipoVenta,
   sesionAbierta = false,
   estadoRed = 'good',
@@ -92,6 +100,15 @@ export default function POSHeader({
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
   const nombreTerminal =
     terminalId === 'CAJA' ? 'Caja Central' : `Terminal ${terminalId || '—'}`;
+
+  // F12.19 — PARIDAD DE PRESENTACIÓN con el viejo POS (§6.8):
+  //   - Si hay folio (`numeroCuenta`), el centro muestra `CTA {folio}` en vez
+  //     de la etiqueta de estado. Es lo que el cajero ve al capturar.
+  //   - El badge `📝 BORRADOR` aparece mientras la cuenta se está capturando
+  //     (folio + al menos una línea) y aún NO se envió al pizarrón (sin pedido).
+  //     Espejo exacto de `currentAccountNum && cartLength > 0 && !orderData`.
+  const etiquetaCentro = numeroCuenta ? `CTA ${numeroCuenta}` : etiquetaEstado;
+  const mostrarBorrador = Boolean(numeroCuenta) && cartLength > 0 && !pedidoProgramado;
 
   return (
     <header className="w-full flex items-center justify-between px-4 py-3 bg-fondo-profundo-alt border-b border-white/5 z-20">
@@ -151,9 +168,18 @@ export default function POSHeader({
           <span className="text-[7px] font-black uppercase text-crema-ticket tracking-[0.5em] mb-0.5">
             Estado de Transaccion
           </span>
+          {/* F12.19 — `CTA {folio}` cuando hay cuenta; si no, la etiqueta de
+              estado (Nueva Venta / Cobrando… / Venta Cobrada). */}
           <span className="text-3xl font-black uppercase tracking-tighter italic text-acento drop-shadow-[0_0_12px_rgba(193,215,46,0.4)]">
-            {etiquetaEstado}
+            {etiquetaCentro}
           </span>
+          {/* F12.19 — Badge BORRADOR (paridad con el viejo POS): la cuenta se
+              está capturando y aún NO se envió al pizarrón. */}
+          {mostrarBorrador ? (
+            <span className="text-[8px] font-black uppercase text-amber-400 tracking-widest mt-0.5">
+              📝 Borrador
+            </span>
+          ) : null}
           {tipoVenta ? (
             <span className="hidden sm:inline text-[8px] font-black uppercase text-crema-ticket/50 tracking-[0.3em] mt-0.5">
               {tipoVenta}
