@@ -4,7 +4,7 @@
 > **Fase:** 12 — Portar funcionalidades del POS viejo al POS nuevo
 > **Estado:** ✅ CERRADA — **DESCARTADA** (disparador prohibido por §10.4; REGLA 19 ya satisfecha)
 > **Fecha:** 2026-10-06
-> **Commit:** `PENDIENTE` — F12.15: cerrar como DESCARTADA (disparador prohibido §10.4; REGLA 19 ya cubierta)
+> **Commit:** `1aceea1` — F12.15: cerrar como DESCARTADA (disparador prohibido por 10.4; REGLA 19 ya cubierta por las 5 rutas de salida)
 > **Plan rector:** §10.4 de `HALLAZGOS_AUDITORIA_BRECHAS_POS.md` + REGLA 19 + §6.8
 
 ---
