@@ -266,24 +266,54 @@ async def test_respuesta_ligera_max_5_campos(entorno):
 
 @pytest.mark.asyncio
 async def test_verificacion_post_envio(entorno):
-    """`POST /verify` confirma en BD que el ticket y sus ítems existen (v6.1 $453)."""
+    """`POST /verify` confirma en BD que el ticket y sus ítems existen (v6.1 $453).
+
+    F12.16 — El `item_id` es la INTENCIÓN de escritura del cliente (contrato 18),
+    NO el `product_id`. Este test usa el flujo REAL: crea el ticket vacío y añade
+    la línea vía contrato 18 con un `item_id` explícito. Antes pasaba `str(p1)`
+    (un `product_id`) y por eso el bug de comparación contra `product_id` quedaba
+    enmascarado.
+    """
     await _limpiar(entorno)
     p1, _ = await _sembrar(entorno)
     try:
         async with _cliente() as cliente:
-            ticket = await _crear_ticket(cliente, p1)
-            ticket_id = ticket["id"]
+            # Ticket vacío (contrato 3) + línea vía contrato 18 con item_id real.
+            res_ticket = await cliente.post(
+                "/pos/tickets",
+                json={
+                    "terminal_id": TERMINAL_ID,
+                    "channel": "PANADERIA",
+                    "items": [],
+                },
+            )
+            assert res_ticket.status_code == 201, res_ticket.text
+            ticket_id = res_ticket.json()["id"]
 
-            # El cliente cree haber enviado la línea p1 y una fantasma.
+            item_id_real = "intencion-abc-123"
+            res_add = await cliente.post(
+                f"/pos/tickets/{ticket_id}/items",
+                json={
+                    "item_id": item_id_real,
+                    "product_id": str(p1),
+                    "quantity": 1,
+                    "version": 0,
+                },
+            )
+            assert res_add.status_code == 200, res_add.text
+
+            # El cliente cree haber enviado la línea real y una fantasma.
             res = await cliente.post(
                 f"/pos/tickets/{ticket_id}/verify",
-                json={"item_ids": [str(p1), "fantasma-999"]},
+                json={"item_ids": [item_id_real, "fantasma-999"]},
             )
             assert res.status_code == 200, res.text
             cuerpo = res.json()
 
             assert cuerpo["existe"] is True
-            assert str(p1) in cuerpo["item_ids_persistidos"]
+            assert item_id_real in cuerpo["item_ids_persistidos"], (
+                "El item_id real (intención del contrato 18) debe estar persistido"
+            )
             assert "fantasma-999" in cuerpo["faltantes"], (
                 "La verificación no detectó el ítem fantasma"
             )

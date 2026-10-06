@@ -658,10 +658,18 @@ async def verificar_envio(
     el frontend limpie el carrito. Es de SOLO LECTURA.
 
     Si `faltantes` no está vacío, el frontend NO debe limpiar el carrito.
+
+    F12.16 — El `item_id` que envía el cliente es la INTENCIÓN de escritura
+    (contrato 18), no el `product_id`. `anadir_item` la registra en el ledger
+    de idempotencia `payment_details["_item_ids"]`. Comparar contra
+    `product_id` (como se hacía antes) marcaba TODOS los ítems como faltantes
+    y bloqueaba el envío de la cuenta al pizarrón. La verificación correcta es
+    contra ese ledger.
     """
     ticket = await _ticket_con_items_o_404(db, ticket_id)
 
-    persistidos = {str(i.product_id) for i in ticket.items}
+    detalles = dict(ticket.payment_details or {})
+    persistidos = {str(i) for i in detalles.get("_item_ids", [])}
     item_ids_persistidos = [i for i in entrada.item_ids if i in persistidos]
     faltantes = [i for i in entrada.item_ids if i not in persistidos]
 
