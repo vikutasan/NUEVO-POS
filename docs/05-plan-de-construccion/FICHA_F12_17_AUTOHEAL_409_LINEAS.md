@@ -4,7 +4,7 @@
 > **Fase:** 12 — Portar funcionalidades del POS viejo al POS nuevo
 > **Estado:** ✅ CERRADA — **BUG CORREGIDO** (bloqueaba ENVIAR CUENTA con `items_no_persistidos`)
 > **Fecha:** 2026-10-06
-> **Commit:** _(pendiente — se registra al cerrar)_
+> **Commit:** `a5347e3` — F12.17: auto-heal del 409 en las acciones de línea (anadirLinea/cambiarCantidad/quitarLinea) + no reintentar errores de negocio (REGLA 18/9)
 > **Plan rector:** REGLA 18 (no reintentar errores de negocio) + REGLA 9 (auto-heal del 409) + RN-25/RN-26 (bloqueo optimista) + contrato 18 (idempotencia por `item_id`) + contrato 21 (lectura ligera del ticket) + contrato 22 (verificación post-envío)
 
 ---
