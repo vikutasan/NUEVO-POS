@@ -177,7 +177,7 @@ El backend (`routers/pos.py::_sesion_caja_activa_o_400`) sigue siendo la autorid
 
 ## 8. Commit
 
-- **NUEVO-POS:** _(pendiente — se registra en un commit de seguimiento)_
+- **NUEVO-POS:** `edbcca1`
 
 ---
 
