@@ -4,7 +4,7 @@
 > **Fase:** 12 — Portar funcionalidades del POS viejo al POS nuevo
 > **Estado:** ✅ CERRADA — gate componente 8/8 en verde, CI completo en verde, guards 7/7 en verde
 > **Fecha:** 2026-10-06
-> **Commit:** `PENDIENTE` — F12.14: bloquear ENVIAR CUENTA sin red (REGLA 13)
+> **Commit:** `3eb46a7` — F12.14: bloquear ENVIAR CUENTA sin red (REGLA 13, botonBloqueado huerfano)
 > **Plan rector:** §6.8 (UX heredada) + §10.6 (lecciones por clase de fallo) + REGLA 13 + Cementerio §3 (Cuenta Fantasma $453)
 
 ---
