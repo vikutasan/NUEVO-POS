@@ -157,25 +157,31 @@ function botonProducto() {
 /** Agrega el producto al carrito y cobra, dejando el paso de entrega abierto. */
 async function agregarYCobrar() {
   // Se pulsa el BOTÓN del producto (no el <p> del nombre): solo el botón
-  // dispara `onAgregar`, y sin línea en el carrito "ENVIAR CUENTA" queda
+  // dispara `onAgregar`, y sin línea en el carrito "COBRAR" queda
   // deshabilitado y el cobro nunca ocurre.
   fireEvent.click(botonProducto());
   await waitFor(() => {
     expect(apiSimulada.crearVenta).toHaveBeenCalled();
   });
+  // F12.9 — El modal de pago lo abre el botón "💰 COBRAR", NO "ENVIAR CUENTA".
+  // El viejo POS tenía DOS botones distintos (§6.8): COBRAR (gateado por caja,
+  // abre el modal) y ENVIAR CUENTA (manda al pizarrón, sin gate de caja). El
+  // nuevo POS los había conflacionado; F12.9 los separó. Este helper cobra, así
+  // que debe pulsar COBRAR.
+  //
   // `agregarProducto` es asíncrono: tras `asegurarTicket()` (que llama a
   // `crearVenta`) recién entonces añade la línea al carrito. Hay que esperar
-  // a que "ENVIAR CUENTA" se habilite (deja de estar `disabled`) antes de
-  // pulsarlo; si no, el clic cae en un botón deshabilitado y el modal de pago
-  // nunca se abre.
-  const enviarCuenta = await screen.findByRole('button', {
-    name: /ENVIAR CUENTA/i,
+  // a que "COBRAR" se habilite (deja de estar `disabled`) antes de pulsarlo;
+  // si no, el clic cae en un botón deshabilitado y el modal de pago nunca se
+  // abre.
+  const cobrar = await screen.findByRole('button', {
+    name: /COBRAR/i,
   });
   await waitFor(() => {
-    expect(enviarCuenta.disabled).toBe(false);
+    expect(cobrar.disabled).toBe(false);
   });
-  // Abre el modal de pago ("💰 ENVIAR CUENTA").
-  fireEvent.click(enviarCuenta);
+  // Abre el modal de pago ("💰 COBRAR").
+  fireEvent.click(cobrar);
   // El modal arranca en EFECTIVO, y con EFECTIVO el botón "CONFIRMAR PAGO"
   // queda deshabilitado hasta capturar un monto >= total (`puedeCobrar`).
   // Se elige "Tarjeta" para habilitarlo sin capturar efectivo: así el clic
@@ -262,14 +268,15 @@ describe('F8.6 — Cableado end-to-end (CRM + Notificaciones)', () => {
     fireEvent.click(botonProducto());
     await waitFor(() => expect(apiSimulada.crearVenta).toHaveBeenCalled());
     // Igual que `agregarYCobrar`: hay que esperar a que la línea entre al
-    // carrito y "ENVIAR CUENTA" se habilite antes de pulsarlo.
-    const enviarCuenta = await screen.findByRole('button', {
-      name: /ENVIAR CUENTA/i,
+    // carrito y "COBRAR" se habilite antes de pulsarlo (F12.9: el modal de
+    // pago lo abre COBRAR, no ENVIAR CUENTA).
+    const cobrar = await screen.findByRole('button', {
+      name: /COBRAR/i,
     });
     await waitFor(() => {
-      expect(enviarCuenta.disabled).toBe(false);
+      expect(cobrar.disabled).toBe(false);
     });
-    fireEvent.click(enviarCuenta);
+    fireEvent.click(cobrar);
     // Igual que `agregarYCobrar`: "Tarjeta" habilita "CONFIRMAR PAGO" sin
     // capturar efectivo (con EFECTIVO el botón queda deshabilitado).
     fireEvent.click(await screen.findByRole('button', { name: /Tarjeta/i }));

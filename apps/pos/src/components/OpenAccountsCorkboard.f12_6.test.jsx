@@ -93,7 +93,7 @@ describe('F12.6 — criterio 1: el corcho usa los tokens de madera', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0042')).toBeTruthy();
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
     // `madera-panel` y `madera-veta` son tokens de COLOR: en el DOM se
@@ -119,7 +119,7 @@ describe('F12.6 — criterio 2: cada post-it lleva un pin', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0001')).toBeTruthy();
+      expect(screen.getByTestId('folio-id-1')).toBeTruthy();
     });
 
     const pines = container.querySelectorAll('li span[aria-hidden="true"]');
@@ -140,7 +140,7 @@ describe('F12.6 — criterio 3: la rotación es determinista', () => {
       <OpenAccountsCorkboard terminalId="T6" servicioCuentas={servicioCon(cuentas)} />
     );
     await waitFor(() => {
-      expect(screen.getByText('T-0001')).toBeTruthy();
+      expect(screen.getByTestId('folio-id-1')).toBeTruthy();
     });
     const rotacionPrimera = primero.container.querySelector('li').className;
     cleanup();
@@ -149,7 +149,7 @@ describe('F12.6 — criterio 3: la rotación es determinista', () => {
       <OpenAccountsCorkboard terminalId="T6" servicioCuentas={servicioCon(cuentas)} />
     );
     await waitFor(() => {
-      expect(screen.getByText('T-0001')).toBeTruthy();
+      expect(screen.getByTestId('folio-id-1')).toBeTruthy();
     });
     const rotacionSegunda = segundo.container.querySelector('li').className;
 
@@ -175,7 +175,7 @@ describe('F12.6 — criterio 4: el color del post-it depende de la terminal', ()
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0042')).toBeTruthy();
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
     const postIt = container.querySelector('li');
@@ -191,7 +191,7 @@ describe('F12.6 — criterio 4: el color del post-it depende de la terminal', ()
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0042')).toBeTruthy();
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
     const postIt = container.querySelector('li');
@@ -213,7 +213,7 @@ describe('F12.6 — criterio 5: tipo de pedido, cliente y teléfono', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0042')).toBeTruthy();
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
     expect(screen.getByText(/PEDIDO/)).toBeTruthy();
@@ -237,7 +237,7 @@ describe('F12.6 — criterio 5: tipo de pedido, cliente y teléfono', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0042')).toBeTruthy();
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
     expect(screen.queryByText(/PEDIDO/)).toBeNull();
@@ -258,7 +258,7 @@ describe('F12.6 — criterio 6: el capturista viaja como nombre resuelto', () =>
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0042')).toBeTruthy();
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
     expect(screen.getByText(/María López/)).toBeTruthy();
@@ -281,7 +281,7 @@ describe('F12.6 — criterio 7: la hora se formatea desde el instante UTC', () =
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0042')).toBeTruthy();
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
     // El formato es HH:MM (dos dígitos, dos dígitos), sin importar la zona.
@@ -297,7 +297,7 @@ describe('F12.6 — criterio 7: la hora se formatea desde el instante UTC', () =
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0042')).toBeTruthy();
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
     expect(screen.getByText(/🕒 —/)).toBeTruthy();

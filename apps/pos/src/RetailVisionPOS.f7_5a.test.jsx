@@ -21,7 +21,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 
 // ── Cliente `api` simulado (se inyecta en el módulo real) ────────────────────
 // `vi.hoisted` es obligatorio: `vi.mock` se eleva al tope del archivo, así que
@@ -328,9 +328,14 @@ describe('F7.5a · Criterio 6 — cerrar el modal no rompe la pantalla', () => {
     await esperarCatalogo();
 
     fireEvent.click(botonProgramarPedido());
-    await screen.findByRole('dialog', { name: /Programación del pedido/i });
+    const dialogo = await screen.findByRole('dialog', {
+      name: /Programación del pedido/i,
+    });
 
-    fireEvent.click(screen.getByRole('button', { name: /Cerrar/i }));
+    // El botón ✕ vive DENTRO del modal; se acota la búsqueda al diálogo para
+    // no colisionar con otros controles "Cerrar" de la pantalla (p. ej. el
+    // visor cenital, que también expone aria-label="Cerrar").
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Cerrar/i }));
 
     await waitFor(() => {
       expect(

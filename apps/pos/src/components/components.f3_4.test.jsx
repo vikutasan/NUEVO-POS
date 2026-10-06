@@ -73,20 +73,29 @@ describe('POSHeader — cabecera (estado, tipo de venta, red)', () => {
     expect(screen.getByText('PANADERIA')).toBeTruthy();
   });
 
-  it('refleja el indicador de red: en línea vs sin red', () => {
-    const { rerender } = render(<POSHeader terminalId="TERM-01" enLinea />);
-    expect(screen.getByText('En línea')).toBeTruthy();
+  it('refleja el indicador de red: etiqueta y semáforo (good vs down)', () => {
+    // El contrato real del nuevo POS es `estadoRed`/`etiquetaRed`/`colorRed`
+    // (semáforo de 3 colores), NO un booleano `enLinea`. La etiqueta la
+    // pre-formatea el orquestador ("RED OK 9ms"); el header solo la pinta.
+    const { rerender } = render(
+      <POSHeader terminalId="TERM-01" estadoRed="good" etiquetaRed="RED OK" colorRed="green" />,
+    );
+    expect(screen.getByText('RED OK')).toBeTruthy();
 
-    rerender(<POSHeader terminalId="TERM-01" enLinea={false} />);
-    expect(screen.getByText('Sin red')).toBeTruthy();
+    rerender(
+      <POSHeader terminalId="TERM-01" estadoRed="down" etiquetaRed="SIN RED" colorRed="red" />,
+    );
+    expect(screen.getByText('SIN RED')).toBeTruthy();
   });
 
-  it('refleja el estado de sesión: abierta vs sin sesión', () => {
-    const { rerender } = render(<POSHeader terminalId="TERM-01" sesionAbierta />);
-    expect(screen.getByText('Sesión abierta')).toBeTruthy();
+  it('refleja el estado de la caja: turno activo vs habilitar (F12.8)', () => {
+    // El header no pinta un texto de "sesión"; pinta el estado del TURNO DE
+    // CAJA real (`turnoCaja`), que es la única fuente de verdad (F12.8).
+    const { rerender } = render(<POSHeader terminalId="TERM-01" turnoCaja={{ id: 'c1' }} />);
+    expect(screen.getByText('● Activa')).toBeTruthy();
 
-    rerender(<POSHeader terminalId="TERM-01" sesionAbierta={false} />);
-    expect(screen.getByText('Sin sesión')).toBeTruthy();
+    rerender(<POSHeader terminalId="TERM-01" turnoCaja={null} />);
+    expect(screen.getByText('○ Habilitar')).toBeTruthy();
   });
 
   it('dispara onCambiarEstacion al pulsar el botón de terminal', () => {
@@ -169,11 +178,33 @@ describe('SalesReceipt — ticket (cantidad, banner, total)', () => {
     expect(boton.disabled).toBe(true);
   });
 
-  it('dispara onCobrar cuando hay líneas', () => {
+  it('dispara onCobrar al pulsar COBRAR cuando hay líneas y caja habilitada', () => {
+    // F12.9 — COBRAR y ENVIAR CUENTA son DOS operaciones distintas (16ª
+    // instancia de §10.6). El botón COBRAR dispara `onCobrar`, pero solo
+    // cuando la caja está habilitada (F12.8): sin turno, el botón va disabled.
     const onCobrar = vi.fn();
-    render(<SalesReceipt lineas={[lineaEjemplo()]} onCobrar={onCobrar} />);
-    fireEvent.click(screen.getByRole('button', { name: /ENVIAR CUENTA/ }));
+    render(
+      <SalesReceipt lineas={[lineaEjemplo()]} onCobrar={onCobrar} cajaHabilitada />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /COBRAR/ }));
     expect(onCobrar).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispara onEnviarCuenta al pulsar ENVIAR CUENTA (F12.9)', () => {
+    // F12.9 — ENVIAR CUENTA NO dispara `onCobrar`; dispara `onEnviarCuenta`.
+    // Esta es la operación que el viejo POS permitía SIN caja habilitada.
+    const onCobrar = vi.fn();
+    const onEnviarCuenta = vi.fn();
+    render(
+      <SalesReceipt
+        lineas={[lineaEjemplo()]}
+        onCobrar={onCobrar}
+        onEnviarCuenta={onEnviarCuenta}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ENVIAR CUENTA/ }));
+    expect(onEnviarCuenta).toHaveBeenCalledTimes(1);
+    expect(onCobrar).not.toHaveBeenCalled();
   });
 
   it('calcularTotal suma unit_price × quantity (RN-16)', () => {

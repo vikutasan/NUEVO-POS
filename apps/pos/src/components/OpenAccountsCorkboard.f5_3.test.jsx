@@ -2,14 +2,19 @@
  * Puerta de FASE 5.3 — Pizarrón de cuentas abiertas (interfaz 13).
  *
  * Verifica los 8 criterios de la sub-fase 5.3:
- *   1. Renderiza una tarjeta por cuenta.
- *   2. Muestra el folio (`account_num`) y el total formateado.
- *   3. El botón "Recuperar" llama a `recuperarCuenta` con el `id` correcto.
- *   4. Estado vacío: "No hay cuentas abiertas".
+ *   1. Renderiza una tarjeta (post-it) por cuenta.
+ *   2. Muestra el folio corto (`#` + últimos 3 dígitos) y el total formateado.
+ *   3. El post-it (la propia tarjeta) llama a `recuperarCuenta` con el `id` correcto.
+ *   4. Estado vacío: "No hay cuentas pendientes en el pizarrón".
  *   5. Estado de carga: indicador visible.
  *   6. Estado de error: mensaje visible.
  *   7. Contenedor raíz fluido (`w-full`) y sin ancho fijo (R-01).
  *   8. Cada tarjeta tiene `min-h-tactil` (R-04).
+ *
+ * NOTA DE PARIDAD (F12.6/F12.9): el pizarrón del viejo POS muestra el folio
+ * CORTO (`#001` vía `slice(-3)`) y la tarjeta entera es el elemento clickeable
+ * (no existe un botón "Recuperar" separado). Esta compuerta se alineó a esa
+ * presentación real tras el rewrite de F12.6.
  *
  * El componente consume `useOpenAccounts`; aquí se inyectan dobles del servicio
  * y del cliente para no tocar la red.
@@ -84,11 +89,12 @@ describe('F5.3 — criterio 1: una tarjeta por cuenta', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0001')).toBeTruthy();
+      expect(screen.getByTestId('folio-id-1')).toBeTruthy();
     });
-    expect(screen.getByText('T-0002')).toBeTruthy();
-    expect(screen.getByText('T-0003')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Recuperar' })).toHaveLength(3);
+    expect(screen.getByTestId('folio-id-2')).toBeTruthy();
+    expect(screen.getByTestId('folio-id-3')).toBeTruthy();
+    // Cada post-it es un elemento clickeable (role="button").
+    expect(screen.getAllByRole('button', { name: /Ver Cuenta/i })).toHaveLength(3);
   });
 });
 
@@ -97,14 +103,15 @@ describe('F5.3 — criterio 1: una tarjeta por cuenta', () => {
 // ---------------------------------------------------------------------------
 
 describe('F5.3 — criterio 2: folio y total formateado', () => {
-  it('muestra el folio y el total en formato de moneda', async () => {
+  it('muestra el folio corto y el total en formato de moneda', async () => {
     const cuentas = [cuentaEjemplo({ id: 'id-1', account_num: 'T-0042', total: '150.00' })];
     render(
       <OpenAccountsCorkboard terminalId="TERM-01" servicioCuentas={servicioCon(cuentas)} />
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('folio-id-1').textContent).toBe('T-0042');
+      // El viejo POS muestra el folio CORTO: `#` + últimos 3 dígitos.
+      expect(screen.getByTestId('folio-id-1').textContent).toBe('#042');
     });
     // $150.00 en es-MX.
     expect(screen.getByTestId('total-id-1').textContent).toContain('150.00');
@@ -134,11 +141,12 @@ describe('F5.3 — criterio 3: recuperar con el id correcto', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0002')).toBeTruthy();
+      expect(screen.getByTestId('folio-id-2')).toBeTruthy();
     });
 
-    const botones = screen.getAllByRole('button', { name: 'Recuperar' });
-    fireEvent.click(botones[1]);
+    // El post-it entero es el elemento clickeable (role="button").
+    const postIts = screen.getAllByRole('button', { name: /Ver Cuenta/i });
+    fireEvent.click(postIts[1]);
 
     await waitFor(() => {
       expect(clienteApi.leerTicket).toHaveBeenCalledWith('id-2');
@@ -152,13 +160,15 @@ describe('F5.3 — criterio 3: recuperar con el id correcto', () => {
 // ---------------------------------------------------------------------------
 
 describe('F5.3 — criterio 4: estado vacío', () => {
-  it('muestra "No hay cuentas abiertas" cuando la lista está vacía', async () => {
+  it('muestra "No hay cuentas pendientes en el pizarrón" cuando la lista está vacía', async () => {
     render(
       <OpenAccountsCorkboard terminalId="TERM-01" servicioCuentas={servicioCon([])} />
     );
 
     await waitFor(() => {
-      expect(screen.getByText('No hay cuentas abiertas.')).toBeTruthy();
+      expect(
+        screen.getByText('No hay cuentas pendientes en el pizarrón'),
+      ).toBeTruthy();
     });
   });
 });
@@ -214,12 +224,14 @@ describe('F5.3 — criterio 7: contenedor raíz fluido (R-01)', () => {
     // Esperar a que la lectura asíncrona se asiente antes de medir el DOM,
     // para no disparar un `act(...)` warning por un setState fuera de act.
     await waitFor(() => {
-      expect(screen.getByText('No hay cuentas abiertas.')).toBeTruthy();
+      expect(
+        screen.getByText('No hay cuentas pendientes en el pizarrón'),
+      ).toBeTruthy();
     });
 
     const raiz = container.firstChild;
     expect(raiz.className).toContain('w-full');
-    expect(raiz.className).toContain('max-w-[1000px]');
+    expect(raiz.className).toContain('max-w-[1100px]');
     // No debe haber un ancho fijo en píxeles sin un `max-` que lo acote.
     expect(raiz.className).not.toMatch(/(^|\s)w-\[\d+px\]/);
   });
@@ -237,7 +249,7 @@ describe('F5.3 — criterio 8: táctil (R-04)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('T-0001')).toBeTruthy();
+      expect(screen.getByTestId('folio-id-1')).toBeTruthy();
     });
 
     const tarjetas = container.querySelectorAll('li');

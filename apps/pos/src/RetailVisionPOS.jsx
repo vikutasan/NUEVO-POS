@@ -626,6 +626,52 @@ export default function RetailVisionPOS({
     onBackToTerminals?.();
   }, [onBackToTerminals]);
 
+  // ── F12.9 — ENVIAR CUENTA AL PIZARRÓN (sin caja) ───────────────────────────
+  // Paridad de operación con el viejo POS (§6.8): el viejo POS tenía DOS botones
+  // distintos en el ticket:
+  //   1. COBRAR        → `handleCheckout()`    — gateado por `cashEnabled`.
+  //   2. ENVIAR CUENTA → `handleHoldAccount()` — NO gateado por `cashEnabled`.
+  // El nuevo POS los había CONFLACIONADO en un solo botón, de modo que el gate
+  // de caja (F12.8) bloqueaba también el envío al pizarrón. Eso rompía el flujo
+  // real: una terminal SIN caja debe poder enviar la cuenta al pizarrón.
+  //
+  // Esta acción es el camino válido SIN caja. La cuenta YA está persistida por
+  // ítem (contratos 18–20); enviarla al pizarrón consiste en:
+  //   1. Asegurar que el ticket existe (si no, se crea vacío — defensivo).
+  //   2. Limpiar el carrito con verificación (contrato 22): `clearCart` NO borra
+  //      si algún ítem no llegó al servidor. Si falla, se avisa y NO se limpia.
+  //   3. Resetear el `ticketId` para que la próxima venta abra una cuenta NUEVA
+  //      (la cuenta enviada queda OPEN en el pizarrón, RN-31).
+  //   4. Refrescar el conteo del pizarrón para que el badge refleje la cuenta.
+  const enviarCuentaAlPizarron = useCallback(async () => {
+    if (carrito.lineas.length === 0) return;
+    setError(null);
+    setBanner(null);
+
+    // 1) Asegurar el ticket (la cuenta debe existir en el servidor).
+    const idTicket = await asegurarTicket();
+    if (!idTicket) return;
+
+    // 2) Limpieza verificada: si algún ítem no está persistido, NO se limpia.
+    const limpieza = await carrito.clearCart();
+    if (limpieza.outcome !== 'ok') {
+      setError(
+        limpieza.reason === 'items_no_persistidos'
+          ? 'No se pudo enviar: hay productos sin guardar en el servidor. Verifique la conexión WiFi.'
+          : 'No se pudo enviar la cuenta al pizarrón. Intente de nuevo.',
+      );
+      return;
+    }
+
+    // 3) Cuenta nueva: la enviada queda OPEN en el pizarrón.
+    setTicketId(null);
+    ticketIdRef.current = null;
+
+    // 4) Refrescar el conteo del pizarrón (badge del header).
+    setCuentasAbiertas((n) => n + 1);
+    setBanner({ tipo: 'ok', mensaje: 'Cuenta enviada al pizarrón' });
+  }, [asegurarTicket, carrito]);
+
   // "Salir sin enviar — perder cuenta": acción destructiva. Se descarta la
   // cuenta (clearCart) y se sale.
   const salirSinEnviar = useCallback(async () => {
@@ -754,6 +800,10 @@ export default function RetailVisionPOS({
             onDecrementar={decrementar}
             onQuitar={quitar}
             onCobrar={abrirCheckoutConGuardia}
+            // F12.9 — ENVIAR CUENTA al pizarrón: NO gateado por caja (§6.8).
+            // Es el camino válido cuando la terminal no tiene turno de caja.
+            onEnviarCuenta={enviarCuentaAlPizarron}
+            enviandoCuenta={acciones.enviando}
             cobrando={acciones.enviando}
             terminalId={terminalEfectiva}
             banner={banner}
@@ -788,6 +838,13 @@ export default function RetailVisionPOS({
                 setTicketAbierto(false);
                 abrirCheckoutConGuardia();
               }}
+              // F12.9 — ENVIAR CUENTA al pizarrón: NO gateado por caja (§6.8).
+              // Mismo camino válido sin caja que el panel lateral.
+              onEnviarCuenta={async () => {
+                setTicketAbierto(false);
+                await enviarCuentaAlPizarron();
+              }}
+              enviandoCuenta={acciones.enviando}
               cobrando={acciones.enviando}
               terminalId={terminalEfectiva}
               banner={banner}

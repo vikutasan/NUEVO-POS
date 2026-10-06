@@ -93,7 +93,10 @@ describe('GestorDeCaja — F4.3', () => {
 
     const fondo = await screen.findByLabelText('Fondo inicial');
     fireEvent.change(fondo, { target: { value: '250.50' } });
+    // F12.7 B2 — la apertura tiene confirmación de 2 pasos: "Abrir turno" abre
+    // el diálogo "Confirmar fondo inicial"; aquí se confirma con "Sí, abrir turno".
     fireEvent.click(screen.getByRole('button', { name: 'Abrir turno' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sí, abrir turno' }));
 
     await waitFor(() => expect(servicio.abrirTurno).toHaveBeenCalledTimes(1));
     expect(servicio.abrirTurno).toHaveBeenCalledWith({
@@ -165,6 +168,7 @@ describe('GestorDeCaja — F4.3', () => {
     montar(servicio);
 
     await screen.findByText('Resumen del turno');
+    // Primer "Cerrar turno" (estado ABIERTO) → pasa al estado CIERRE (arqueo).
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar turno' }));
 
     fireEvent.change(await screen.findByLabelText('Efectivo contado'), {
@@ -172,7 +176,10 @@ describe('GestorDeCaja — F4.3', () => {
     });
     fireEvent.change(screen.getByLabelText('Crédito contado'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Débito contado'), { target: { value: '0' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
+    // F12.7 B3 — el cierre tiene confirmación de 2 pasos: el "Cerrar turno" del
+    // estado CIERRE abre el diálogo; aquí se confirma con "Sí, cerrar turno".
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar turno' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sí, cerrar turno' }));
 
     await waitFor(() => expect(servicio.cerrarTurno).toHaveBeenCalledTimes(1));
     expect(servicio.cerrarTurno).toHaveBeenCalledWith({
@@ -193,7 +200,9 @@ describe('GestorDeCaja — F4.3', () => {
     });
     montar(servicio);
 
+    // F12.7 B2 — "Abrir turno" abre el diálogo; se confirma para llegar al servicio.
     fireEvent.click(await screen.findByRole('button', { name: 'Abrir turno' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sí, abrir turno' }));
 
     const alerta = await screen.findByRole('alert');
     expect(alerta.textContent).toMatch(/turno de caja abierto/i);

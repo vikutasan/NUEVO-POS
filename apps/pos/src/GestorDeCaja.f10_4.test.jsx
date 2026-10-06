@@ -90,13 +90,16 @@ async function montarConTurnoAbierto(servicio, servicioCtx) {
   });
 }
 
-/** Avanza al estado CIERRE y confirma el cierre. */
+/** Avanza al estado CIERRE y confirma el cierre (F12.7 B3: 2 pasos). */
 async function cerrarTurno() {
   fireEvent.click(screen.getByText('Cerrar turno'));
   await waitFor(() => {
     expect(screen.getByText('Arqueo y cierre')).toBeTruthy();
   });
-  fireEvent.click(screen.getByText('Confirmar cierre'));
+  // Paso 1: "Cerrar turno" abre el diálogo de confirmación (acción irreversible).
+  fireEvent.click(screen.getByText('Cerrar turno'));
+  // Paso 2: se confirma el cierre definitivo.
+  fireEvent.click(await screen.findByText('Sí, cerrar turno'));
 }
 
 // ---------------------------------------------------------------------------

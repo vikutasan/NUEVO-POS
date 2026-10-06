@@ -104,8 +104,15 @@ describe('useNetworkHealth', () => {
       useNetworkHealth({ sonda, intervaloMs: 1000 })
     );
 
-    // Deja resolver la sonda inicial.
+    // Deja resolver la sonda inicial (1er fallo → 'slow', aún en línea).
     await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.enLinea).toBe(true);
+
+    // 2º fallo consecutivo → 'down' (anti-falso-positivo v6.1: FALLOS_PARA_DOWN = 2).
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
       await Promise.resolve();
     });
 
@@ -154,7 +161,15 @@ describe('useNetworkHealth', () => {
       useNetworkHealth({ sonda, intervaloMs: 1000 })
     );
 
+    // 1er fallo (excepción) → 'slow', aún en línea.
     await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.enLinea).toBe(true);
+
+    // 2º fallo consecutivo → 'down' (anti-falso-positivo v6.1: FALLOS_PARA_DOWN = 2).
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
       await Promise.resolve();
     });
 

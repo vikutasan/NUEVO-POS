@@ -258,7 +258,9 @@ describe('CIERRE F3 — cobro con verificación post-envío (contrato 22)', () =
     const idsEsperados = apiSimulada.anadirItem.mock.calls.map((c) => c[1].item_id);
 
     // Abrir el checkout y cobrar en efectivo.
-    fireEvent.click(screen.getByText('💰 ENVIAR CUENTA'));
+    // F12.9 — el botón que ABRE el modal de pago es "💰 COBRAR" (gateado por
+    // caja); "📌 ENVIAR CUENTA" es la operación distinta de mandar al pizarrón.
+    fireEvent.click(screen.getByText('💰 COBRAR'));
     fireEvent.click(screen.getByText('Efectivo'));
     // Efectivo exige monto recibido ≥ total para habilitar el botón:
     // un billete rápido ($50) cubre el total y habilita "CONFIRMAR PAGO".
@@ -311,7 +313,8 @@ describe('CIERRE F3 — prohibición #2 en la pantalla real', () => {
     fireEvent.click(screen.getByText('Concha de Vainilla'));
     await waitFor(() => expect(apiSimulada.anadirItem).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByText('💰 ENVIAR CUENTA'));
+    // F12.9 — el botón que ABRE el modal de pago es "💰 COBRAR".
+    fireEvent.click(screen.getByText('💰 COBRAR'));
     fireEvent.click(screen.getByText('Efectivo'));
     // Efectivo exige monto recibido ≥ total para habilitar el botón.
     fireEvent.click(screen.getByText('$50'));

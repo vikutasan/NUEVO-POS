@@ -27,7 +27,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 
 // ── Cliente `api` simulado (se inyecta en el módulo real) ────────────────────
 // `vi.hoisted` es obligatorio: `vi.mock` se eleva al tope del archivo, así que
@@ -240,9 +240,12 @@ describe('F12.5 · Criterio 2 — el botón abre el pizarrón', () => {
     fireEvent.click(botonPizarron());
     await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
 
-    // Las dos cuentas sembradas aparecen en el corcho.
-    expect(await screen.findByText('C-001')).toBeTruthy();
-    expect(await screen.findByText('C-002')).toBeTruthy();
+    // Las dos cuentas sembradas aparecen en el corcho. El folio se muestra
+    // CORTO (`#` + últimos 3 dígitos), como en el viejo POS.
+    expect(await screen.findByTestId('folio-cuenta-1')).toBeTruthy();
+    expect(await screen.findByTestId('folio-cuenta-2')).toBeTruthy();
+    expect(screen.getByTestId('folio-cuenta-1').textContent).toBe('#001');
+    expect(screen.getByTestId('folio-cuenta-2').textContent).toBe('#002');
     expect(apiSimulada.listarCuentasAbiertas).toHaveBeenCalled();
   });
 });
@@ -256,11 +259,13 @@ describe('F12.5 · Criterio 3 — recuperar una cuenta', () => {
     await esperarCatalogo();
 
     fireEvent.click(botonPizarron());
-    await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
-    await screen.findByText('C-001');
+    const dialogo = await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
+    await screen.findByTestId('folio-cuenta-1');
 
-    // El primer botón "Recuperar" corresponde a la primera tarjeta (C-001).
-    fireEvent.click(screen.getAllByRole('button', { name: /^Recuperar$/i })[0]);
+    // El post-it entero es el elemento clickeable (role="button"): el primero
+    // corresponde a la primera tarjeta (cuenta-1).
+    const postIts = within(dialogo).getAllByRole('button', { name: /Ver Cuenta/i });
+    fireEvent.click(postIts[0]);
 
     // El pizarrón pide la versión FRESCA por el contrato 21.
     await waitFor(() => {
@@ -285,9 +290,11 @@ describe('F12.5 · Criterio 4 — cerrar sin recuperar', () => {
     await esperarCatalogo();
 
     fireEvent.click(botonPizarron());
-    await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
+    const dialogo = await screen.findByRole('dialog', { name: /Cuentas abiertas/i });
 
-    fireEvent.click(screen.getByRole('button', { name: /^Cerrar$/i }));
+    // El botón "Cerrar" del pizarrón se busca ACOTADO al diálogo: el POS tiene
+    // sus propios botones "Cerrar" (p. ej. el de la sesión de caja).
+    fireEvent.click(within(dialogo).getByRole('button', { name: /^Cerrar$/i }));
 
     await waitFor(() => {
       expect(

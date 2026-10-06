@@ -19,7 +19,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 
 // ── Cliente `api` simulado (se inyecta en el módulo real) ────────────────────
 // `vi.hoisted` es obligatorio: `vi.mock` se eleva al tope del archivo, así que
@@ -113,11 +113,6 @@ function botonEscanerIA() {
 /** Localiza el botón de voz del header (aria-label="Dictado por voz"). */
 function botonVoz() {
   return screen.getByRole('button', { name: /Dictado por voz/i });
-}
-
-/** Localiza el botón de tema del header (aria-label="Cambiar tema"). */
-function botonTema() {
-  return screen.getByRole('button', { name: /Cambiar tema/i });
 }
 
 beforeEach(() => {
@@ -229,12 +224,12 @@ describe('F7.6 · Criterio 4 — el visor NO es un overlay suelto', () => {
     await esperarCatalogo();
 
     fireEvent.click(botonEscanerIA());
-    await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: /Visión cenital/i })).toBeTruthy();
-    });
+    const visor = await screen.findByRole('dialog', { name: /Visión cenital/i });
 
-    // El botón "×" del visor cierra volviendo al grid.
-    fireEvent.click(screen.getByRole('button', { name: /^Cerrar$/i }));
+    // El botón "×" del visor cierra volviendo al grid. Se acota la búsqueda al
+    // diálogo del visor para no colisionar con otros controles "Cerrar" de la
+    // pantalla (p. ej. el modal de programación de pedido).
+    fireEvent.click(within(visor).getByRole('button', { name: /^Cerrar$/i }));
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /Visión cenital/i })).toBeNull();
@@ -293,19 +288,20 @@ describe('F7.6 · Criterio 7 — el header NO tiene botón de visión', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CRITERIO 8 — El tema se abre como overlay nuevo
+// CRITERIO 8 — El tema vive en la landing (TerminalSelector), no en el POS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('F7.6 · Criterio 8 — el tema se abre como overlay nuevo', () => {
-  it('pulsar el botón de tema monta el ThemeSelector', async () => {
+describe('F7.6 · Criterio 8 — el tema vive en la landing, no en el POS', () => {
+  it('la pantalla del POS NO expone el control de tema (se reubicó a la landing)', async () => {
     render(<RetailVisionPOS />);
     await esperarCatalogo();
 
-    fireEvent.click(botonTema());
-
-    await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: /Selector de tema/i })).toBeTruthy();
-    });
+    // El selector de tema se reubicó a la landing (TerminalSelector) en el
+    // commit del pizarrón: la pantalla del POS ya NO monta el ThemeSelector ni
+    // expone el botón "Cambiar tema". La compuerta del ThemeSelector en sí vive
+    // en ThemeSelector.f7_1.test.jsx; aquí solo se fija la frontera de pantalla.
+    expect(screen.queryByRole('button', { name: /Cambiar tema/i })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: /Selector de tema/i })).toBeNull();
   });
 });
 

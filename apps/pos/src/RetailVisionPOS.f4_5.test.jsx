@@ -140,29 +140,34 @@ function botonProducto() {
 /**
  * Agrega el producto al carrito y abre el modal de pago, sin confirmar.
  *
- * F12.8 — El botón "ENVIAR CUENTA" está gateado por la caja habilitada
+ * F12.8/F12.9 — El botón "💰 COBRAR" está gateado por la caja habilitada
  * (§6.8, paridad de operación con el viejo POS). Por eso este helper SOLO
  * puede abrir el modal cuando hay turno de caja abierto (`conCaja: true`).
  * Sin caja, el botón está deshabilitado y el modal es inalcanzable: ese es
  * precisamente el comportamiento corregido que verifica F4.5.3.
+ *
+ * F12.9 — El modal de pago lo abre COBRAR, NO "ENVIAR CUENTA". El viejo POS
+ * tenía DOS botones distintos: COBRAR (gateado por caja, abre el modal) y
+ * ENVIAR CUENTA (manda al pizarrón, sin gate de caja). El nuevo POS los había
+ * conflacionado; F12.9 los separó. Este helper cobra, así que pulsa COBRAR.
  */
 async function agregarYAbrirPago({ conCaja = false } = {}) {
   fireEvent.click(botonProducto());
   await waitFor(() => {
     expect(apiSimulada.crearVenta).toHaveBeenCalled();
   });
-  const enviarCuenta = await screen.findByRole('button', {
-    name: /ENVIAR CUENTA/i,
+  const cobrar = await screen.findByRole('button', {
+    name: /COBRAR/i,
   });
   await waitFor(() => {
-    expect(enviarCuenta.disabled).toBe(!conCaja);
+    expect(cobrar.disabled).toBe(!conCaja);
   });
   if (!conCaja) {
     // Sin caja habilitada no se puede abrir el modal: se devuelve el botón
     // bloqueado para que el test verifique el gate.
-    return enviarCuenta;
+    return cobrar;
   }
-  fireEvent.click(enviarCuenta);
+  fireEvent.click(cobrar);
   // El modal arranca en EFECTIVO; se elige "Tarjeta" para habilitar el botón
   // "CONFIRMAR PAGO" sin capturar efectivo.
   fireEvent.click(await screen.findByRole('button', { name: /Tarjeta/i }));
@@ -205,13 +210,13 @@ describe('F4.5 — Montaje del Gestor de Caja', () => {
   it('F4.5.3 — sin turno abierto, el botón de cobro está BLOQUEADO (F12.8)', async () => {
     // `getSesionCajaActiva` ya devuelve `null` por defecto: no hay turno.
     // F12.8 — Paridad de operación (§6.8): sin caja habilitada, el botón
-    // "ENVIAR CUENTA" está deshabilitado y el modal de pago es inalcanzable.
+    // "💰 COBRAR" está deshabilitado y el modal de pago es inalcanzable.
     // El usuario NO puede ni siquiera intentar cobrar. La guarda RN-49 sigue
     // existiendo como defensa en profundidad (probada en SalesReceipt.f12_8).
     render(<RetailVisionPOS />);
     await esperarCatalogo();
-    const enviarCuenta = await agregarYAbrirPago({ conCaja: false });
-    expect(enviarCuenta.disabled).toBe(true);
+    const cobrar = await agregarYAbrirPago({ conCaja: false });
+    expect(cobrar.disabled).toBe(true);
     // El cobro NUNCA llegó al backend.
     expect(apiSimulada.cobrarTicket).not.toHaveBeenCalled();
   });
@@ -222,8 +227,8 @@ describe('F4.5 — Montaje del Gestor de Caja', () => {
     await agregarYAbrirPago({ conCaja: false });
     // El rótulo del footer cambia a "Caja no habilitada" y el title guía.
     expect(screen.getByText('Caja no habilitada')).toBeTruthy();
-    const enviarCuenta = screen.getByRole('button', { name: /ENVIAR CUENTA/i });
-    expect(enviarCuenta.getAttribute('title')).toBe(
+    const cobrar = screen.getByRole('button', { name: /COBRAR/i });
+    expect(cobrar.getAttribute('title')).toBe(
       'Presione "🏦 CAJA" para habilitar el cobro',
     );
   });

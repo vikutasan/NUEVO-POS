@@ -237,10 +237,18 @@ export function useCart(opciones = {}) {
       }
 
       // 2) Verificado: ahora sí, limpieza espejo (Regla 19).
+      //
+      // F12.9 — `lineasRef` NO se pasa a `buildResetPatch`: está en
+      // `FORBIDDEN_KEYS` porque tiene su propio ciclo de vida (se limpia aquí
+      // mismo con `setLineas([])`, tras la verificación post-envío del
+      // contrato 22). Pasarlo hacía que `buildResetPatch` lanzara un
+      // `TypeError`, abortando la limpieza. El bug era latente: el camino de
+      // éxito de `clearCart` nunca se ejercitó en producción hasta que F12.9
+      // lo usó para enviar la cuenta al pizarrón sin caja.
       setLineas([]);
       aplicarReset(
-        { lineasRef, versionRef, ticketRef, enviandoRef },
-        buildResetPatch({ lineasRef, versionRef, ticketRef, enviandoRef })
+        { versionRef, ticketRef, enviandoRef },
+        buildResetPatch({ versionRef, ticketRef, enviandoRef })
       );
       if (typeof alLimpiarRef.current === 'function') alLimpiarRef.current();
       return { outcome: 'ok', reason: null, data: { verificado: true } };

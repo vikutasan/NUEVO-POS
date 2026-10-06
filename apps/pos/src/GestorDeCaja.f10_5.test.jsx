@@ -144,7 +144,10 @@ describe('F10.5 — criterio 1: abrir turno envía el nombre del cajero', () => 
     fireEvent.change(screen.getByLabelText('Fondo inicial'), {
       target: { value: '500' },
     });
+    // F12.7 B2 — la apertura tiene confirmación de 2 pasos: "Abrir turno" abre
+    // el diálogo "Confirmar fondo inicial"; aquí se confirma con "Sí, abrir turno".
     fireEvent.click(screen.getByRole('button', { name: 'Abrir turno' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sí, abrir turno' }));
 
     await waitFor(() => {
       expect(servicio.abrirTurno).toHaveBeenCalledTimes(1);
@@ -184,7 +187,9 @@ describe('F10.5 — criterio 2: sin nombre no se envía la clave', () => {
     fireEvent.change(screen.getByLabelText('Fondo inicial'), {
       target: { value: '500' },
     });
+    // F12.7 B2 — "Abrir turno" abre el diálogo; se confirma para llegar al servicio.
     fireEvent.click(screen.getByRole('button', { name: 'Abrir turno' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sí, abrir turno' }));
 
     await waitFor(() => {
       expect(servicio.abrirTurno).toHaveBeenCalledTimes(1);

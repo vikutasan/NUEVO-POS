@@ -27,7 +27,7 @@
  * Referencia: PLAN_DE_ABORDAJE_FASE_3_POR_PARTES.md §4 FASE 3.0.
  */
 
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -38,6 +38,11 @@ const SCAN_DIRS = ['apps', 'packages'];
 // Extensiones de test de Node que este runner ejecuta como subproceso.
 // OJO: `.jsx` NO entra aquí — Node no entiende JSX. Esos los corre Vitest.
 const NODE_TEST_RE = /\.(test|spec)\.(js|mjs|cjs)$/;
+
+// Un `.js` que importa `vitest` NO puede correr con `node` (Vitest falla con
+// "failed to access its internal state"). Esos archivos pertenecen al bloque
+// de Vitest aunque su extensión sea `.js`. Se detectan por su contenido.
+const VITEST_IMPORT_RE = /from\s+['"]vitest['"]/;
 
 /**
  * Recorre un directorio recursivamente y devuelve las rutas de tests de Node.
@@ -55,6 +60,15 @@ function findNodeTests(dir, acc = []) {
       if (entry.name === 'node_modules' || entry.name === '.git') continue;
       findNodeTests(full, acc);
     } else if (entry.isFile() && NODE_TEST_RE.test(entry.name)) {
+      // Un `.js` que importa `vitest` NO es un test de Node: lo corre Vitest.
+      // Se descarta aquí para que no lo ejecute el subproceso `node`.
+      let contenido = '';
+      try {
+        contenido = readFileSync(full, 'utf8');
+      } catch {
+        contenido = '';
+      }
+      if (VITEST_IMPORT_RE.test(contenido)) continue;
       acc.push(full);
     }
   }
@@ -121,6 +135,16 @@ function hayTestsDeComponentes() {
         walk(full);
       } else if (e.isFile() && VITEST_TEST_RE.test(e.name)) {
         encontrados.push(full);
+      } else if (e.isFile() && NODE_TEST_RE.test(e.name)) {
+        // Un `.js` que importa `vitest` pertenece al bloque de Vitest aunque su
+        // extensión sea `.js`. Se detecta por su contenido (ver VITEST_IMPORT_RE).
+        let contenido = '';
+        try {
+          contenido = readFileSync(full, 'utf8');
+        } catch {
+          contenido = '';
+        }
+        if (VITEST_IMPORT_RE.test(contenido)) encontrados.push(full);
       }
     }
   })(dir);

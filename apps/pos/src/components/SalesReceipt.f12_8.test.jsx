@@ -64,8 +64,15 @@ function montar(props = {}) {
   return render(<SalesReceipt {...base} {...props} />);
 }
 
+// F12.9 — El ticket ahora tiene DOS botones (paridad de operación con el viejo
+// POS): "💰 COBRAR" (gateado por caja) y "📌 ENVIAR CUENTA" (NO gateado). Este
+// helper aísla el botón COBRAR; el de ENVIAR CUENTA se busca con `botonEnviar`.
 function botonCobrar() {
-  return screen.getByRole('button', { name: /ENVIAR CUENTA|Cobrando/ });
+  return screen.getByRole('button', { name: /COBRAR|Cobrando/ });
+}
+
+function botonEnviar() {
+  return screen.getByRole('button', { name: /ENVIAR CUENTA|Enviando/ });
 }
 
 describe('F12.8 — sin caja habilitada el cobro está bloqueado', () => {
@@ -148,5 +155,101 @@ describe('F12.8 — los bloqueos previos se preservan', () => {
     );
     expect(botonCobrar().disabled).toBe(true);
     expect(screen.getByText('Caja no habilitada')).toBeTruthy();
+  });
+});
+
+/**
+ * F12.9 — PARIDAD DE OPERACIÓN (16ª instancia de §10.6).
+ *
+ * El viejo POS tenía DOS botones distintos, no uno:
+ *   1. COBRAR        → `handleCheckout()`    — gateado por `cashEnabled`.
+ *   2. ENVIAR CUENTA → `handleHoldAccount()` — NO gateado por `cashEnabled`.
+ *
+ * El nuevo POS los había CONFLACIONADO en un solo botón, de modo que el gate
+ * de caja (F12.8) bloqueaba también el envío al pizarrón. Eso rompía el flujo
+ * real: una terminal SIN caja debe poder enviar la cuenta al pizarrón.
+ *
+ * Esta compuerta fija las invariantes de la operación heredada:
+ *   1. Sin caja, ENVIAR CUENTA está HABILITADO (es el camino válido).
+ *   2. Sin caja, pulsar ENVIAR CUENTA dispara `onEnviarCuenta`.
+ *   3. Sin caja, pulsar ENVIAR CUENTA NO dispara `onCobrar`.
+ *   4. Un ticket vacío bloquea ENVIAR CUENTA.
+ *   5. Un envío en curso bloquea ENVIAR CUENTA.
+ *   6. Los dos botones son INDEPENDIENTES: el estado de uno no altera el otro.
+ *   7. Con caja, ambos botones están habilitados y disparan su handler propio.
+ */
+describe('F12.9 — sin caja, ENVIAR CUENTA al pizarrón sigue disponible', () => {
+  it('el botón ENVIAR CUENTA está habilitado sin caja', () => {
+    montar({ cajaHabilitada: false });
+    expect(botonEnviar().disabled).toBe(false);
+  });
+
+  it('pulsar ENVIAR CUENTA dispara onEnviarCuenta', () => {
+    const onEnviarCuenta = vi.fn();
+    montar({ cajaHabilitada: false, onEnviarCuenta });
+    fireEvent.click(botonEnviar());
+    expect(onEnviarCuenta).toHaveBeenCalledTimes(1);
+  });
+
+  it('pulsar ENVIAR CUENTA NO dispara onCobrar', () => {
+    const onCobrar = vi.fn();
+    const onEnviarCuenta = vi.fn();
+    montar({ cajaHabilitada: false, onCobrar, onEnviarCuenta });
+    fireEvent.click(botonEnviar());
+    expect(onEnviarCuenta).toHaveBeenCalledTimes(1);
+    expect(onCobrar).not.toHaveBeenCalled();
+  });
+
+  it('un ticket vacío bloquea ENVIAR CUENTA', () => {
+    montar({ cajaHabilitada: false, lineas: [] });
+    expect(botonEnviar().disabled).toBe(true);
+  });
+
+  it('un envío en curso bloquea ENVIAR CUENTA', () => {
+    montar({ cajaHabilitada: false, enviandoCuenta: true });
+    expect(botonEnviar().disabled).toBe(true);
+  });
+
+  it('el rótulo del envío en curso dice "Enviando…"', () => {
+    montar({ cajaHabilitada: false, enviandoCuenta: true });
+    expect(screen.getByText(/Enviando/)).toBeTruthy();
+  });
+});
+
+describe('F12.9 — los dos botones son independientes', () => {
+  it('sin caja: COBRAR bloqueado, ENVIAR CUENTA habilitado', () => {
+    montar({ cajaHabilitada: false });
+    expect(botonCobrar().disabled).toBe(true);
+    expect(botonEnviar().disabled).toBe(false);
+  });
+
+  it('con caja: ambos habilitados', () => {
+    montar({ cajaHabilitada: true });
+    expect(botonCobrar().disabled).toBe(false);
+    expect(botonEnviar().disabled).toBe(false);
+  });
+
+  it('con caja, cada botón dispara su propio handler', () => {
+    const onCobrar = vi.fn();
+    const onEnviarCuenta = vi.fn();
+    montar({ cajaHabilitada: true, onCobrar, onEnviarCuenta });
+    fireEvent.click(botonCobrar());
+    expect(onCobrar).toHaveBeenCalledTimes(1);
+    expect(onEnviarCuenta).not.toHaveBeenCalled();
+    fireEvent.click(botonEnviar());
+    expect(onEnviarCuenta).toHaveBeenCalledTimes(1);
+    expect(onCobrar).toHaveBeenCalledTimes(1);
+  });
+
+  it('un cobro en curso NO bloquea ENVIAR CUENTA', () => {
+    montar({ cajaHabilitada: true, cobrando: true });
+    expect(botonCobrar().disabled).toBe(true);
+    expect(botonEnviar().disabled).toBe(false);
+  });
+
+  it('un envío en curso NO bloquea COBRAR', () => {
+    montar({ cajaHabilitada: true, enviandoCuenta: true });
+    expect(botonEnviar().disabled).toBe(true);
+    expect(botonCobrar().disabled).toBe(false);
   });
 });
