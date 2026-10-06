@@ -1,4 +1,4 @@
-"""Registro de los 28 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario).
+"""Registro de los 29 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario) + FASE 12.9.1 (Creación de ticket).
 
 Cada contrato se declara aquí con su firma completa (entrada/salida) y su
 proveedor. El registro es la fuente única de verdad: el test de la puerta F2
@@ -47,6 +47,11 @@ Contratos de la FASE 8.0 (CRM y Notificaciones — lado POS):
 
   26  clientes.beneficios_para_ticket     POS                 CRM          FASE 8.0
   27  notificaciones.encolar_ticket       POS                 Notificaciones FASE 8.0
+
+Contrato de la FASE 12.9.1 (creación de ticket — cierra el hueco A-02 del
+endpoint `POST /pos/tickets`, que existía sin contrato declarado):
+
+  29  pos.crear_ticket                    POS                 POS          FASE 12.9.1
 
 ──────────────────────────────────────────────────────────────────────────────
 NOTA DE FRONTERA — CRM Y NOTIFICACIONES (FASE 8.0) — añadida 30 Sep 2026
@@ -770,6 +775,51 @@ CONTRATOS: tuple[Contrato, ...] = (
             "400 si la sesión del movimiento está cerrada (RN-52).",
         ),
         estado_hoy="FASE 10.6.2",
+    ),
+    # ── §15 POS — Creación de ticket (proveedor: POS — FASE 12.9.1) ────────
+    Contrato(
+        numero=29,
+        nombre="pos.crear_ticket",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="POST /pos/tickets",
+        entrada={
+            "terminal_id": "String",
+            "channel": "String = 'PANADERIA'",
+            "items": "List[{product_id: UUID, quantity: Integer}] = []",
+            "order_type": "String = 'VENTA_DIRECTA'",
+            "capturista_nombre": "String | None",
+        },
+        salida={
+            "id": "UUID",
+            "account_num": "String (folio V####, RN-10)",
+            "status": "String (OPEN, RN-14)",
+            "total": "Numeric(12,2)",
+            "version": "Integer",
+            "terminal_id": "String",
+            "channel": "String",
+            "items": "List[LineaSalida]",
+            "payment_details": "Dict | None",
+        },
+        garantias=(
+            "El ticket puede nacer SIN LÍNEAS (`items` vacío): es el flujo real "
+            "del POS, que crea la cuenta vacía para obtener folio y `account_num`, "
+            "y luego la llena por el contrato 18 (`pos.añadir_item`).",
+            "Un ticket vacío es válido: nace OPEN con `total` = 0.00 y aparece en "
+            "el pizarrón (contrato 23) hasta que se cobra.",
+            "El `unit_price` y el `subtotal` los resuelve el servidor contra el "
+            "catálogo (RN-18/RN-19); el cliente NO dicta precios.",
+            "El ticket nace OPEN (RN-14) y con `version` 0 (RN-15).",
+            "Exige una sesión de terminal activa (RN-24).",
+            "Devuelve una PROYECCIÓN, no la fila completa de `tickets` (O-23).",
+        ),
+        errores=(
+            "404 si la terminal no tiene sesión activa (RN-24).",
+            "404 si algún `product_id` no existe (RN-21).",
+            "400 si algún producto está inactivo (RN-22).",
+            "400 si alguna `quantity` no es un entero positivo (RN-20).",
+        ),
+        estado_hoy="FASE 12.9.1",
     ),
     # ── §14 Estadísticas — Contexto diario (proveedor: POS — FASE 10.4) ─────
     Contrato(

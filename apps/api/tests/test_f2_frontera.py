@@ -34,15 +34,17 @@ MODULOS_AJENOS = (
     "stats",
 )
 
-# Los 29 contratos esperados: los 17 del Documento 9 §10 (FASE 2) más los 5
+# Los 30 contratos esperados: los 17 del Documento 9 §10 (FASE 2) más los 5
 # atómicos de la FASE 3.2 (corrigen el defecto D-2: endpoints sin contrato) más
 # el contrato 23 de la FASE 5.0 (pizarrón de cuentas abiertas) más los 2 de la
 # FASE 7.0 (capacidades de IA — cierran la brecha de la DT-07) más los 2 de la
 # FASE 8.0 (CRM y Notificaciones — lado POS) más el contrato 28 de la FASE 10.4
 # (contexto diario post-corte — cierra la brecha B-02) más el contrato 29 de la
 # FASE 10.6.2 (eliminar movimiento de caja — cierra la brecha de paridad de
-# operación del Gestor de Caja).
-LOS_29_CONTRATOS = (
+# operación del Gestor de Caja) más el contrato 29 de la FASE 12.9.1 (creación
+# de ticket — cierra el hueco A-02 del endpoint `POST /pos/tickets`, que
+# existía sin contrato declarado).
+LOS_30_CONTRATOS = (
     "catalogo.productos_para_venta",
     "almacenes.consumir_por_venta",
     "almacenes.disponibilidad",
@@ -76,6 +78,8 @@ LOS_29_CONTRATOS = (
     "notificaciones.encolar_ticket",
     # ── FASE 10.6.2 — Eliminar movimiento de caja (proveedor: Caja) ────────
     "caja.eliminar_movimiento",
+    # ── FASE 12.9.1 — Creación de ticket (proveedor: POS — cierra A-02) ────
+    "pos.crear_ticket",
     # ── FASE 10.4 — Contexto diario post-corte (proveedor: POS) ────────────
     "pos.contexto_diario",
 )
@@ -158,11 +162,11 @@ def test_criterio1_los_contratos_no_importan_modelos():
 # ── Criterio 2: cada contrato tiene su firma ───────────────────────────────
 
 
-def test_criterio2_hay_exactamente_29_contratos():
-    """El registro declara los 29 contratos (17 F2 + 5 F3.2 + 1 F5.0 + 2 F7.0 + 2 F8.0 + 1 F10.4 + 1 F10.6.2)."""
-    assert len(CONTRATOS) == 29, f"Se esperaban 29 contratos, hay {len(CONTRATOS)}"
+def test_criterio2_hay_exactamente_30_contratos():
+    """El registro declara los 30 contratos (17 F2 + 5 F3.2 + 1 F5.0 + 2 F7.0 + 2 F8.0 + 1 F10.4 + 1 F10.6.2 + 1 F12.9.1)."""
+    assert len(CONTRATOS) == 30, f"Se esperaban 30 contratos, hay {len(CONTRATOS)}"
     nombres = tuple(c.nombre for c in CONTRATOS)
-    assert nombres == LOS_29_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
+    assert nombres == LOS_30_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
 
 
 def test_criterio2_cada_contrato_tiene_firma_documentada():
@@ -211,7 +215,8 @@ def test_criterio3_el_pos_es_proveedor_en_sus_contratos():
     Documento 9 §12 fijaba 2 (auditoría y estadísticas). La FASE 3.2 añade 5
     contratos atómicos cuyo proveedor es el propio POS (endpoints de ticket).
     La FASE 5.0 añade el contrato 23 (pizarrón de cuentas abiertas), también
-    provisto por el POS.
+    provisto por el POS. La FASE 12.9.1 añade el contrato 29 (creación de
+    ticket), que cierra el hueco A-02 del endpoint `POST /pos/tickets`.
     """
     proveedor_pos = [c.nombre for c in CONTRATOS if c.proveedor == "POS"]
     assert proveedor_pos == [
@@ -223,10 +228,11 @@ def test_criterio3_el_pos_es_proveedor_en_sus_contratos():
         "pos.leer_ticket",
         "pos.verificar_envio",
         "pos.cuentas_abiertas",
+        "pos.crear_ticket",
         "pos.contexto_diario",
     ], f"El POS es proveedor en contratos inesperados: {proveedor_pos}"
 
 
-def test_listar_contratos_devuelve_los_29():
-    """La función pública del paquete devuelve los 29 contratos."""
-    assert len(listar_contratos()) == 29
+def test_listar_contratos_devuelve_los_30():
+    """La función pública del paquete devuelve los 30 contratos."""
+    assert len(listar_contratos()) == 30

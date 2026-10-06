@@ -107,11 +107,23 @@ class CrearTicketEntrada(BaseModel):
     El POS guarda su copia de trabajo en `tickets.order_*` (los 9 campos del
     modelo `Ticket`). La proyección a `orders` la gobierna el módulo Pedidos
     (contrato 15), no el POS (A-02: frontera por contratos).
+
+    F12.9.1 — `items` puede venir VACÍO: el ticket nace sin líneas y se llena
+    después por el contrato atómico 18 (`pos.añadir_item`). Este es el flujo
+    REAL del POS: `asegurarTicket` crea la cuenta vacía (para obtener folio y
+    `account_num`) y cada producto entra luego, uno a uno. El caso de uso
+    primario es la CUENTA VACÍA que se envía al pizarrón y se cobra más tarde,
+    pero la capacidad es GENERAL: todo ticket puede nacer sin líneas. Un ticket
+    vacío es válido (total `0.00`); el POS lo muestra en el pizarrón y lo
+    completa cuando el cliente agrega productos.
     """
 
     terminal_id: str
     channel: str = "PANADERIA"
-    items: list[LineaEntrada] = Field(min_length=1)
+    # F12.9.1 — Lista vacía por defecto (no `min_length=1`): el ticket puede
+    # nacer sin líneas. El POS crea la cuenta vacía primero y la llena después
+    # vía el contrato atómico 18. Ver la garantía del contrato `pos.crear_ticket`.
+    items: list[LineaEntrada] = Field(default_factory=list)
 
     # ── Programación de pedido (opcional) ─────────────────────────────────
     order_type: str = "VENTA_DIRECTA"
