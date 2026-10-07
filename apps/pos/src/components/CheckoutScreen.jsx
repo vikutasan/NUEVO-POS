@@ -186,7 +186,6 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
    * `0` y `manejarAgregarPago` rechaza el abono (no tiene sentido abonar $0).
    */
   function montoAplicado(metodoReal, capturado) {
-    if (metodoReal !== 'EFECTIVO') return capturado;
     const pendiente = Math.max(0, Math.round((total - resumen.abonado) * 100) / 100);
     // Si ya no queda pendiente, no se aplica nada (el excedente sería cambio).
     return Math.min(capturado, pendiente);
