@@ -342,3 +342,72 @@ describe('FIX "confirmar pago no hace nada" — el bloqueo se explica junto al b
     expect(texto).not.toMatch(/Faltan/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. FIX "suma_no_cuadra" — el vuelto (monto capturado > pendiente) NO rompe
+//    el cobro. El abono aplica solo lo que falta y el excedente es cambio.
+// ---------------------------------------------------------------------------
+
+describe('FIX "suma_no_cuadra" — el vuelto no rompe el cobro', () => {
+  it('con abonos: capturar MÁS que el pendiente aplica solo el pendiente y cuadra', () => {
+    const { onConfirmar } = montar(100);
+    // El cajero teclea $150 para un total de $100 (prueba del cambio).
+    agregarAbono(150);
+    // El abono aplicado es $100 (no $150): el faltante queda en cero.
+    expect(screen.getByText('$0.00')).toBeTruthy();
+    // El botón se habilita (antes quedaba muerto por `suma_no_cuadra`).
+    expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(false);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const payload = onConfirmar.mock.calls[0][0];
+    expect(payload.abonos).toHaveLength(1);
+    // El abono aplica $100 y conserva los $150 recibidos (vuelto $50).
+    expect(Number(payload.abonos[0].monto)).toBe(100);
+    expect(Number(payload.abonos[0].recibido)).toBe(150);
+  });
+
+  it('con abonos: el vuelto se calcula como recibido − aplicado', () => {
+    const { onConfirmar } = montar(100);
+    agregarAbono(150);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const abono = onConfirmar.mock.calls[0][0].abonos[0];
+    // El servicio canónico calcula el cambio al construir el payload.
+    expect(Number(abono.monto)).toBe(100);
+    expect(Number(abono.recibido)).toBe(150);
+  });
+
+  it('con abonos: un monto MENOR al pendiente se aplica tal cual (sin regresión)', () => {
+    montar(100);
+    agregarAbono(40);
+    // Sigue faltando $60 (el abono parcial no se toca).
+    expect(screen.getByText('$60.00')).toBeTruthy();
+  });
+
+  it('con abonos mixtos: efectivo con vuelto + tarjeta cuadran el total', () => {
+    const { onConfirmar } = montar(100);
+    // Efectivo $60 (aplica $60) y tarjeta $40 → cuadra exacto.
+    agregarAbono(60);
+    elegirMetodo('Tarjeta');
+    agregarAbono(40);
+    expect(screen.getByText('$0.00')).toBeTruthy();
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const abonos = onConfirmar.mock.calls[0][0].abonos;
+    expect(abonos).toHaveLength(2);
+    const suma = abonos.reduce((acc, a) => acc + Number(a.monto), 0);
+    expect(suma).toBe(100);
+  });
+
+  it('al editar un abono con vuelto, también aplica solo el pendiente', () => {
+    const { onConfirmar } = montar(100);
+    agregarAbono(40);
+    // Edita el abono a $150 (más que el total): debe aplicar $100.
+    fireEvent.click(screen.getByText('Editar'));
+    escribirMonto(150);
+    fireEvent.click(screen.getByText('Guardar abono'));
+    expect(screen.getByText('$0.00')).toBeTruthy();
+    expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(false);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const abono = onConfirmar.mock.calls[0][0].abonos[0];
+    expect(Number(abono.monto)).toBe(100);
+    expect(Number(abono.recibido)).toBe(150);
+  });
+});

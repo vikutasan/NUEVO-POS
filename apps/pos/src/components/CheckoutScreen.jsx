@@ -150,15 +150,35 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     return METODOS_VALIDOS.includes(m) ? m : 'EFECTIVO';
   }
 
+  /**
+   * FIX "suma_no_cuadra" (7 Oct 2026) — CAUSA REAL: al capturar un monto MAYOR
+   * al pendiente (p. ej. total $100 y el cliente entrega $150 para probar el
+   * cambio), el abono guardaba `monto = 150` (lo RECIBIDO) en vez de `monto =
+   * 100` (lo APLICADO al total). Entonces la suma de `monto` (150) no cuadraba
+   * el total (100) → RN-94 → `suma_no_cuadra` y el cobro se abortaba.
+   *
+   * El diseño (ver `checkoutService.calcularCambio`) es: `monto` = lo que se
+   * APLICA al total (nunca más que el pendiente); `recibido` = el efectivo que
+   * el cliente entrega; `cambio` = `recibido − monto`. Para EFECTIVO se aplica
+   * `min(capturado, pendiente)` y el excedente queda como `recibido` (vuelto).
+   * Para TARJETA/TRANSFERENCIA el monto aplicado es el capturado tal cual.
+   */
+  function montoAplicado(metodoReal, capturado) {
+    if (metodoReal !== 'EFECTIVO') return capturado;
+    const pendiente = Math.max(0, Math.round((total - resumen.abonado) * 100) / 100);
+    return Math.min(capturado, pendiente > 0 ? pendiente : capturado);
+  }
+
   /** Agrega el monto capturado como un abono con el método elegido. */
   function manejarAgregarPago() {
-    const monto = Number(montoAbono);
-    if (!Number.isFinite(monto) || monto <= 0) return;
+    const capturado = Number(montoAbono);
+    if (!Number.isFinite(capturado) || capturado <= 0) return;
     const metodoReal = metodoCanonico(metodo);
+    const monto = montoAplicado(metodoReal, capturado);
     const nuevo = agregarPago({
       metodo: metodoReal,
       monto,
-      recibido: metodoReal === 'EFECTIVO' ? monto : null,
+      recibido: metodoReal === 'EFECTIVO' ? capturado : null,
     });
     if (nuevo) {
       setMontoAbono('');
@@ -173,15 +193,26 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     setMetodo(abono.metodo === 'DEBITO' || abono.metodo === 'CREDITO' ? 'TARJETA' : abono.metodo);
   }
 
-  /** Guarda la edición del abono en curso. */
+  /** Guarda la edición del abono en curso (mismo criterio que agregar). */
   function manejarGuardarEdicion() {
-    const monto = Number(montoAbono);
-    if (!Number.isFinite(monto) || monto <= 0) return;
+    const capturado = Number(montoAbono);
+    if (!Number.isFinite(capturado) || capturado <= 0) return;
     const metodoReal = metodoCanonico(metodo);
+    // Al editar, el pendiente excluye el monto ANTERIOR de este abono.
+    const anterior = abonos.find((a) => a.id === editandoId);
+    const abonadoSinEste = Math.max(
+      0,
+      Math.round((resumen.abonado - (Number(anterior?.monto) || 0)) * 100) / 100,
+    );
+    const pendiente = Math.max(0, Math.round((total - abonadoSinEste) * 100) / 100);
+    const monto =
+      metodoReal === 'EFECTIVO'
+        ? Math.min(capturado, pendiente > 0 ? pendiente : capturado)
+        : capturado;
     editarPago(editandoId, {
       metodo: metodoReal,
       monto,
-      recibido: metodoReal === 'EFECTIVO' ? monto : null,
+      recibido: metodoReal === 'EFECTIVO' ? capturado : null,
     });
     setMontoAbono('');
     setEditandoId(null);
