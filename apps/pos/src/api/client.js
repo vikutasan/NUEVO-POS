@@ -244,9 +244,17 @@ export function liberarLock(terminalId, usuarioId) {
 // FASE 4.2 — Caja (contratos 9–14)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** GET /cash/active-session — turno de caja abierto (contrato 9). */
-export function getSesionCajaActiva() {
-  return peticion('/cash/active-session');
+/**
+ * GET /cash/active-session — turno de caja abierto (contrato 9).
+ *
+ * El endpoint EXIGE `terminal_id` (Query(...) en el router): sin él responde
+ * 422 y el POS nunca sabría que la caja ya está habilitada (el botón se
+ * quedaba en "○ Habilitar" y la guarda de cobro seguía activa). Se envía
+ * siempre, con el mismo patrón que `getSesionActiva`.
+ */
+export function getSesionCajaActiva(terminalId = CONFIG.TERMINAL_ID) {
+  const qs = new URLSearchParams({ terminal_id: terminalId });
+  return peticion(`/cash/active-session?${qs.toString()}`);
 }
 
 /**

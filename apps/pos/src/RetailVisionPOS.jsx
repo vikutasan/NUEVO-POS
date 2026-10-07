@@ -312,11 +312,11 @@ export default function RetailVisionPOS({
   // `null`: la guarda es un AVISO, no un bloqueo duro (el backend sigue siendo
   // la autoridad final vía RN-49).
   const refrescarTurnoCaja = useCallback(async () => {
-    const r = await caja.obtenerTurnoActivo();
+    const r = await caja.obtenerTurnoActivo(terminalEfectiva);
     if (r.outcome === 'ok') {
       setTurnoCaja(r.data && r.data.cash_session_id ? r.data : null);
     }
-  }, []);
+  }, [terminalEfectiva]);
 
   useEffect(() => {
     refrescarTurnoCaja();

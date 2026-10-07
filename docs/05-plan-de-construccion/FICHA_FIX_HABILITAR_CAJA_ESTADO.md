@@ -250,3 +250,131 @@ Y la regla de diseño que se fija para siempre:
 | [`apps/pos/src/components/TerminalSelector.jsx`](../../apps/pos/src/components/TerminalSelector.jsx:138) | Badge verde "Caja habilitada" |
 | [`apps/pos/src/GestorDeCaja.jsx`](../../apps/pos/src/GestorDeCaja.jsx:100) | Callbacks `onCajaHabilitada`/`onCajaDeshabilitada` + recuperación 409 |
 | [`apps/pos/src/RetailVisionPOS.jsx`](../../apps/pos/src/RetailVisionPOS.jsx:1219) | Cableado de los callbacks a `turnoCaja` |
+
+---
+
+## 7. Segunda vuelta — Defecto D: `GET /cash/active-session` sin `terminal_id` (422)
+
+### 7.1 Síntoma reportado (tras la primera corrección)
+
+El dueño reportó, textualmente:
+
+> *"en el landing dice caja habilitada la terminal , al entrar el boton aun dice caja
+> habilitar , invoco una cuenta del pizarron y aun no esta habilitado el boton de cobrar"*
+
+El **Defecto C quedó resuelto** (el landing ya marca la terminal), pero persistían DOS
+síntomas que la primera vuelta no cubría:
+
+1. **Al entrar al POS**, el botón del encabezado seguía diciendo "○ Habilitar".
+2. **Al invocar una cuenta del pizarrón**, el botón de **Cobrar** seguía deshabilitado.
+
+### 7.2 Diagnóstico (causa raíz)
+
+El endpoint `GET /cash/active-session` **EXIGE** `terminal_id` como query param:
+
+```python
+# apps/api/routers/cash.py:175
+async def sesion_activa(
+    terminal_id: str = Query(..., description="Terminal a consultar"),
+    ...
+```
+
+Pero el cliente del POS lo llamaba **sin el parámetro**:
+
+```javascript
+// apps/pos/src/api/client.js:248 (ANTES)
+export function getSesionCajaActiva() {
+  return peticion('/cash/active-session');   // ← sin terminal_id
+}
+```
+
+**Prueba en vivo (REGLA DURA 2):**
+
+```
+$ curl -s "http://localhost:5101/cash/active-session"
+{"detail":[{"type":"missing","loc":["query","terminal_id"],
+            "msg":"Field required","input":null}]}          ← HTTP 422
+
+$ curl -s "http://localhost:5101/cash/active-session?terminal_id=TERM-01"
+{"cash_session_id":"d7e69762-24f6-4850-bbc3-496c3966a0d1",
+ "abierta_en":"2026-10-07T04:23:44.867723Z"}                ← HTTP 200
+```
+
+**La cadena del fallo:**
+
+1. `refrescarTurnoCaja` llama a `caja.obtenerTurnoActivo()` → `getSesionCajaActiva()` sin
+   `terminal_id` → **HTTP 422**.
+2. `aOutcome` traduce el 422 a `{ outcome: 'error', reason: 'datos_invalidos' }`.
+3. `refrescarTurnoCaja` **solo actúa si `outcome === 'ok'`** → `turnoCaja` se queda en `null`.
+4. El botón lee `turnoCaja` → pinta "○ Habilitar" (síntoma 1).
+5. La guarda de cobro lee `cajaHabilitada={Boolean(turnoCaja)}` → `false` → el botón
+   **Cobrar** queda bloqueado aunque la caja esté abierta (síntoma 2).
+
+**Es la MISMA clase de fallo que el Defecto A/B/C**: la operación existía, el backend
+estaba correcto, pero el **cableado** estaba roto. Aquí el cableado roto era el **query
+param obligatorio** que el cliente omitía.
+
+### 7.3 Corrección aplicada
+
+Se siguió el patrón ya establecido en el propio archivo (`getSesionActiva`, línea 103):
+
+```javascript
+// apps/pos/src/api/client.js — AHORA
+export function getSesionCajaActiva(terminalId = CONFIG.TERMINAL_ID) {
+  const qs = new URLSearchParams({ terminal_id: terminalId });
+  return peticion(`/cash/active-session?${qs.toString()}`);
+}
+```
+
+Y se propagó el `terminalId` por toda la cadena de llamada:
+
+| Capa | Archivo | Cambio |
+|---|---|---|
+| Cliente | [`client.js`](../../apps/pos/src/api/client.js:255) | `getSesionCajaActiva(terminalId)` + `URLSearchParams` |
+| Servicio | [`cashService.js`](../../apps/pos/src/services/cashService.js:54) | `obtenerTurnoActivo(terminalId)` reenvía el id |
+| Contenedor | [`RetailVisionPOS.jsx`](../../apps/pos/src/RetailVisionPOS.jsx:314) | `obtenerTurnoActivo(terminalEfectiva)` + dep `[terminalEfectiva]` |
+| Modal | [`GestorDeCaja.jsx`](../../apps/pos/src/GestorDeCaja.jsx:232) | `obtenerTurnoActivo(terminalId)` en `cargar` y en la recuperación 409 |
+
+### 7.4 Verificación
+
+| Suite | Resultado |
+|---|---|
+| `curl /cash/active-session?terminal_id=TERM-01` | **HTTP 200** con `cash_session_id` |
+| `npx vitest run src/services/cashService.f4_2.test.jsx` | **14 passed** (13 + 1 nuevo) |
+| `npm test -- --run` (frontend completo) | **708 passed** (64 archivos) |
+
+Test de regresión añadido en [`cashService.f4_2.test.jsx`](../../apps/pos/src/services/cashService.f4_2.test.jsx:80):
+
+```javascript
+it('obtenerTurnoActivo reenvía el terminalId al cliente', async () => {
+  apiSimulada.getSesionCajaActiva.mockResolvedValue({ cash_session_id: 'caja-1' });
+  await caja.obtenerTurnoActivo('TERM-03');
+  expect(apiSimulada.getSesionCajaActiva).toHaveBeenCalledWith('TERM-03');
+});
+```
+
+### 7.5 Lección (Defecto D)
+
+> **Un query param obligatorio que el cliente omite es un fallo silencioso**: el 422 se
+> traduce a `outcome: 'error'` y el componente, que solo actúa en `'ok'`, se queda con el
+> estado viejo SIN mostrar error. La operación "parece" no hacer nada.
+
+La regla que se refuerza (hermana de la §5):
+
+> **Cuando un endpoint declara un parámetro obligatorio (`Query(...)`), el cliente DEBE
+> enviarlo SIEMPRE.** Un `terminal_id` opcional con default en el cliente es una bomba de
+> tiempo: si el default no coincide con la terminal real, el estado se lee de la terminal
+> equivocada. Por eso el default es `CONFIG.TERMINAL_ID` y el contenedor SIEMPRE pasa la
+> terminal efectiva.
+
+---
+
+## 8. Archivos tocados (segunda vuelta)
+
+| Archivo | Cambio |
+|---|---|
+| [`apps/pos/src/api/client.js`](../../apps/pos/src/api/client.js:255) | `getSesionCajaActiva(terminalId)` con `URLSearchParams` |
+| [`apps/pos/src/services/cashService.js`](../../apps/pos/src/services/cashService.js:54) | `obtenerTurnoActivo(terminalId)` |
+| [`apps/pos/src/RetailVisionPOS.jsx`](../../apps/pos/src/RetailVisionPOS.jsx:314) | `obtenerTurnoActivo(terminalEfectiva)` + dep |
+| [`apps/pos/src/GestorDeCaja.jsx`](../../apps/pos/src/GestorDeCaja.jsx:232) | `obtenerTurnoActivo(terminalId)` (cargar + 409) |
+| [`apps/pos/src/services/cashService.f4_2.test.jsx`](../../apps/pos/src/services/cashService.f4_2.test.jsx:80) | Test de regresión del reenvío del `terminalId` |

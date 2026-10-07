@@ -77,6 +77,18 @@ describe('cashService — éxito', () => {
     expect(apiSimulada.getSesionCajaActiva).toHaveBeenCalledTimes(1);
   });
 
+  // FIX "habilitar caja" (2ª vuelta) — el endpoint EXIGE `terminal_id`
+  // (Query(...)). Sin él el API responde 422 y el POS nunca sabe que la caja
+  // ya está habilitada: el botón se quedaba en "○ Habilitar" y la guarda de
+  // cobro seguía activa. Este test fija que el `terminalId` se reenvía.
+  it('obtenerTurnoActivo reenvía el terminalId al cliente', async () => {
+    apiSimulada.getSesionCajaActiva.mockResolvedValue({ cash_session_id: 'caja-1' });
+
+    await caja.obtenerTurnoActivo('TERM-03');
+
+    expect(apiSimulada.getSesionCajaActiva).toHaveBeenCalledWith('TERM-03');
+  });
+
   it('abrirTurno pasa el cuerpo tal cual al cliente', async () => {
     apiSimulada.abrirTurno.mockResolvedValue({ cash_session_id: 'caja-2' });
 

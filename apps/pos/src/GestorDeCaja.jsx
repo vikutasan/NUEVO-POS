@@ -229,7 +229,7 @@ export default function GestorDeCaja({
     let vigente = true;
 
     async function cargar() {
-      const r = await servicio.obtenerTurnoActivo();
+      const r = await servicio.obtenerTurnoActivo(terminalId);
       if (!vigente) return;
       if (!esOk(r)) {
         setError(mensajeDe(r.reason));
@@ -251,7 +251,7 @@ export default function GestorDeCaja({
     return () => {
       vigente = false;
     };
-  }, [servicio, onCajaHabilitada]);
+  }, [servicio, terminalId, onCajaHabilitada]);
 
   /** Refresca el resumen del turno abierto. */
   const refrescarResumen = useCallback(async () => {
@@ -307,7 +307,7 @@ export default function GestorDeCaja({
       // gestionar. Aquí se replica la recuperación: se relee el turno activo y,
       // si existe, se adopta como propio (estado ABIERTO + aviso al contenedor).
       if (r.reason === 'ya_hay_turno_abierto') {
-        const activo = await servicio.obtenerTurnoActivo();
+        const activo = await servicio.obtenerTurnoActivo(terminalId);
         if (esOk(activo) && activo.data && activo.data.cash_session_id) {
           setTurno(activo.data);
           setEstado(ESTADOS.ABIERTO);

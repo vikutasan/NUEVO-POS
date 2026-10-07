@@ -45,10 +45,14 @@ function motivo(err) {
 
 /**
  * GET /cash/active-session — el turno de caja abierto, o `null`.
+ *
+ * `terminalId` es OBLIGATORIO en el endpoint (Query(...)): sin él el API
+ * responde 422 y el POS no puede saber que la caja ya está habilitada.
+ * @param {string} [terminalId] terminal a consultar (por defecto la del POS)
  * @returns {Promise<{outcome: string, reason: string|null, data: object|null}>}
  */
-export function obtenerTurnoActivo() {
-  return aOutcome(() => cliente.getSesionCajaActiva(), motivo);
+export function obtenerTurnoActivo(terminalId) {
+  return aOutcome(() => cliente.getSesionCajaActiva(terminalId), motivo);
 }
 
 /**
