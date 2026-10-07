@@ -107,9 +107,22 @@ export function useCart(opciones = {}) {
     ticketRef.current = ticketId;
   }, [ticketId]);
 
-  /** Total local (suma de subtotales). El servidor es la fuente de verdad. */
+  /**
+   * Total local (suma de subtotales). El servidor es la fuente de verdad.
+   *
+   * FIX "suma_no_cuadra" (4ª vuelta, 7 Oct 2026) — CAUSA RAÍZ: la suma cruda de
+   * `unit_price × quantity` produce errores de coma flotante (p. ej.
+   * `33.33 × 3 = 99.99000000000001`). Ese total viajaba SIN redondear hasta el
+   * `payment_details`, y el backend compara con `Decimal` EXACTO (RN-94, DT-02):
+   * `Decimal("99.99000000000001") != Decimal("99.99")` → `suma_no_cuadra`.
+   * Se redondea a 2 decimales AQUÍ (frontera del dinero) para que TODA la app
+   * (checkout, resumen, payload) hable del MISMO total.
+   */
   const total = useMemo(
-    () => lineas.reduce((acc, l) => acc + Number(l.unit_price) * Number(l.quantity), 0),
+    () =>
+      Math.round(
+        lineas.reduce((acc, l) => acc + Number(l.unit_price) * Number(l.quantity), 0) * 100
+      ) / 100,
     [lineas]
   );
 

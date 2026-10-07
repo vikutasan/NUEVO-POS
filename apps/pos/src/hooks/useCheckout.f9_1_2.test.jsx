@@ -193,6 +193,58 @@ describe('F9.1.2 — A6: helpers del servicio', () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+// A7. FIX "suma_no_cuadra" (4ª VUELTA) — el servicio tolera un TOTAL con error
+//     de coma flotante (p. ej. `33.33 × 3 = 99.99000000000001`). El backend
+//     compara con `Decimal` EXACTO (RN-94, DT-02), así que la frontera debe
+//     redondear a 2 decimales antes de decidir si la suma cuadra.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('FIX "suma_no_cuadra" (4ª vuelta) — total flotante en el servicio', () => {
+  const TOTAL_FLOTANTE = 33.33 * 3; // 99.99000000000001
+
+  it('un abono con el total flotante cuadra (no devuelve suma_no_cuadra)', () => {
+    const r = construirPaymentDetails({
+      abonos: [{ metodo: 'EFECTIVO', monto: 99.99, recibido: 100 }],
+      total: TOTAL_FLOTANTE,
+    });
+    expect(r.outcome).toBe('ok');
+    expect(r.data.pagos[0].monto).toBe('99.99');
+  });
+
+  it('un abono con monto flotante se redondea antes de sumar', () => {
+    const r = construirPaymentDetails({
+      abonos: [{ metodo: 'EFECTIVO', monto: TOTAL_FLOTANTE, recibido: 100 }],
+      total: TOTAL_FLOTANTE,
+    });
+    expect(r.outcome).toBe('ok');
+    // El monto serializado es 99.99, no 99.99000000000001.
+    expect(r.data.pagos[0].monto).toBe('99.99');
+  });
+
+  it('pago mixto con total flotante cuadra exacto', () => {
+    const r = construirPaymentDetails({
+      abonos: [
+        { metodo: 'EFECTIVO', monto: 50, recibido: 50 },
+        { metodo: 'DEBITO', monto: 49.99 },
+      ],
+      total: TOTAL_FLOTANTE,
+    });
+    expect(r.outcome).toBe('ok');
+    const suma = r.data.pagos.reduce((acc, p) => acc + Number(p.monto), 0);
+    expect(Math.round(suma * 100) / 100).toBe(99.99);
+  });
+
+  it('un cobro realmente corto sigue rechazándose (sin regresión)', () => {
+    const r = construirPaymentDetails({
+      abonos: [{ metodo: 'EFECTIVO', monto: 99.98, recibido: 100 }],
+      total: TOTAL_FLOTANTE,
+    });
+    expect(r.outcome).toBe('error');
+    expect(r.reason).toBe('suma_no_cuadra');
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 // B. HOOK
 // ───────────────────────────────────────────────────────────────────────────
 

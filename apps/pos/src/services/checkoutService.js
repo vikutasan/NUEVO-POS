@@ -108,7 +108,12 @@ export function construirPaymentDetails({ abonos = [], total = 0, cajero = null 
     if (!metodo) {
       return fallo('metodo_invalido', null);
     }
-    const montoNum = Number(abono && abono.monto);
+    // 4ª VUELTA (7 Oct 2026) — Se redondea el monto a 2 decimales ANTES de
+    // sumar. `aMonto` ya devuelve String con 2 decimales, pero el `montoNum`
+    // crudo puede traer error de coma flotante (p. ej. 99.99000000000001) que
+    // se propagaría a `recibido`/`cambio`. Redondear aquí garantiza que la
+    // suma de `pagos` sea EXACTA frente al `Decimal` del backend (RN-94).
+    const montoNum = Math.round(Number(abono && abono.monto) * 100) / 100;
     if (!Number.isFinite(montoNum) || montoNum <= 0) {
       return fallo('monto_invalido', null);
     }

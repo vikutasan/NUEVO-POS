@@ -473,3 +473,80 @@ describe('FIX "suma_no_cuadra" (3ª vuelta) — pago único con vuelto', () => {
     expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 11. FIX "suma_no_cuadra" (4ª VUELTA) — el TOTAL con error de coma flotante
+//     (p. ej. `33.33 × 3 = 99.99000000000001`) NO debe romper el cobro.
+//
+//     CAUSA RAÍZ: `useCart.total` sumaba `unit_price × quantity` SIN redondear.
+//     Ese total viajaba al `payment_details` y el backend compara con `Decimal`
+//     EXACTO (RN-94, DT-02): `Decimal("99.99000000000001") != Decimal("99.99")`
+//     → `suma_no_cuadra`. El path de abonos se salvaba porque `montoAplicado`
+//     redondea el pendiente; el path de PAGO ÚNICO no redondeaba `monto`.
+//     Ahora todo monto que cruza la frontera se redondea a 2 decimales.
+// ---------------------------------------------------------------------------
+
+describe('FIX "suma_no_cuadra" (4ª vuelta) — total con error de coma flotante', () => {
+  // Total "sucio" tal como lo produce `33.33 × 3` en coma flotante.
+  const TOTAL_FLOTANTE = 33.33 * 3; // 99.99000000000001
+
+  it('el total flotante se redondea a 2 decimales en el resumen', () => {
+    montar(TOTAL_FLOTANTE);
+    // El resumen muestra $99.99 (no $99.99000000000001).
+    expect(screen.getByText('$99.99')).toBeTruthy();
+  });
+
+  it('pago único en efectivo exacto: monto redondeado = 99.99 (no el float crudo)', () => {
+    const { onConfirmar } = montar(TOTAL_FLOTANTE);
+    escribirMonto(100); // el cliente entrega $100 por un total de $99.99
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const payload = onConfirmar.mock.calls[0][0];
+    // `monto` debe ser EXACTAMENTE 99.99 (2 decimales), no 99.99000000000001.
+    expect(payload.monto).toBe(99.99);
+    expect(payload.recibido).toBe(100);
+    expect(payload.cambio).toBe(0.01);
+  });
+
+  it('pago único en efectivo con vuelto: monto redondeado y cambio exacto', () => {
+    const { onConfirmar } = montar(TOTAL_FLOTANTE);
+    escribirMonto(150);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const payload = onConfirmar.mock.calls[0][0];
+    expect(payload.monto).toBe(99.99);
+    expect(payload.recibido).toBe(150);
+    expect(payload.cambio).toBe(50.01);
+  });
+
+  it('pago único con tarjeta: monto redondeado = 99.99', () => {
+    const { onConfirmar } = montar(TOTAL_FLOTANTE);
+    elegirMetodo('Tarjeta');
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const payload = onConfirmar.mock.calls[0][0];
+    expect(payload.monto).toBe(99.99);
+    expect(payload.recibido).toBe(99.99);
+    expect(payload.cambio).toBe(0);
+  });
+
+  it('con abonos: el monto aplicado se redondea a 2 decimales', () => {
+    const { onConfirmar } = montar(TOTAL_FLOTANTE);
+    // El cajero teclea $150: el abono aplica el pendiente redondeado (99.99).
+    agregarAbono(150);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const abono = onConfirmar.mock.calls[0][0].abonos[0];
+    expect(Number(abono.monto)).toBe(99.99);
+    expect(Number(abono.recibido)).toBe(150);
+  });
+
+  it('con abonos: la suma de montos cuadra EXACTO el total redondeado', () => {
+    const { onConfirmar } = montar(TOTAL_FLOTANTE);
+    // Efectivo $50 + tarjeta $49.99 → 99.99 exacto.
+    agregarAbono(50);
+    elegirMetodo('Tarjeta');
+    agregarAbono(49.99);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const abonos = onConfirmar.mock.calls[0][0].abonos;
+    const suma = abonos.reduce((acc, a) => acc + Number(a.monto), 0);
+    // Sin redondeo, la suma sería 99.99000000000001 y RN-94 la rechazaría.
+    expect(Math.round(suma * 100) / 100).toBe(99.99);
+  });
+});

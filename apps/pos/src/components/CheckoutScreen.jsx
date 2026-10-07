@@ -50,6 +50,21 @@ import TecladoNumerico from './TecladoNumerico.jsx';
 import { useCheckout } from '../hooks/useCheckout.js';
 import { METODOS_VALIDOS } from '../services/checkoutService.js';
 
+/**
+ * Redondea a 2 decimales (frontera del dinero, DT-02).
+ *
+ * FIX "suma_no_cuadra" (4ª vuelta, 7 Oct 2026): el pago único enviaba
+ * `monto = Math.min(capturado, total)` SIN redondear. Como `total` puede venir
+ * con error de coma flotante (p. ej. `99.99000000000001`), el backend recibía
+ * `Decimal("99.99000000000001")` y RN-94 lo rechazaba contra `Decimal("99.99")`.
+ * Todo monto que cruce la frontera se redondea con esta función.
+ */
+function redondear2(valor) {
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
 /** Formatea un precio numérico como moneda mexicana. */
 function formatearPrecio(valor) {
   const numero = Number(valor);
@@ -257,20 +272,27 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
       return;
     }
     const metodoReal = metodoCanonico(metodo);
+    // 4ª VUELTA (7 Oct 2026) — TODO monto que cruza la frontera se redondea a 2
+    // decimales. Antes `monto = Math.min(capturado, total)` viajaba con el error
+    // de coma flotante de `total` (p. ej. 99.99000000000001) y el backend lo
+    // rechazaba con RN-94 (`suma_no_cuadra`). `recibido` y `cambio` se redondean
+    // por la misma razón (el cambio es `recibido − monto`, ambos ya redondeados).
     if (esEfectivo) {
-      const monto = Math.min(montoCapturado, total);
+      const monto = redondear2(Math.min(montoCapturado, total));
+      const recibido = redondear2(montoCapturado);
       onConfirmar({
         metodo: metodoReal,
         monto,
-        recibido: montoCapturado,
-        cambio: Math.max(montoCapturado - monto, 0),
+        recibido,
+        cambio: redondear2(Math.max(recibido - monto, 0)),
       });
       return;
     }
+    const totalRedondeado = redondear2(total);
     onConfirmar({
       metodo: metodoReal,
-      monto: total,
-      recibido: total,
+      monto: totalRedondeado,
+      recibido: totalRedondeado,
       cambio: 0,
     });
   }

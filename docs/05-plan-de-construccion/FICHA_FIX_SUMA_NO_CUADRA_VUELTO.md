@@ -2,9 +2,9 @@
 
 **Fecha:** 7 de octubre de 2026
 **Fase:** Corrección post-F13 (defecto reportado en operación real)
-**Estado:** ✅ COMPLETO — corregido, probado (732 frontend / 320 backend), documentado y pusheado
-**Commit:** `3f6b3f8` (1ª vuelta) + `57a1ba4` (ficha) + **3ª vuelta** (defensa de frontera)
-**Archivos tocados:** 4 (2 de código + 2 de test) — ver §8.6
+**Estado:** ✅ COMPLETO — corregido, probado (742 frontend / 320 backend), documentado y pusheado
+**Commit:** `3f6b3f8` (1ª vuelta) + `57a1ba4` (ficha) + `24971a2`/`1ff2c93` (3ª vuelta) + **4ª vuelta** (redondeo de flotantes)
+**Archivos tocados:** 6 (3 de código + 2 de test + esta ficha) — ver §9.6
 
 > **NOTA DE HONESTIDAD (3ª vuelta).** El usuario reportó "el problema continua"
 > tras la 1ª vuelta. El diagnóstico de la 2ª vuelta concluyó que el backend y el
@@ -254,3 +254,175 @@ SANEa.** La 1ª vuelta corrigió el cliente; la 3ª vuelta hizo que el servidor
 tolere clientes obsoletos. En un POS con terminales que pueden quedar con
 bundles cacheados, **el backend debe ser el guardián final**: si un `monto`
 excede el total, es un vuelto mal etiquetado, no un error del cajero.
+
+---
+
+## 9. 4ª vuelta — la causa raíz REAL: el total flotante sin redondear
+
+### 9.1 El reporte
+
+> "refresque navegador y el problema continua"
+
+Tras la 3ª vuelta, el usuario **refrescó el navegador** (descartando así el
+bundle viejo) y el `suma_no_cuadra` **siguió apareciendo**. Esto **refutó** el
+diagnóstico de la 2ª vuelta ("bundle viejo"): el defecto era real y estaba en
+el código actual.
+
+### 9.2 Reproducción end-to-end contra la API viva
+
+Se escribió un script (`_repro_e2e.py`) que, contra la API viva
+(`nuevo_pos_api` en el puerto 5101), envía el payload **canónico** y el
+**legacy**. Resultado: **el backend responde 200 en ambos casos**. Es decir, el
+backend NO era el culpable — el error nacía en el cliente, ANTES de la llamada.
+
+### 9.3 La causa raíz — aritmética de punto flotante
+
+El total del carrito se calculaba en
+[`useCart.js`](../NUEVO-POS/apps/pos/src/hooks/useCart.js:111) como una **suma
+cruda de flotantes**:
+
+```js
+const total = useMemo(
+  () => lineas.reduce((acc, l) => acc + Number(l.unit_price) * Number(l.quantity), 0),
+  [lineas]
+);
+```
+
+Con un precio como `$33.33` y cantidad `3`, el resultado en JS es
+`33.33 × 3 = 99.99000000000001` (no `99.99`). Ese total **flotante** fluía al
+path del **pago único** en
+[`manejarConfirmar()`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.jsx:269):
+
+```js
+const monto = Math.min(montoCapturado, total);   // ← 99.99000000000001 SIN redondear
+```
+
+El `monto` sin redondear cruzaba la frontera y el backend lo comparaba con
+`Decimal` exacto:
+
+```
+Decimal("99.99000000000001") != Decimal("99.99")   →   RN-94   →   suma_no_cuadra
+```
+
+**El path de `abonos` estaba protegido** porque
+[`montoAplicado()`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.jsx:188)
+redondea el `pendiente` con `Math.round(... * 100) / 100`. **El path del pago
+único NO redondeaba nada.** Esa asimetría era el bug.
+
+### 9.4 La corrección — redondear TODO lo que cruza la frontera
+
+Se aplicaron **4 cambios** para que ningún flotante llegue jamás al backend:
+
+| # | Archivo | Cambio |
+|---|---------|--------|
+| 1 | [`useCart.js`](../NUEVO-POS/apps/pos/src/hooks/useCart.js:111) | El `total` se redondea a 2 decimales en el origen. |
+| 2 | [`CheckoutScreen.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.jsx:62) | Nuevo helper `redondear2(valor)`. |
+| 3 | [`CheckoutScreen.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.jsx:269) | `manejarConfirmar` redondea `monto`, `recibido` y `cambio` (ambos paths: efectivo y tarjeta). |
+| 4 | [`checkoutService.js`](../NUEVO-POS/apps/pos/src/services/checkoutService.js:95) | `construirPaymentDetails` redondea cada `montoNum` antes de sumar. |
+
+**Cambio 1 — `useCart.js`:**
+
+```js
+const total = useMemo(
+  () =>
+    Math.round(
+      lineas.reduce((acc, l) => acc + Number(l.unit_price) * Number(l.quantity), 0) * 100
+    ) / 100,
+  [lineas]
+);
+```
+
+**Cambio 2 — helper `redondear2` en `CheckoutScreen.jsx`:**
+
+```js
+function redondear2(valor) {
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+```
+
+**Cambio 3 — `manejarConfirmar` (pago único):**
+
+```js
+if (esEfectivo) {
+  const monto = redondear2(Math.min(montoCapturado, total));
+  const recibido = redondear2(montoCapturado);
+  onConfirmar({
+    metodo: metodoReal,
+    monto,
+    recibido,
+    cambio: redondear2(Math.max(recibido - monto, 0)),
+  });
+  return;
+}
+const totalRedondeado = redondear2(total);
+onConfirmar({
+  metodo: metodoReal,
+  monto: totalRedondeado,
+  recibido: totalRedondeado,
+  cambio: 0,
+});
+```
+
+**Cambio 4 — `construirPaymentDetails` (path de abonos):**
+
+```js
+const montoNum = Math.round(Number(abono && abono.monto) * 100) / 100;
+if (!Number.isFinite(montoNum) || montoNum <= 0) {
+  return fallo('monto_invalido', null);
+}
+const pago = { metodo, monto: aMonto(montoNum) };
+```
+
+### 9.5 Tests de regresión (total flotante `99.99000000000001`)
+
+Se añadieron **10 tests** con `const TOTAL_FLOTANTE = 33.33 * 3;`:
+
+- **Sección 11 de [`CheckoutScreen.f9_1_3.test.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.f9_1_3.test.jsx) (6 tests):**
+  1. El resumen muestra `$99.99` (no `$99.99000000000001`).
+  2. Pago único exacto: `monto === 99.99`, `recibido === 100`, `cambio === 0.01`.
+  3. Pago único con vuelto: `monto === 99.99`, `recibido === 150`, `cambio === 50.01`.
+  4. Tarjeta: `monto === 99.99`.
+  5. Abonos: `Number(abono.monto) === 99.99`.
+  6. Abonos: la suma redondeada es `99.99`.
+- **Sección A7 de [`useCheckout.f9_1_2.test.jsx`](../NUEVO-POS/apps/pos/src/hooks/useCheckout.f9_1_2.test.jsx) (4 tests):**
+  1. Abono con total flotante → `ok`.
+  2. Abono con monto flotante → `pagos[0].monto === '99.99'`.
+  3. Pago mixto → suma `99.99`.
+  4. Pago corto → sigue rechazándose con `suma_no_cuadra` (sin regresión).
+
+### 9.6 Archivos tocados (4ª vuelta)
+
+| Archivo | Cambio |
+|---------|--------|
+| [`useCart.js`](../NUEVO-POS/apps/pos/src/hooks/useCart.js:111) | `total` redondeado a 2 decimales. |
+| [`CheckoutScreen.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.jsx:62) | Helper `redondear2` + `manejarConfirmar` redondea `monto`/`recibido`/`cambio`. |
+| [`checkoutService.js`](../NUEVO-POS/apps/pos/src/services/checkoutService.js:95) | `construirPaymentDetails` redondea cada `montoNum`. |
+| [`CheckoutScreen.f9_1_3.test.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.f9_1_3.test.jsx) | +6 tests (sección 11). |
+| [`useCheckout.f9_1_2.test.jsx`](../NUEVO-POS/apps/pos/src/hooks/useCheckout.f9_1_2.test.jsx) | +4 tests (sección A7). |
+| [`FICHA_FIX_SUMA_NO_CUADRA_VUELTO.md`](../NUEVO-POS/docs/05-plan-de-construccion/FICHA_FIX_SUMA_NO_CUADRA_VUELTO.md) | Esta sección §9. |
+
+### 9.7 Verificación (4ª vuelta)
+
+| Suite | Antes | Después |
+|-------|-------|---------|
+| Frontend (`npm run test -- --run`) | 732 passed | **742 passed** (64 files) |
+
+Los 10 tests nuevos pasan; ningún test existente se rompió (incluido el cambio
+de `useCart.total`, que afecta a todo el carrito).
+
+### 9.8 Lección de la 4ª vuelta
+
+**El dinero NUNCA debe viajar como flotante sin redondear.** `33.33 × 3` no es
+`99.99` en IEEE-754; es `99.99000000000001`. Cuando ese valor cruza a un backend
+que compara con `Decimal` exacto (RN-94), la comparación falla por un bit. La
+regla es simple y no admite excepciones: **todo valor monetario se redondea a 2
+decimales en el punto donde se calcula** (el carrito) **y otra vez en el punto
+donde cruza la frontera** (el payload). Redondear en un solo lado es frágil;
+redondear en ambos es defensa en profundidad.
+
+**Regla derivada:** si un path de cobro redondea y otro no, el que no redondea
+es un bug latente esperando un precio con centavos no representables en binario
+(`.33`, `.67`, etc.). La asimetría entre `montoAplicado` (redondeaba) y
+`manejarConfirmar` (no redondeaba) fue exactamente eso.
