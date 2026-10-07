@@ -597,7 +597,21 @@ export default function RetailVisionPOS({
       // F4.5.3 — Guarda de cobro (RN-49). Sin turno de caja abierto el backend
       // rechaza el cobro con un 400 críptico. Aquí se AVISA antes: se cierra el
       // checkout, se enciende el aviso y se ofrece abrir el gestor. No se cobra.
-      if (!turnoCaja) {
+      //
+      // FIX "confirmar pago no hace nada" (7 Oct 2026): el estado `turnoCaja`
+      // puede quedar DESACTUALIZADO (se cargó al montar y solo se refresca al
+      // cerrar el gestor). Si el operador abrió la caja por otra vía, un `null`
+      // obsoleto rebotaba el cobro en silencio. Antes de avisar, se RELEE el
+      // turno real del servidor; solo si de verdad no hay turno se avisa.
+      let turnoVigente = turnoCaja;
+      if (!turnoVigente) {
+        const r = await caja.obtenerTurnoActivo(terminalEfectiva);
+        if (r.outcome === 'ok' && r.data && r.data.cash_session_id) {
+          turnoVigente = r.data;
+          setTurnoCaja(r.data);
+        }
+      }
+      if (!turnoVigente) {
         setCheckoutAbierto(false);
         setAvisoCaja(true);
         return;

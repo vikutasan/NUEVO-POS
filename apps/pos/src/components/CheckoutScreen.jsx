@@ -124,6 +124,26 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     return null;
   }, [hayAbonos, resumen.faltante, esEfectivo, montoCapturado, minimo]);
 
+  // FIX "confirmar pago no hace nada" (7 Oct 2026) — el botón CONFIRMAR PAGO
+  // se deshabilita cuando los abonos NO cuadran el total, pero el mensaje que
+  // lo explicaba vivía SOLO en la columna izquierda (bajo la lista de abonos),
+  // lejos del botón. El cajero veía un botón "muerto" y creía que la app no
+  // respondía. Este mensaje se muestra JUNTO al botón (columna derecha) para
+  // que la causa sea evidente en el mismo lugar donde se hace clic.
+  const motivoBloqueo = useMemo(() => {
+    if (procesando) return null;
+    if (hayAbonos) {
+      if (resumen.faltante > 0) {
+        return `Faltan ${formatearPrecio(resumen.faltante)} para poder cobrar.`;
+      }
+      return null;
+    }
+    if (esEfectivo && montoCapturado < minimo) {
+      return `Faltan ${formatearPrecio(minimo - montoCapturado)} para poder cobrar.`;
+    }
+    return null;
+  }, [procesando, hayAbonos, resumen.faltante, esEfectivo, montoCapturado, minimo]);
+
   /** Método real que se envía al backend (TARJETA → DEBITO por defecto). */
   function metodoCanonico(m) {
     if (m === 'TARJETA') return 'DEBITO';
@@ -411,6 +431,17 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
           ) : null}
 
           <div className="mt-auto flex flex-col gap-3">
+            {/* FIX "confirmar pago no hace nada": el motivo por el que el botón
+                está deshabilitado se muestra AQUÍ, junto al botón, no solo en
+                la columna izquierda. Sin esto, el cajero ve un botón "muerto". */}
+            {motivoBloqueo ? (
+              <p
+                role="status"
+                className="rounded-canon35 bg-peligro/20 text-peligro px-4 py-3 text-sm font-semibold text-center"
+              >
+                {motivoBloqueo}
+              </p>
+            ) : null}
             <button
               type="button"
               disabled={!puedeCobrar || procesando}

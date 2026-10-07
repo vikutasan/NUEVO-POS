@@ -251,7 +251,14 @@ describe('CheckoutScreen — cobro (efectivo, tarjeta, cambio, validación)', ()
     // comparte el placeholder `0.00`.
     const input = screen.getByLabelText('Efectivo recibido');
     fireEvent.change(input, { target: { value: '40' } });
-    expect(screen.getByText(/Faltan/)).toBeTruthy();
+    // FIX "confirmar pago no hace nada" (7 Oct 2026): el faltante ahora se
+    // muestra DOS veces — el mensaje de validación de la columna izquierda
+    // ("Faltan $60.00 para cubrir el mínimo ($100.00).") y el motivo junto al
+    // botón ("Faltan $60.00 para poder cobrar."). Se afirma sobre el texto
+    // completo del mensaje de validación para no colisionar con el nuevo.
+    expect(
+      screen.getByText('Faltan $60.00 para cubrir el mínimo ($100.00).'),
+    ).toBeTruthy();
     expect(screen.getByRole('button', { name: /CONFIRMAR PAGO/ }).disabled).toBe(true);
   });
 

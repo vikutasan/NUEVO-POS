@@ -284,3 +284,61 @@ describe('FIX cobro parcial — D2: el teclado NO desaparece al elegir tarjeta',
     expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 8. FIX "confirmar pago no hace nada" — el motivo del bloqueo es visible
+//    JUNTO al botón CONFIRMAR PAGO (no solo en la columna izquierda).
+// ---------------------------------------------------------------------------
+
+describe('FIX "confirmar pago no hace nada" — el bloqueo se explica junto al botón', () => {
+  it('con abonos que NO cuadran, muestra el faltante junto al botón y lo deshabilita', () => {
+    montar(100);
+    agregarAbono(40);
+    // El botón está deshabilitado (no se puede cobrar con faltante).
+    expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(true);
+    // Y el motivo aparece en un `role="status"` junto al botón (columna derecha).
+    const avisos = screen.getAllByRole('status');
+    const texto = avisos.map((n) => n.textContent).join(' ');
+    expect(texto).toMatch(/Faltan/);
+    expect(texto).toMatch(/\$60\.00/);
+  });
+
+  it('al cuadrar el total, el aviso desaparece y el botón se habilita', () => {
+    montar(100);
+    agregarAbono(40);
+    expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
+    agregarAbono(60);
+    // Ya no hay motivo de bloqueo: ningún `role="status"` con "Faltan".
+    const avisos = screen.queryAllByRole('status');
+    const texto = avisos.map((n) => n.textContent).join(' ');
+    expect(texto).not.toMatch(/Faltan/);
+    expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(false);
+  });
+
+  it('en efectivo sin abonos y con recibido insuficiente, explica el faltante junto al botón', () => {
+    montar(100);
+    escribirMonto(50);
+    expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(true);
+    const avisos = screen.getAllByRole('status');
+    const texto = avisos.map((n) => n.textContent).join(' ');
+    expect(texto).toMatch(/Faltan/);
+    expect(texto).toMatch(/\$50\.00/);
+  });
+
+  it('mientras procesa, no muestra motivo de bloqueo (el botón dice "Procesando…")', () => {
+    const onConfirmar = vi.fn();
+    render(
+      <CheckoutScreen
+        total={100}
+        onConfirmar={onConfirmar}
+        onCancelar={vi.fn()}
+        procesando={true}
+        error={null}
+      />
+    );
+    expect(screen.getByText('Procesando…')).toBeTruthy();
+    const avisos = screen.queryAllByRole('status');
+    const texto = avisos.map((n) => n.textContent).join(' ');
+    expect(texto).not.toMatch(/Faltan/);
+  });
+});
