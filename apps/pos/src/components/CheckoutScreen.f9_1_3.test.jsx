@@ -39,29 +39,30 @@ function montar(total = 100) {
 }
 
 /**
- * Devuelve el input de "Efectivo recibido".
+ * Devuelve el input de captura del monto.
  *
- * Se localiza por su ETIQUETA, no por el placeholder: el input de
- * "Monto del abono" comparte el mismo placeholder `0.00`, y además solo
- * existe cuando el método es efectivo. Buscar por etiqueta es estable.
+ * FIX "cobro parcial": la captura es ÚNICA. En efectivo la etiqueta es
+ * "Efectivo recibido"; en tarjeta/transferencia es "Monto a cobrar". El
+ * teclado numérico y el input nativo escriben el MISMO campo.
+ *
+ * El helper es agnóstico al método: busca la etiqueta de efectivo y, si no
+ * existe (porque el método cambió), cae a la de tarjeta/transferencia.
  */
-function inputRecibido() {
-  return screen.getByLabelText('Efectivo recibido');
+function inputMonto() {
+  return (
+    screen.queryByLabelText('Efectivo recibido') ||
+    screen.getByLabelText('Monto a cobrar')
+  );
 }
 
-/** Devuelve el input de "Monto del abono" (siempre presente). */
-function inputMontoAbono() {
-  return screen.getByLabelText('Monto del abono');
+/** Devuelve el input de captura cuando el método NO es efectivo. */
+function inputMontoNoEfectivo() {
+  return screen.getByLabelText('Monto a cobrar');
 }
 
-/** Captura el input de "Monto del abono" y le escribe un valor. */
-function escribirMontoAbono(valor) {
-  fireEvent.change(inputMontoAbono(), { target: { value: String(valor) } });
-}
-
-/** Captura el input de "Efectivo recibido" y le escribe un valor. */
-function escribirRecibido(valor) {
-  fireEvent.change(inputRecibido(), { target: { value: String(valor) } });
+/** Captura el input de monto y le escribe un valor. */
+function escribirMonto(valor) {
+  fireEvent.change(inputMonto(), { target: { value: String(valor) } });
 }
 
 /** Selecciona un método de pago por su etiqueta visible. */
@@ -69,10 +70,15 @@ function elegirMetodo(etiqueta) {
   fireEvent.click(screen.getByText(etiqueta));
 }
 
+/** Localiza el botón "Agregar pago" (su etiqueta incluye el método). */
+function botonAgregarPago() {
+  return screen.getByRole('button', { name: /Agregar pago/ });
+}
+
 /** Agrega un abono con el método ya seleccionado. */
 function agregarAbono(monto) {
-  escribirMontoAbono(monto);
-  fireEvent.click(screen.getByText('Agregar pago'));
+  escribirMonto(monto);
+  fireEvent.click(botonAgregarPago());
 }
 
 // ---------------------------------------------------------------------------
@@ -116,8 +122,8 @@ describe('F9.1.3 — editar un abono', () => {
     agregarAbono(40);
     fireEvent.click(screen.getByText('Editar'));
     // El formulario entra en modo edición.
-    escribirMontoAbono(100);
-    fireEvent.click(screen.getByText('Guardar'));
+    escribirMonto(100);
+    fireEvent.click(screen.getByText('Guardar abono'));
     // Ya cuadra: el faltante es cero.
     expect(screen.getByText('$0.00')).toBeTruthy();
   });
@@ -174,7 +180,7 @@ describe('F9.1.3 — regresión: un solo pago', () => {
   it('sin abonos, confirma el pago único con el método seleccionado', () => {
     const { onConfirmar } = montar(100);
     // Efectivo recibido = 100 (cubre el total).
-    escribirRecibido(100);
+    escribirMonto(100);
     fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
     expect(onConfirmar).toHaveBeenCalledTimes(1);
     const payload = onConfirmar.mock.calls[0][0];
@@ -185,7 +191,7 @@ describe('F9.1.3 — regresión: un solo pago', () => {
 
   it('en efectivo con recibido menor al total, el botón está deshabilitado', () => {
     montar(100);
-    escribirRecibido(50);
+    escribirMonto(50);
     expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(true);
   });
 
@@ -209,5 +215,72 @@ describe('F9.1.3 — se conserva el teclado numérico', () => {
     // El teclado expone teclas numéricas (1..9) y el 0.
     expect(screen.getByText('7')).toBeTruthy();
     expect(screen.getByText('0')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. FIX "cobro parcial" — regresión de los dos defectos reportados
+// ---------------------------------------------------------------------------
+
+describe('FIX cobro parcial — D1: el abono parcial en efectivo es descubrible', () => {
+  it('el botón "Agregar pago" está visible y habilitado tras capturar un monto', () => {
+    montar(100);
+    const boton = botonAgregarPago();
+    // Sin monto capturado, el botón está deshabilitado (no hay nada que abonar).
+    expect(boton.disabled).toBe(true);
+    // Al capturar un monto parcial, se habilita.
+    escribirMonto(40);
+    expect(botonAgregarPago().disabled).toBe(false);
+  });
+
+  it('permite abonar un pago parcial en efectivo y muestra el faltante', () => {
+    montar(100);
+    // Abono parcial de $40 en efectivo (el resto queda pendiente).
+    agregarAbono(40);
+    const lista = screen.getByLabelText('Abonos agregados');
+    expect(lista.querySelectorAll('li')).toHaveLength(1);
+    expect(lista.textContent).toContain('Efectivo');
+    expect(screen.getByText('$60.00')).toBeTruthy();
+  });
+});
+
+describe('FIX cobro parcial — D2: el teclado NO desaparece al elegir tarjeta', () => {
+  it('el teclado numérico sigue visible con el método Tarjeta', () => {
+    montar(100);
+    elegirMetodo('Tarjeta');
+    // El teclado debe seguir montado (antes desaparecía con `esEfectivo`).
+    expect(screen.getByRole('group', { name: 'Teclado numérico de efectivo' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '7' })).toBeTruthy();
+  });
+
+  it('permite teclear el monto del abono con tarjeta usando el teclado', () => {
+    montar(100);
+    elegirMetodo('Tarjeta');
+    // Teclea "60" con el teclado en pantalla.
+    fireEvent.click(screen.getByRole('button', { name: '6' }));
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+    // El input de captura (etiqueta "Monto a cobrar") refleja lo tecleado.
+    expect(inputMontoNoEfectivo().value).toBe('60');
+    // Y se puede agregar como abono de tarjeta.
+    fireEvent.click(botonAgregarPago());
+    const lista = screen.getByLabelText('Abonos agregados');
+    expect(lista.querySelectorAll('li')).toHaveLength(1);
+    expect(lista.textContent).toContain('Tarjeta');
+  });
+
+  it('permite un pago mixto: efectivo parcial + tarjeta parcial', () => {
+    montar(100);
+    // 1) Abono parcial en efectivo.
+    agregarAbono(40);
+    // 2) Cambia a tarjeta y abona el resto con el teclado.
+    elegirMetodo('Tarjeta');
+    fireEvent.click(screen.getByRole('button', { name: '6' }));
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+    fireEvent.click(botonAgregarPago());
+    // Dos abonos y el faltante en cero.
+    const lista = screen.getByLabelText('Abonos agregados');
+    expect(lista.querySelectorAll('li')).toHaveLength(2);
+    expect(screen.getByText('$0.00')).toBeTruthy();
+    expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(false);
   });
 });

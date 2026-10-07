@@ -26,6 +26,17 @@
  *     confirma, se envía el pago único de siempre (regresión blindada).
  *   - Se CONSERVA el `TecladoNumerico` de F9.0.2 y los billetes rápidos.
  *
+ * FIX "cobro parcial" (7 Oct 2026) — dos defectos de operación:
+ *   - D1: no había forma descubrible de ABONAR un pago parcial en efectivo: el
+ *     botón "Agregar pago" quedaba enterrado al fondo de la sección y la
+ *     captura del abono era un input distinto del de "Efectivo recibido".
+ *   - D2: al elegir TARJETA/TRANSFERENCIA DESAPARECÍA el teclado numérico
+ *     (estaba dentro del bloque `esEfectivo`), así que el cajero no podía
+ *     teclear el monto del abono con el teclado en pantalla.
+ *   La corrección unifica la captura: UN solo input de monto + UN solo teclado
+ *   SIEMPRE visibles, y el botón "Agregar pago" como acción primaria. El
+ *   método elegido solo cambia la etiqueta y el cálculo del cambio.
+ *
  * R-01: `w-full max-w-[1100px]` es fluido. R-04: los botones de pago respetan
  * el target táctil de 44×44px. La paleta usa `fondo-panel` (#1a1a1a) y el
  * acento (#c1d72e).
@@ -74,22 +85,29 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     ? montoMinimo
     : total;
   const [metodo, setMetodo] = useState('EFECTIVO');
-  const [recibido, setRecibido] = useState('');
+  // Captura ÚNICA del monto a abonar (FIX cobro parcial): el teclado y el input
+  // nativo escriben aquí, sin importar el método. Antes había dos campos
+  // separados ("Efectivo recibido" y "Monto del abono") y el teclado solo
+  // existía en efectivo.
   const [montoAbono, setMontoAbono] = useState('');
   const [editandoId, setEditandoId] = useState(null);
 
   const checkout = useCheckout({ total });
-  const { abonos, resumen, puedeCobrar: cuadra, agregarPago, editarPago, borrarPago, limpiarPagos } =
+  const { abonos, resumen, puedeCobrar: cuadra, agregarPago, editarPago, borrarPago } =
     checkout;
 
-  const montoRecibido = Number(recibido) || 0;
   const esEfectivo = metodo === 'EFECTIVO';
-  const cambio = esEfectivo ? montoRecibido - total : 0;
-  const faltante = esEfectivo ? Math.max(minimo - montoRecibido, 0) : 0;
+  const montoCapturado = Number(montoAbono) || 0;
 
   // ¿Hay abonos agregados? Si no, el flujo es el de un solo pago (regresión).
   const hayAbonos = abonos.length > 0;
-  const puedeCobrar = hayAbonos ? cuadra : !esEfectivo || montoRecibido >= minimo;
+
+  // FIX cobro parcial: el pago único sigue funcionando sin agregar abonos.
+  //   - Efectivo: se puede cobrar si el monto capturado cubre el mínimo.
+  //   - Tarjeta/Transferencia: se cobra el total exacto (no requiere captura).
+  const puedeCobrar = hayAbonos
+    ? cuadra
+    : !esEfectivo || montoCapturado >= minimo;
 
   const mensajeValidacion = useMemo(() => {
     if (hayAbonos) {
@@ -99,10 +117,12 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
       return null;
     }
     if (!esEfectivo) return null;
-    if (montoRecibido === 0) return 'Captura el efectivo recibido.';
-    if (faltante > 0) return `Faltan ${formatearPrecio(faltante)} para cubrir el mínimo (${formatearPrecio(minimo)}).`;
+    if (montoCapturado === 0) return 'Captura el efectivo recibido.';
+    if (montoCapturado < minimo) {
+      return `Faltan ${formatearPrecio(minimo - montoCapturado)} para cubrir el mínimo (${formatearPrecio(minimo)}).`;
+    }
     return null;
-  }, [hayAbonos, resumen.faltante, esEfectivo, montoRecibido, faltante, minimo]);
+  }, [hayAbonos, resumen.faltante, esEfectivo, montoCapturado, minimo]);
 
   /** Método real que se envía al backend (TARJETA → DEBITO por defecto). */
   function metodoCanonico(m) {
@@ -161,8 +181,8 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     }
     onConfirmar({
       metodo: metodoCanonico(metodo),
-      recibido: esEfectivo ? montoRecibido : (minimo < total ? minimo : total),
-      cambio: esEfectivo ? Math.max(montoRecibido - minimo, 0) : 0,
+      recibido: esEfectivo ? montoCapturado : (minimo < total ? minimo : total),
+      cambio: esEfectivo ? Math.max(montoCapturado - minimo, 0) : 0,
     });
   }
 
@@ -184,6 +204,7 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
             </div>
           ) : null}
 
+          {/* 1. Método de pago */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {METODOS_PAGO.map((m) => (
               <button
@@ -202,50 +223,57 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
             ))}
           </div>
 
-          {esEfectivo ? (
-            <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm text-crema-ticket/70">Efectivo recibido</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.50"
-                  value={recibido}
-                  onChange={(e) => setRecibido(e.target.value)}
-                  className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket px-4 text-lg border border-white/10 focus:border-acento outline-none"
-                  placeholder="0.00"
-                />
-              </label>
+          {/* 2. Captura del monto (FIX cobro parcial: SIEMPRE visible, sin
+              importar el método). El teclado numérico escribe este campo. */}
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm text-crema-ticket/70">
+                {esEfectivo ? 'Efectivo recibido' : 'Monto a cobrar'}
+              </span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.50"
+                value={montoAbono}
+                onChange={(e) => setMontoAbono(e.target.value)}
+                className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket px-4 text-lg border border-white/10 focus:border-acento outline-none"
+                placeholder="0.00"
+              />
+            </label>
 
-              {/* Botones rápidos de billetes */}
+            {/* Botones rápidos de billetes (solo efectivo) */}
+            {esEfectivo ? (
               <div className="grid grid-cols-4 gap-2">
                 {BILLETES_RAPIDOS.map((billete) => (
                   <button
                     key={billete}
                     type="button"
-                    onClick={() => setRecibido(String(billete))}
+                    onClick={() => setMontoAbono(String(billete))}
                     className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket border border-white/10 hover:border-acento/60 font-bold transition-colors"
                   >
                     ${billete}
                   </button>
                 ))}
               </div>
+            ) : null}
 
-              {/* Teclado numérico táctil (F9.0.2) — alternativa al input nativo */}
-              <TecladoNumerico
-                valor={recibido}
-                onCambiar={setRecibido}
-                deshabilitado={procesando}
-              />
+            {/* Teclado numérico táctil (F9.0.2) — SIEMPRE visible (FIX D2):
+                antes vivía dentro del bloque `esEfectivo` y desaparecía al
+                elegir tarjeta/transferencia. */}
+            <TecladoNumerico
+              valor={montoAbono}
+              onCambiar={setMontoAbono}
+              deshabilitado={procesando}
+            />
 
-              {!hayAbonos && mensajeValidacion ? (
-                <p className="text-sm text-peligro font-semibold">{mensajeValidacion}</p>
-              ) : null}
-            </div>
-          ) : null}
+            {!hayAbonos && mensajeValidacion ? (
+              <p className="text-sm text-peligro font-semibold">{mensajeValidacion}</p>
+            ) : null}
+          </div>
 
-          {/* ─── Pagos mixtos (F9.1.3) ─────────────────────────────────── */}
+          {/* 3. Abonos del ticket (F9.1.3) — el botón "Agregar pago" es la
+              acción primaria y está SIEMPRE disponible (FIX D1). */}
           <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
             <span className="text-sm font-semibold text-crema-ticket/70">
               Abonos del ticket
@@ -296,30 +324,17 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
               </p>
             )}
 
-            {/* Captura de un abono parcial */}
-            <div className="flex items-end gap-2">
-              <label className="flex-1 flex flex-col gap-1">
-                <span className="text-xs text-crema-ticket/60">Monto del abono</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.50"
-                  value={montoAbono}
-                  onChange={(e) => setMontoAbono(e.target.value)}
-                  className="min-h-tactil rounded-canon35 bg-fondo-profundo text-crema-ticket px-4 border border-white/10 focus:border-acento outline-none"
-                  placeholder="0.00"
-                />
-              </label>
+            {/* Acción primaria: agregar el monto capturado como abono. */}
+            <div className="flex items-center gap-2">
               {editandoId ? (
                 <>
                   <button
                     type="button"
                     onClick={manejarGuardarEdicion}
                     disabled={procesando}
-                    className="min-h-tactil px-4 rounded-canon35 bg-acento text-fondo-profundo font-bold transition hover:brightness-95"
+                    className="flex-1 min-h-tactil px-4 rounded-canon35 bg-acento text-fondo-profundo font-bold transition hover:brightness-95"
                   >
-                    Guardar
+                    Guardar abono
                   </button>
                   <button
                     type="button"
@@ -334,10 +349,10 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
                 <button
                   type="button"
                   onClick={manejarAgregarPago}
-                  disabled={procesando}
-                  className="min-h-tactil px-4 rounded-canon35 bg-acento text-fondo-profundo font-bold transition hover:brightness-95"
+                  disabled={procesando || montoCapturado <= 0}
+                  className="flex-1 min-h-tactil px-4 rounded-canon35 bg-acento text-fondo-profundo font-bold transition hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Agregar pago
+                  + Agregar pago ({esEfectivo ? 'Efectivo' : etiquetaMetodo(metodoCanonico(metodo))})
                 </button>
               )}
             </div>
@@ -387,10 +402,10 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
               <span className="text-sm text-crema-ticket/60">Cambio</span>
               <span
                 className={`text-2xl font-bold ${
-                  cambio < 0 ? 'text-peligro' : 'text-crema-ticket'
+                  montoCapturado - minimo < 0 ? 'text-peligro' : 'text-crema-ticket'
                 }`}
               >
-                {formatearPrecio(Math.max(cambio, 0))}
+                {formatearPrecio(Math.max(montoCapturado - minimo, 0))}
               </span>
             </div>
           ) : null}
