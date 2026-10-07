@@ -139,6 +139,24 @@ export function useTicketActions(opciones = {}) {
   }, []);
 
   /**
+   * F8.6b — Limpia el ticket en memoria (estado + refs).
+   *
+   * Cicatriz (bug de runtime reportado en vivo): tras cobrar, `acciones.ticket`
+   * quedaba con el ticket `PAID` para siempre. El `OverlayExito` ("Venta
+   * cobrada") se montaba con `status === 'PAID'` y su botón "Nueva venta" NO
+   * limpiaba el ticket, así que el operador quedaba ATRAPADO en el modal.
+   *
+   * Esta acción cierra el ciclo post-cobro: la pantalla la invoca al omitir/
+   * enviar el ticket o al pulsar "Nueva venta", de modo que el overlay
+   * desaparece y el POS queda listo para la siguiente venta.
+   */
+  const limpiarTicket = useCallback(() => {
+    limpiarRefs();
+    setTicket(null);
+    setUltimoOutcome(null);
+  }, [limpiarRefs]);
+
+  /**
    * Crea el ticket con sus líneas (contrato 3). NUNCA lanza.
    *
    * F7.5.6 — El segundo argumento `bloquePedido` es OPCIONAL: son los campos
@@ -303,6 +321,7 @@ export function useTicketActions(opciones = {}) {
     ultimoOutcome,
     crearTicket,
     cobrar,
+    limpiarTicket,
   };
 }
 

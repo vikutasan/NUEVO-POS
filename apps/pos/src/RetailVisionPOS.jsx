@@ -1066,11 +1066,24 @@ export default function RetailVisionPOS({
           red: el nuevo POS no tiene cola local, así que no hay conteo. */}
       <OfflineBanner visible={red.bannerVisible} />
 
+      {/* F8.6b — El overlay "Venta cobrada" y el paso de entrega del ticket
+          (F8.5) son EXCLUYENTES: ambos son `fixed inset-0 z-50` y coexistían,
+          de modo que el backdrop del primero competía por el foco/pointer con
+          los inputs del segundo (no se podía capturar el teléfono/correo) y,
+          al omitir el ticket, el operador quedaba ATRAPADO en "Venta cobrada"
+          (su botón "Nueva venta" no limpiaba `acciones.ticket`). Ahora el
+          overlay solo se muestra cuando el paso de entrega NO está abierto, y
+          "Nueva venta" limpia el ticket para cerrar el ciclo post-cobro. */}
       <OverlayExito
-        ticket={acciones.ticket && acciones.ticket.status === 'PAID' ? acciones.ticket : null}
+        ticket={
+          !entregaAbierta && acciones.ticket && acciones.ticket.status === 'PAID'
+            ? acciones.ticket
+            : null
+        }
         onNuevaVenta={() => {
           setError(null);
           setBanner(null);
+          acciones.limpiarTicket();
         }}
       />
 
@@ -1240,8 +1253,18 @@ export default function RetailVisionPOS({
           <TicketDeliveryPanel
             ticket={ticketConPct}
             cliente={cliente}
-            onOmitir={() => setEntregaAbierta(false)}
-            onEnviado={() => setEntregaAbierta(false)}
+            // F8.6b — Al cerrar el paso de entrega se limpia el ticket en
+            // memoria: así NO queda un `OverlayExito` ("Venta cobrada") abierto
+            // atrapando al operador. El ciclo post-cobro termina aquí y el POS
+            // queda listo para la siguiente venta.
+            onOmitir={() => {
+              setEntregaAbierta(false);
+              acciones.limpiarTicket();
+            }}
+            onEnviado={() => {
+              setEntregaAbierta(false);
+              acciones.limpiarTicket();
+            }}
           />
         );
       })() : null}
