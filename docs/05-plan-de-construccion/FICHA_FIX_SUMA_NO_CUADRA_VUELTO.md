@@ -4,7 +4,7 @@
 **Fase:** Corrección post-F13 (defecto reportado en operación real)
 **Estado:** ✅ COMPLETO — corregido, probado (732 frontend / 320 backend), documentado y pusheado
 **Commit:** `3f6b3f8` (1ª vuelta) + `57a1ba4` (ficha) + **3ª vuelta** (defensa de frontera)
-**Archivos tocados:** 4 (2 de código + 2 de test)
+**Archivos tocados:** 4 (2 de código + 2 de test) — ver §8.6
 
 > **NOTA DE HONESTIDAD (3ª vuelta).** El usuario reportó "el problema continua"
 > tras la 1ª vuelta. El diagnóstico de la 2ª vuelta concluyó que el backend y el
