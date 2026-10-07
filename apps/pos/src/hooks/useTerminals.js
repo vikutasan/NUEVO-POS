@@ -144,6 +144,16 @@ export function useTerminals(currentUser) {
     [statuses]
   );
 
+  // FIX "habilitar caja" (paridad con el viejo POS §6.8) — ¿la terminal tiene un
+  // turno de caja ABIERTO? Es un estado INDEPENDIENTE del candado: una terminal
+  // puede estar libre (sin candado) pero con la caja habilitada, o al revés. El
+  // landing lo pinta como un badge aparte. El backend lo expone en
+  // `/pos/terminals/status` como `caja_habilitada`.
+  const getCajaHabilitada = useCallback(
+    (terminalId) => Boolean(statuses[terminalId]?.caja_habilitada),
+    [statuses]
+  );
+
   // Seleccionar terminal (tomar lock)
   const selectTerminal = useCallback(async (terminalId) => {
     if (!currentUser?.id) return { success: false, message: 'Sin usuario' };
@@ -226,6 +236,7 @@ export function useTerminals(currentUser) {
     // Resolución
     getCardState,
     getNetStatus,
+    getCajaHabilitada,
     // Acciones de selección
     selectTerminal,
     releaseTerminal,

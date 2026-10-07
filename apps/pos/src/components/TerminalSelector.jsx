@@ -138,7 +138,7 @@ function getBadge(state) {
 export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   const {
     terminals, statuses, loading, locking,
-    getCardState, getNetStatus, selectTerminal,
+    getCardState, getNetStatus, getCajaHabilitada, selectTerminal,
     addTerminal, updateTerminal, removeTerminal, saveConfig,
     ordenTerminales, terminalesDesplegadas, invertirOrden,
   } = useTerminals(currentUser);
@@ -512,6 +512,10 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
           const badge = getBadge(state);
           const info = statuses[t.id];
           const cardStyle = getCardStyle(state);
+          // FIX "habilitar caja" (paridad con el viejo POS §6.8) — la caja es un
+          // estado INDEPENDIENTE del candado. Una terminal libre puede tener la
+          // caja habilitada (turno abierto) y el landing debe mostrarlo.
+          const cajaHabilitada = getCajaHabilitada(t.id);
 
           return (
             <button key={t.id}
@@ -580,6 +584,28 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
                   {net.label}
                 </span>
               </div>
+
+              {/* FIX "habilitar caja" (paridad con el viejo POS §6.8) — indicador de
+                  caja habilitada. Independiente del candado: se muestra aunque la
+                  terminal esté libre. El verde (#16a34a) es el mismo del botón
+                  "● Activa" del POSHeader, para que el lenguaje visual sea uno. */}
+              {cajaHabilitada && (
+                <div
+                  data-testid={`caja-habilitada-${t.id}`}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.35rem',
+                    marginTop: '0.35rem', padding: '0.2rem 0.6rem',
+                    background: 'rgba(22,163,74,0.15)',
+                    border: '1px solid rgba(22,163,74,0.5)',
+                    borderRadius: '0.5rem',
+                  }}>
+                  <span style={{ fontSize: '0.6rem', color: '#4ade80' }}>●</span>
+                  <span style={{ fontSize: '0.55rem', fontWeight: 900, color: '#4ade80',
+                                 textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Caja habilitada
+                  </span>
+                </div>
+              )}
             </button>
           );
         })}

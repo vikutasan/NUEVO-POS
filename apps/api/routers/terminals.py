@@ -48,7 +48,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
-from models import TerminalLock
+from models import CashSession, TerminalLock
 from rules import ReglaViolada
 from rules.registry import (
     rn03_candado_exclusivo,
@@ -203,10 +203,15 @@ def _candado_vigente(candado: TerminalLock, ahora: datetime) -> bool:
     return rn04_ttl_del_candado(candado.locked_at, ahora, TTL_MINUTOS)
 
 
-def _a_estado(candado: TerminalLock | None, ahora: datetime) -> dict[str, object]:
+def _a_estado(
+    candado: TerminalLock | None,
+    ahora: datetime,
+    caja_habilitada: bool = False,
+) -> dict[str, object]:
     """Proyecta un candado al mapa de estado que consume el frontend.
 
-    Forma: `{ occupier_id, occupier_ref, occupier_name, locked_at, stale_session }`.
+    Forma: `{ occupier_id, occupier_ref, occupier_name, locked_at,
+    stale_session, caja_habilitada }`.
     Un candado vencido se reporta como libre (occupier_id = None).
 
     `occupier_id` es el UUID canónico (C-01) que vive en la tabla. Pero el
@@ -215,6 +220,13 @@ def _a_estado(candado: TerminalLock | None, ahora: datetime) -> dict[str, object
     como lo envió el cliente (guardado en `occupier_name`). Sin este campo, el
     dueño de la terminal no se reconocía a sí mismo y su propia terminal se
     pintaba como "ocupada por otro" — el bloqueo que impedía entrar.
+
+    `caja_habilitada` (FIX "habilitar caja" — paridad con el viejo POS §6.8):
+    indica si la terminal tiene un turno de caja ABIERTO (RN-49). El candado y
+    la caja son DOS estados independientes: una terminal puede estar libre (sin
+    candado) pero con la caja habilitada, o al revés. El landing los pinta por
+    separado. Antes el landing NO sabía nada de la caja, así que una terminal
+    con turno abierto aparecía como si no tuviera caja — el bug reportado.
     """
     if candado is None or not _candado_vigente(candado, ahora):
         return {
@@ -223,6 +235,7 @@ def _a_estado(candado: TerminalLock | None, ahora: datetime) -> dict[str, object
             "occupier_name": None,
             "locked_at": None,
             "stale_session": False,
+            "caja_habilitada": caja_habilitada,
         }
     return {
         "occupier_id": str(candado.occupier_id),
@@ -230,6 +243,7 @@ def _a_estado(candado: TerminalLock | None, ahora: datetime) -> dict[str, object
         "occupier_name": candado.occupier_name,
         "locked_at": candado.locked_at.isoformat(),
         "stale_session": False,
+        "caja_habilitada": caja_habilitada,
     }
 
 
@@ -250,16 +264,35 @@ async def estado_terminales(db: AsyncSession = Depends(get_db)) -> dict[str, obj
     """Estado de ocupación de TODAS las terminales configuradas.
 
     Devuelve un mapa `{ "TERM-01": {occupier_id, occupier_name, locked_at,
-    stale_session}, ... }`. Una terminal sin candado vigente aparece libre.
+    stale_session, caja_habilitada}, ... }`. Una terminal sin candado vigente
+    aparece libre.
+
+    FIX "habilitar caja" (paridad con el viejo POS §6.8): además del candado
+    (quién ocupa la terminal), se reporta `caja_habilitada` — si la terminal
+    tiene un turno de caja ABIERTO (RN-49). Son DOS estados independientes y el
+    landing los pinta por separado. Antes el landing no sabía nada de la caja,
+    así que una terminal con turno abierto aparecía como si no tuviera caja.
     """
     ahora = _ahora()
     candados = (await db.execute(select(TerminalLock))).scalars().all()
     por_terminal = {c.terminal_id: c for c in candados}
 
+    # Turnos de caja ABIERTOS por terminal (RN-49: a lo sumo uno por terminal).
+    sesiones_abiertas = (
+        await db.execute(
+            select(CashSession).where(CashSession.status == "OPEN")
+        )
+    ).scalars().all()
+    caja_por_terminal = {s.terminal_id for s in sesiones_abiertas}
+
     estado: dict[str, object] = {}
     for terminal in _leer_config():
         tid = terminal["id"]
-        estado[tid] = _a_estado(por_terminal.get(tid), ahora)
+        estado[tid] = _a_estado(
+            por_terminal.get(tid),
+            ahora,
+            caja_habilitada=tid in caja_por_terminal,
+        )
     return estado
 
 

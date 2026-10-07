@@ -104,6 +104,13 @@ export default function GestorDeCaja({
   servicio = caja,
   servicioContexto = contexto,
   onCerrar,
+  // FIX "habilitar caja" — paridad con el viejo POS (§6.8). El gestor avisa al
+  // contenedor cuando el turno se ABRE o se CIERRA, para que el estado del
+  // padre (`turnoCaja`) se actualice AL INSTANTE y no solo al cerrar el modal.
+  // Sin esto, el botón del header seguía diciendo "○ Habilitar" con la caja ya
+  // abierta, y la landing nunca se enteraba.
+  onCajaHabilitada,
+  onCajaDeshabilitada,
 }) {
   const [estado, setEstado] = useState(ESTADOS.SIN_TURNO);
   const [turno, setTurno] = useState(null);
@@ -231,6 +238,10 @@ export default function GestorDeCaja({
       if (r.data && r.data.cash_session_id) {
         setTurno(r.data);
         setEstado(ESTADOS.ABIERTO);
+        // FIX "habilitar caja" — si al montar ya había un turno abierto (p. ej.
+        // el operador recargó la página con la caja abierta), el contenedor
+        // debe enterarse de inmediato: el botón del header pasa a "● Activa".
+        onCajaHabilitada?.(r.data.cash_session_id);
       } else {
         setEstado(ESTADOS.SIN_TURNO);
       }
@@ -240,7 +251,7 @@ export default function GestorDeCaja({
     return () => {
       vigente = false;
     };
-  }, [servicio]);
+  }, [servicio, onCajaHabilitada]);
 
   /** Refresca el resumen del turno abierto. */
   const refrescarResumen = useCallback(async () => {
@@ -289,12 +300,30 @@ export default function GestorDeCaja({
     setOcupado(false);
 
     if (!esOk(r)) {
+      // FIX "habilitar caja" — RECUPERACIÓN del 409 (RN-49). El viejo POS, al
+      // recibir "ya existe una sesión activa", NO se quedaba atorado: releía la
+      // sesión abierta y sincronizaba el estado. El nuevo POS solo mostraba el
+      // error, dejando al operador con un turno abierto que no podía ver ni
+      // gestionar. Aquí se replica la recuperación: se relee el turno activo y,
+      // si existe, se adopta como propio (estado ABIERTO + aviso al contenedor).
+      if (r.reason === 'ya_hay_turno_abierto') {
+        const activo = await servicio.obtenerTurnoActivo();
+        if (esOk(activo) && activo.data && activo.data.cash_session_id) {
+          setTurno(activo.data);
+          setEstado(ESTADOS.ABIERTO);
+          onCajaHabilitada?.(activo.data.cash_session_id);
+          return;
+        }
+      }
       setError(mensajeDe(r.reason));
       return;
     }
     setTurno(r.data);
     setEstado(ESTADOS.ABIERTO);
-  }, [servicio, terminalId, usuarioId, usuarioNombre, fondoInicial]);
+    // FIX "habilitar caja" — avisa al contenedor AL INSTANTE: el botón del
+    // header pasa a "● Activa" sin esperar a que se cierre el modal.
+    onCajaHabilitada?.(r.data.cash_session_id);
+  }, [servicio, terminalId, usuarioId, usuarioNombre, fondoInicial, onCajaHabilitada]);
 
   /** Registra una entrada o salida de efectivo (RN-51, RN-55). */
   const alRegistrarMovimiento = useCallback(async () => {
@@ -368,9 +397,13 @@ export default function GestorDeCaja({
       return;
     }
     setDiferencia(r.data);
+    // FIX "habilitar caja" — avisa al contenedor AL INSTANTE: el botón del
+    // header vuelve a "○ Habilitar" y la landing deja de marcar la terminal
+    // como caja, sin esperar a que se cierre el modal.
+    onCajaDeshabilitada?.();
     // FASE 10.4 — el corte ya quedó cerrado; el contexto es NO crítico.
     setMostrarContexto(true);
-  }, [servicio, turno, conteoEfectivo, conteoCredito, conteoDebito]);
+  }, [servicio, turno, conteoEfectivo, conteoCredito, conteoDebito, onCajaDeshabilitada]);
 
   /**
    * B4 — Iniciar un nuevo turno sin salir del gestor.

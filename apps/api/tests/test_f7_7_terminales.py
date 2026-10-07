@@ -35,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from core.database import DATABASE_URL, get_db
 from main import app
-from models import TerminalLock
+from models import CashSession, TerminalLock
 
 # ---------------------------------------------------------------------------
 # Entorno de prueba (mismo patrón que las puertas F4/F5).
@@ -73,10 +73,38 @@ async def entorno():
 
 
 async def _limpiar(ent: _Entorno) -> None:
-    """Borra todos los candados de prueba (deja la tabla limpia)."""
+    """Borra todos los candados y turnos de caja de prueba (deja las tablas limpias)."""
     async with ent.Session() as db:
         await db.execute(delete(TerminalLock))
+        await db.execute(delete(CashSession))
         await db.commit()
+
+
+async def _sembrar_turno_abierto(
+    ent: _Entorno,
+    terminal_id: str,
+    *,
+    estado: str = "OPEN",
+) -> uuid.UUID:
+    """Inserta un turno de caja directamente en la BD. Devuelve su id.
+
+    `estado` permite simular un turno ya cerrado (`CLOSED`) para verificar que
+    el status solo marca `caja_habilitada` cuando el turno está ABIERTO (RN-49).
+    """
+    sesion_id = uuid.uuid4()
+    async with ent.Session() as db:
+        db.add(
+            CashSession(
+                id=sesion_id,
+                terminal_id=terminal_id,
+                employee_id=uuid.uuid5(uuid.NAMESPACE_URL, "pos-usuario:1"),
+                employee_name="Cajero de prueba",
+                opening_float=0,
+                status=estado,
+            )
+        )
+        await db.commit()
+    return sesion_id
 
 
 async def _sembrar_candado(
@@ -478,3 +506,65 @@ async def test_criterio10_user_id_texto_es_aceptado(entorno):
         )
     assert r.status_code == 200, r.text
     assert r.json()["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# Criterio 11 — El status expone `caja_habilitada` (FIX "habilitar caja").
+#
+# Paridad con el viejo POS (§6.8): el candado (quién está en la terminal) y la
+# caja (si hay un turno ABIERTO) son DOS estados INDEPENDIENTES. El landing
+# necesita saber si la terminal ya tiene caja habilitada para pintar el badge y
+# para que el botón no diga "Habilitar" cuando ya lo está.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_criterio11_status_sin_turno_caja_deshabilitada(entorno):
+    """Sin turno de caja, `caja_habilitada` es False en todas las terminales."""
+    await _limpiar(entorno)
+    async with _cliente() as cliente:
+        estado = (await cliente.get("/pos/terminals/status")).json()
+    assert estado["TERM-01"]["caja_habilitada"] is False
+    assert estado["TERM-02"]["caja_habilitada"] is False
+
+
+@pytest.mark.asyncio
+async def test_criterio11_status_con_turno_abierto_marca_caja_habilitada(entorno):
+    """Un turno OPEN en una terminal marca `caja_habilitada` SOLO en esa terminal."""
+    await _limpiar(entorno)
+    await _sembrar_turno_abierto(entorno, "TERM-01")
+    async with _cliente() as cliente:
+        estado = (await cliente.get("/pos/terminals/status")).json()
+    assert estado["TERM-01"]["caja_habilitada"] is True
+    assert estado["TERM-02"]["caja_habilitada"] is False
+
+
+@pytest.mark.asyncio
+async def test_criterio11_turno_cerrado_no_marca_caja_habilitada(entorno):
+    """Un turno CLOSED NO marca `caja_habilitada` (solo cuentan los OPEN)."""
+    await _limpiar(entorno)
+    await _sembrar_turno_abierto(entorno, "TERM-01", estado="CLOSED")
+    async with _cliente() as cliente:
+        estado = (await cliente.get("/pos/terminals/status")).json()
+    assert estado["TERM-01"]["caja_habilitada"] is False
+
+
+@pytest.mark.asyncio
+async def test_criterio11_caja_y_candado_son_independientes(entorno):
+    """Caja habilitada y candado son estados INDEPENDIENTES (paridad viejo POS).
+
+    Una terminal puede tener caja habilitada SIN candado (el cajero cerró el
+    navegador pero el turno sigue abierto) y viceversa. El status debe exponer
+    ambos sin confundirlos.
+    """
+    await _limpiar(entorno)
+    await _sembrar_turno_abierto(entorno, "TERM-01")
+    await _sembrar_candado(entorno, "TERM-02", "7")
+    async with _cliente() as cliente:
+        estado = (await cliente.get("/pos/terminals/status")).json()
+    # TERM-01: caja abierta, sin candado.
+    assert estado["TERM-01"]["caja_habilitada"] is True
+    assert estado["TERM-01"]["occupier_id"] is None
+    # TERM-02: candado vigente, sin caja.
+    assert estado["TERM-02"]["caja_habilitada"] is False
+    assert estado["TERM-02"]["occupier_id"] is not None

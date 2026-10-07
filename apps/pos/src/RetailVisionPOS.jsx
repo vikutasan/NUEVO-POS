@@ -1222,6 +1222,16 @@ export default function RetailVisionPOS({
               // F10.5 — paridad de datos: el viejo POS persistía el NOMBRE del
               // cajero (`employee_name`). Se hereda del usuario autenticado.
               usuarioNombre={currentUser?.name || null}
+              // FIX "habilitar caja" — paridad con el viejo POS (§6.8). El gestor
+              // avisa AL INSTANTE cuando el turno se abre o se cierra, así el
+              // botón del header ("● Activa" / "○ Habilitar") y la guarda de
+              // cobro reflejan el estado real sin esperar a cerrar el modal.
+              onCajaHabilitada={(cashSessionId) => {
+                setTurnoCaja({ cash_session_id: cashSessionId });
+              }}
+              onCajaDeshabilitada={() => {
+                setTurnoCaja(null);
+              }}
               onCerrar={() => {
                 setCajaAbierta(false);
                 // F4.5.3 — Al cerrar el gestor, se relee el turno: si el operador
