@@ -536,3 +536,30 @@ El total se **derivaba** en el cliente cuando debía **leerse** del servidor.
 frontend", la prueba no es "¿el resultado coincide?" sino "¿de dónde viene el
 dato?". Y si el guard no detecta la violación, **el guard tiene un punto ciego
 que hay que cerrar** — un estándar que no se ejecuta es una opinión.
+
+---
+
+## 11. FIX Arquitectónico: Cobro Mixto y "suma_no_cuadra" (6ª Vuelta)
+
+**Fecha:** 7 de octubre de 2026
+**Commits:** `6eb38f1` y `7b0b6d4`
+
+### 11.1 El Síntoma
+El error `suma_no_cuadra` continuaba manifestándose **solamente en el flujo de pagos mixtos** cuando el cajero abonaba una cantidad inicial en efectivo (ej. $10) y luego intentaba cubrir el resto (ej. $37) pagando con tarjeta por un monto superior al saldo pendiente (ej. $1,000 para forzar un error, o simplemente por un error de tipeo en el que ingresaban $1,000 en vez del total restante). El frontend devolvía `suma_no_cuadra` y bloqueaba la operación.
+
+### 11.2 La Causa Raíz
+En la función `montoAplicado` de `CheckoutScreen.jsx`, la protección que acotaba el monto ingresado al **saldo pendiente** del ticket solo estaba habilitada para `EFECTIVO`. 
+```javascript
+// El código viejo hacía esto:
+if (metodoReal !== 'EFECTIVO') return capturado; 
+```
+Si el cajero ingresaba $1000 en tarjeta, el abono se registraba íntegramente por $1000, lo que provocaba que la suma total de los abonos (1010) excediera el total del ticket (47), detonando la validación RN-94 del frontend antes de llegar al backend.
+
+### 11.3 La Solución
+1. **Acotamiento Universal:** Se eliminó la cláusula de escape. Ahora **todos los métodos de pago** acotan automáticamente el monto al saldo pendiente. Si el total pendiente es $37 y el cajero teclea $1000 en débito, el abono se registrará exactamente por $37.
+2. **Corrección Visual de Cambio:** Al acotar el monto al pendiente, la función `resumenDePagos` de `checkoutService.js` (que calculaba el cambio restando la sumatoria de `monto` del total) comenzó a dar siempre `cambio = 0`, ya que el `monto` total nunca podía rebasar el total del ticket. Se modificó la función para que compute lo *entregado* utilizando el valor `recibido` si está presente.
+3. **Desglose en Lista:** Se actualizó la UI del listado de abonos en `CheckoutScreen.jsx` para mostrar explícitamente cuando hay un excedente en efectivo:
+   `Entregó $500.00 (Aplica: $47.00)`
+
+### 11.4 Conclusión Final
+Esta iteración erradica por completo la imposibilidad de tener discrepancias de sumatorias locales para la validación de frontera RN-94 sin romper la regla transversal de redondeos DT-02, a la vez que se provee visibilidad de la cantidad exacta de efectivo recibida, preservando intacta la capacidad del cajero para calcular vuelto en la terminal.
