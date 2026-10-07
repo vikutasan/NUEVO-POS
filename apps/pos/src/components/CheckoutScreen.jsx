@@ -402,7 +402,9 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
                         {etiquetaMetodo(a.metodo)}
                       </span>
                       <span className="text-xs text-crema-ticket/60">
-                        {formatearPrecio(a.monto)}
+                        {a.recibido && a.recibido !== a.monto
+                          ? `Entregó ${formatearPrecio(a.recibido)} (Aplica: ${formatearPrecio(a.monto)})`
+                          : formatearPrecio(a.monto)}
                       </span>
                     </span>
                     <span className="flex items-center gap-2">

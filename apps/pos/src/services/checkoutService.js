@@ -167,13 +167,21 @@ export function construirPaymentDetails({ abonos = [], total = 0, cajero = null 
  */
 export function resumenDePagos(abonos = [], total = 0) {
   const totalNum = Number(total) || 0;
-  const abonado = (Array.isArray(abonos) ? abonos : []).reduce(
-    (acc, a) => acc + (Number(a && a.monto) || 0),
+  const arr = Array.isArray(abonos) ? abonos : [];
+  const abonado = arr.reduce((acc, a) => acc + (Number(a && a.monto) || 0), 0);
+  const entregado = arr.reduce(
+    (acc, a) =>
+      acc +
+      (Number(a && (a.recibido !== undefined && a.recibido !== null ? a.recibido : a.monto)) || 0),
     0
   );
+  
   const abonadoRedondeado = Math.round(abonado * 100) / 100;
+  const entregadoRedondeado = Math.round(entregado * 100) / 100;
+  
   const faltante = Math.max(0, Math.round((totalNum - abonadoRedondeado) * 100) / 100);
-  const cambio = Math.max(0, Math.round((abonadoRedondeado - totalNum) * 100) / 100);
+  const cambio = Math.max(0, Math.round((entregadoRedondeado - totalNum) * 100) / 100);
+  
   return {
     abonado: abonadoRedondeado,
     faltante,
