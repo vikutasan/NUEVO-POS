@@ -21,8 +21,9 @@ Esta puerta verifica CUATRO cosas (Plan de Abordaje Fase 5 §4.0.3):
       proyección a 12 campos para la paridad de presentación con el viejo POS
       (terminal, capturista, cliente, teléfono, tipo de pedido, hora).
 
-  ✓ test_terminal_id_vacio_es_400  (negativo)
-      Un `terminal_id` vacío responde 400, no una lista silenciosa.
+  ✓ test_sin_terminal_id_devuelve_todas  (FICHA_FIX_PIZARRON_422)
+      Sin `terminal_id` (o vacío) devuelve TODAS las cuentas OPEN de TODAS las
+      terminales (modo CAJA, D1). Antes respondía 422 y dejaba el pizarrón vacío.
 
 La evidencia es la RESPUESTA HTTP real contra la app FastAPI montada sobre
 PostgreSQL, más una lectura directa de la BD para confirmar el filtro.
@@ -292,25 +293,68 @@ async def test_respuesta_ligera_campos_escalares(entorno):
 
 
 # ---------------------------------------------------------------------------
-# Criterio 4 — terminal_id vacío es 400 (negativo)
+# Criterio 4 — sin terminal_id (o vacío) devuelve TODAS las cuentas (modo CAJA)
 # ---------------------------------------------------------------------------
+#
+# FICHA_FIX_PIZARRON_422 (7 Oct 2026) — CAMBIO DE CONTRATO.
+#
+# El contrato 23 declaraba `terminal_id` OBLIGATORIO (`Query(..., min_length=1)`).
+# Pero el frontend, en modo CAJA (D1), llama `listarCuentasAbiertas('')`, que
+# produce la URL `/pos/open-accounts` SIN el query param. FastAPI respondía 422
+# ("Los datos recibidos no son válidos") y el pizarrón quedaba vacío.
+#
+# El contrato ahora declara `terminal_id` OPCIONAL: si se omite (o viene vacío),
+# devuelve TODAS las cuentas OPEN de TODAS las terminales (paridad con el viejo
+# POS `getOpenTickets()`). Si viene, filtra por esa terminal (RN-31).
 
 @pytest.mark.asyncio
-async def test_terminal_id_vacio_es_rechazado(entorno):
-    """Un `terminal_id` vacío es rechazado, no devuelve una lista silenciosa.
+async def test_sin_terminal_id_devuelve_todas(entorno):
+    """Sin `terminal_id` devuelve las cuentas OPEN de TODAS las terminales.
 
-    FastAPI valida `Query(..., min_length=1)` ANTES de entrar al cuerpo del
-    handler, así que la respuesta es 422 (error de validación estándar), no
-    400. Lo importante es que NO devuelva 200 con una lista vacía: un
-    `terminal_id` vacío jamás debe confundirse con "esta terminal no tiene
-    cuentas".
+    Es el modo CAJA (D1): el cajero central necesita ver las cuentas de T2, T3,
+    T4… para poder cobrarlas. Antes este caso respondía 422 y rompía el pizarrón.
     """
     ent: _Entorno = entorno
     await _limpiar(ent)
     try:
+        await _sembrar(ent)
+        # Una cuenta OPEN en A y otra en B (insertadas directo en la BD).
+        await _crear_ticket(ent, TERMINAL_A)
+        await _crear_ticket(ent, TERMINAL_B)
+
+        async with _cliente() as cliente:
+            # SIN el query param: debe devolver AMBAS (no 422).
+            res = await cliente.get("/pos/open-accounts")
+        assert res.status_code == 200, res.text
+        cuentas = res.json()["cuentas"]
+        terminales = {c["terminal_id"] for c in cuentas}
+        # La BD puede tener cuentas de otras terminales (datos de otros tests);
+        # lo que importa es que las de AMBAS terminales de prueba estén.
+        assert {TERMINAL_A, TERMINAL_B} <= terminales, (
+            f"Sin terminal_id deben venir las cuentas de TODAS las terminales, "
+            f"tiene: {terminales}"
+        )
+    finally:
+        await _limpiar(ent)
+
+
+@pytest.mark.asyncio
+async def test_terminal_id_vacio_devuelve_todas(entorno):
+    """Un `terminal_id` vacío se trata como "sin filtro" (modo CAJA), no 422.
+
+    El frontend envía `terminal_id=''` para pedir TODAS las cuentas. Antes esto
+    respondía 422; ahora devuelve 200 con todas las cuentas OPEN.
+    """
+    ent: _Entorno = entorno
+    await _limpiar(ent)
+    try:
+        await _sembrar(ent)
+        await _crear_ticket(ent, TERMINAL_A)
+
         async with _cliente() as cliente:
             res = await cliente.get("/pos/open-accounts", params={"terminal_id": ""})
-        assert res.status_code == 422, res.text
+        assert res.status_code == 200, res.text
+        assert len(res.json()["cuentas"]) >= 1
     finally:
         await _limpiar(ent)
 

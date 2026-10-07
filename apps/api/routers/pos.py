@@ -766,7 +766,7 @@ async def leer_lineas(
 
 @router.get("/open-accounts", response_model=CuentasAbiertasSalida)
 async def cuentas_abiertas(
-    terminal_id: str = Query(..., min_length=1),
+    terminal_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> CuentasAbiertasSalida:
     """Lista las cuentas OPEN de una terminal (contrato 23, FASE 5.0).
@@ -780,20 +780,34 @@ async def cuentas_abiertas(
     capturista, teléfono, tipo de pedido, tipo de entrega y hora). Siguen
     siendo escalares: la frontera A-02 / O-23 se respeta.
 
-    Solo devuelve cuentas de la terminal pedida (RN-31), ordenadas por
-    `created_at` ascendente (la más antigua primero, como un corcho real).
-    """
-    if not terminal_id or not terminal_id.strip():
-        raise HTTPException(status_code=400, detail="terminal_id es obligatorio")
+    FICHA_FIX_PIZARRON_422 (7 Oct 2026) — `terminal_id` es OPCIONAL:
+      - Si viene, devuelve SOLO las cuentas OPEN de esa terminal (RN-31).
+      - Si se OMITE, devuelve TODAS las cuentas OPEN de TODAS las terminales
+        (modo CAJA — D1, paridad con el viejo POS `getOpenTickets()`).
 
-    filas = (
-        await db.execute(
-            select(Ticket)
-            .where(Ticket.terminal_id == terminal_id)
-            .where(Ticket.status == "OPEN")
-            .order_by(Ticket.created_at.asc())
-        )
-    ).scalars().all()
+    POR QUÉ el bug: el frontend en modo CAJA llama `listarCuentasAbiertas('')`,
+    que produce la URL `/pos/open-accounts` SIN el query param. El endpoint
+    declaraba `terminal_id: str = Query(..., min_length=1)` (OBLIGATORIO), así
+    que FastAPI respondía **422** ("Los datos recibidos no son válidos") y el
+    pizarrón quedaba vacío. El contrato documentaba un 400, pero el 422 lo
+    emitía la validación de FastAPI ANTES de entrar al handler.
+
+    Ordenadas por `created_at` ascendente (la más antigua primero, como un
+    corcho real).
+    """
+    consulta = (
+        select(Ticket)
+        .where(Ticket.status == "OPEN")
+        .order_by(Ticket.created_at.asc())
+    )
+
+    # FICHA_FIX_PIZARRON_422 — filtro por terminal SOLO si se pidió una.
+    # Un `terminal_id` vacío/espacios se trata como "sin filtro" (modo CAJA),
+    # no como error: el frontend envía '' para pedir TODAS las cuentas.
+    if terminal_id is not None and terminal_id.strip():
+        consulta = consulta.where(Ticket.terminal_id == terminal_id)
+
+    filas = (await db.execute(consulta)).scalars().all()
 
     return CuentasAbiertasSalida(
         cuentas=[CuentaAbiertaSalida.model_validate(t) for t in filas]

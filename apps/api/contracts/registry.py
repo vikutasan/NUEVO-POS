@@ -635,7 +635,7 @@ CONTRATOS: tuple[Contrato, ...] = (
         consumidor="POS",
         proveedor="POS",
         operacion="GET /pos/open-accounts",
-        entrada={"terminal_id": "String"},
+        entrada={"terminal_id": "String = NULL (opcional)"},
         salida={"cuentas": "List[CuentaAbiertaSalida]"},
         garantias=(
             "Devuelve una PROYECCIÓN de las cuentas OPEN, no la tabla `tickets` (O-23).",
@@ -643,11 +643,13 @@ CONTRATOS: tuple[Contrato, ...] = (
             "F12.6 — PARIDAD DE PRESENTACIÓN: la proyección incluye terminal, "
             "capturista (nombre desnormalizado, patrón F10.5), cliente, teléfono, "
             "tipo de pedido, tipo de entrega y hora de creación, como el viejo POS.",
-            "Solo devuelve cuentas de la terminal pedida (RN-31).",
+            "Si `terminal_id` viene, devuelve SOLO las cuentas de esa terminal (RN-31).",
+            "FICHA_FIX_PIZARRON_422 — si `terminal_id` se OMITE (o viene vacío), "
+            "devuelve TODAS las cuentas OPEN de TODAS las terminales (modo CAJA, D1).",
             "NO devuelve las líneas: leer las líneas es del contrato 21.",
         ),
-        errores=("400 si `terminal_id` está vacío.",),
-        estado_hoy="FASE 5.0 + F12.6",
+        errores=(),
+        estado_hoy="FASE 5.0 + F12.6 + FICHA_FIX_PIZARRON_422",
     ),
     # ── §11 IA — Voz (proveedor: Centro de IA — DT-07 / FASE 7.0) ──────────
     Contrato(
