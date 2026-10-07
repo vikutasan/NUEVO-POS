@@ -3,7 +3,7 @@
 **Fecha:** 7 de octubre de 2026
 **Fase:** Corrección post-F13 (defecto reportado en operación real)
 **Estado:** ✅ COMPLETO — corregido, probado (727/727), documentado y pusheado
-**Commit:** _(ver §7)_
+**Commit:** `3f6b3f8` (push `5266ffe..3f6b3f8`)
 **Archivos tocados:** 2 (1 de código + 1 de test)
 
 ---
