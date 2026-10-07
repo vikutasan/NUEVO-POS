@@ -22,9 +22,17 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid5
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+# FICHA_FIX_TURNO_CAJA_USUARIO_ID (7 Oct 2026) — Espacio de nombres fijo para
+# derivar un UUID DETERMINISTA a partir del id NUMÉRICO del ERP (p. ej. `1`).
+# El mismo id del ERP produce SIEMPRE el mismo UUID, así que la identidad del
+# cajero es estable entre turnos, cortes y reportes. El valor es arbitrario
+# pero INMUTABLE: cambiarlo reasignaría la identidad de todos los cajeros.
+ESPACIO_IDS_ERP = UUID("6f2a1c9e-0b7d-4e3a-9c5f-1d8b2a4e6f70")
 
 
 # ---------------------------------------------------------------------------
@@ -360,12 +368,48 @@ class AbrirTurnoEntrada(BaseModel):
     perdía (se guardaba el UUID como nombre). `usuario_nombre` restaura ese
     dato. Es OPCIONAL para no romper a un consumidor que aún no lo envíe: si
     falta, el router cae al `usuario_id` (comportamiento anterior).
+
+    FICHA_FIX_TURNO_CAJA_USUARIO_ID (7 Oct 2026) — TOLERANCIA AL ID DEL ERP.
+    El ERP autentica al cajero con un id NUMÉRICO (`currentUser.id = 1`), no
+    con un UUID. Declarar `usuario_id: UUID` hacía que Pydantic v2 rechazara
+    la petición con 422 (`uuid_type`) y el turno NUNCA se abría. Es la misma
+    clase de bug que F7.7c (el id del ERP es un número, no un UUID).
+
+    La corrección NO relaja la frontera: el contrato sigue exigiendo un
+    identificador de empleado, pero acepta `str | int | UUID` y lo normaliza
+    a un UUID DETERMINISTA (mismo id → mismo UUID) en un validador. Así el
+    POS puede enviar `1` y el backend lo persiste como un UUID estable, sin
+    romper a un consumidor que ya envíe un UUID real.
     """
 
     terminal_id: str
-    usuario_id: UUID
+    usuario_id: str | int | UUID
     monto_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
     usuario_nombre: str | None = None
+
+    @field_validator("usuario_id", mode="before")
+    @classmethod
+    def _normalizar_usuario_id(cls, valor: object) -> UUID:
+        """Normaliza el id del empleado a un UUID determinista.
+
+        - Si ya es un `UUID`, se respeta tal cual.
+        - Si es un UUID en texto, se parsea.
+        - Si es un id numérico del ERP (p. ej. `1`), se deriva un UUID
+          determinista con `uuid5` sobre un espacio de nombres fijo, de modo
+          que el MISMO id del ERP produzca SIEMPRE el MISMO UUID (trazabilidad
+          estable entre turnos, cortes y reportes).
+        """
+        if isinstance(valor, UUID):
+            return valor
+        if isinstance(valor, str):
+            try:
+                return UUID(valor)
+            except (ValueError, AttributeError):
+                # No es un UUID en texto: se trata como id del ERP.
+                return uuid5(ESPACIO_IDS_ERP, valor)
+        if isinstance(valor, int):
+            return uuid5(ESPACIO_IDS_ERP, str(valor))
+        raise ValueError("usuario_id debe ser un UUID o un id de empleado")
 
 
 class AbrirTurnoSalida(BaseModel):

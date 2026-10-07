@@ -294,7 +294,13 @@ CONTRATOS: tuple[Contrato, ...] = (
         operacion="POST /cash/open-session",
         entrada={
             "terminal_id": "UUID",
-            "usuario_id": "UUID",
+            # FICHA_FIX_TURNO_CAJA_USUARIO_ID (7 Oct 2026) — el ERP autentica al
+            # cajero con un id NUMÉRICO (`currentUser.id = 1`), no con un UUID.
+            # El contrato acepta `UUID | String | Int` y lo normaliza a un UUID
+            # determinista (uuid5) en la frontera. Antes exigía `UUID` y Pydantic
+            # v2 rechazaba el id del ERP con 422 (`uuid_type`): el turno NUNCA
+            # se abría. Misma clase de bug que F7.7c.
+            "usuario_id": "UUID | String | Int",
             "monto_inicial": "Numeric(12,2)",
             # F10.5 — paridad de datos: el nombre del cajero que el viejo POS
             # persistía en `cash_sessions.employee_name`. Opcional.

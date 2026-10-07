@@ -125,6 +125,15 @@ export default function RetailVisionPOS({
   const { modo, esMovil } = useModo();
   const red = useNetworkHealth();
 
+  // FICHA_FIX_TURNO_CAJA_USUARIO_ID (7 Oct 2026) — IDENTIDAD DEL OPERADOR.
+  // El operador es el usuario AUTENTICADO por el ERP (`currentUser`), no la
+  // sesión de terminal. `SesionActiva` (contrato 9) NUNCA expone `employee_id`
+  // —la tabla `terminal_sessions` no tiene esa columna—, así que
+  // `sesion?.employee_id` era SIEMPRE `undefined`. Eso dejaba `usuarioId` en
+  // `null` y el backend rechazaba abrir el turno con 422 (`uuid_type`).
+  // Se deriva UNA sola vez aquí y se usa en los tres puntos que lo necesitan.
+  const usuarioId = currentUser?.id ?? null;
+
   // ── Estado de la pantalla (solo lo que NO vive en un hook) ─────────────────
   const [categorias, setCategorias] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -211,7 +220,7 @@ export default function RetailVisionPOS({
   const locking = useTerminalLocking({
     api,
     terminalId: terminalEfectiva,
-    usuarioId: sesion?.employee_id || null,
+    usuarioId,
   });
 
   // ── Hooks de IA (F7.5) ─────────────────────────────────────────────────────
@@ -257,9 +266,8 @@ export default function RetailVisionPOS({
     url: `${CONFIG.API_BASE_URL}/pos/terminals/${terminalEfectiva}/unlock`,
     activo: locking.esDueno,
     obtenerPayload: () => {
-      const uid = sesion?.employee_id;
-      if (!uid) return null;
-      return { occupier_id: String(uid) };
+      if (usuarioId === null || usuarioId === undefined) return null;
+      return { occupier_id: String(usuarioId) };
     },
   });
 
@@ -1210,7 +1218,7 @@ export default function RetailVisionPOS({
           <div className="bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <GestorDeCaja
               terminalId={terminalEfectiva}
-              usuarioId={sesion?.employee_id || null}
+              usuarioId={usuarioId}
               // F10.5 — paridad de datos: el viejo POS persistía el NOMBRE del
               // cajero (`employee_name`). Se hereda del usuario autenticado.
               usuarioNombre={currentUser?.name || null}
