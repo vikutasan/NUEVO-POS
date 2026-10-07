@@ -41,8 +41,12 @@ export const FALLOS_PARA_DOWN = 2;
 export async function sondaReal(url) {
   const inicio = performance.now();
   try {
+    // NOTA (7 Oct 2026): el endpoint `/health` del API solo acepta GET
+    // (`@app.get("/health")`). Un HEAD devuelve 405 Method Not Allowed,
+    // que `res.ok` interpreta como caída y dispara el banner rojo falso.
+    // Se usa GET: la sonda es un chequeo de vida ligero, no descarga cuerpo útil.
     const res = await fetch(url, {
-      method: 'HEAD',
+      method: 'GET',
       cache: 'no-store',
       signal: AbortSignal.timeout(5000),
     });
