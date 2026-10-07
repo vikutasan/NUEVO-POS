@@ -35,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from core.database import DATABASE_URL, get_db
 from main import app
-from models import CashSession, TerminalLock
+from models import CashSession, TerminalLock, Ticket, TicketItem
 
 # ---------------------------------------------------------------------------
 # Entorno de prueba (mismo patrón que las puertas F4/F5).
@@ -73,9 +73,18 @@ async def entorno():
 
 
 async def _limpiar(ent: _Entorno) -> None:
-    """Borra todos los candados y turnos de caja de prueba (deja las tablas limpias)."""
+    """Borra los datos de prueba (deja las tablas limpias).
+
+    FICHA_FIX_PIZARRON_422 (7 Oct 2026) — el orden importa: `tickets` referencia
+    `cash_sessions` (FK `fk_tickets_cash_session_id_cash_sessions`). Si se borra
+    la sesión de caja ANTES que los tickets que la referencian, PostgreSQL lanza
+    `ForeignKeyViolationError` y TODA la puerta falla. Por eso se borran primero
+    los `ticket_items`, luego los `tickets`, y al final las sesiones de caja.
+    """
     async with ent.Session() as db:
         await db.execute(delete(TerminalLock))
+        await db.execute(delete(TicketItem))
+        await db.execute(delete(Ticket))
         await db.execute(delete(CashSession))
         await db.commit()
 

@@ -160,24 +160,28 @@ de una sesión de terminal activa.
 | Prueba | Resultado |
 |---|---|
 | `pytest tests/test_f5_cuentas.py` | **7 passed** |
-| `pytest` (suite completa, sin `test_f7_7_terminales.py`) | **287 passed** |
+| `pytest tests/test_f7_7_terminales.py` (tras arreglar el aislamiento) | **28 passed** |
+| `pytest` (suite completa) | **315 passed** |
 | `npm run test -- --run` (frontend) | **64 files, 722 tests, 0 failures** |
 | En vivo `GET /pos/open-accounts` (sin param) | **200** (antes 422) |
 | En vivo `GET /pos/open-accounts?terminal_id=TERM-01` | **200** |
 | En vivo `GET /pos/open-accounts?terminal_id=` (vacío) | **200** (antes 422) |
 
-### 6.1 Nota de honestidad — los 28 fallos de `test_f7_7_terminales.py`
+### 6.1 Nota de honestidad — los 28 fallos de `test_f7_7_terminales.py` (PRE-EXISTENTES, ya corregidos)
 
-La suite completa reporta **28 failed, 287 passed**. Los 28 fallos están **TODOS** en
-`test_f7_7_terminales.py` y son **PRE-EXISTENTES**, ajenos a esta corrección:
+Al correr la suite completa aparecieron **28 failed** en `test_f7_7_terminales.py`. Se comprobó
+que eran **PRE-EXISTENTES** y ajenos a esta corrección:
 
 - Causa: `ForeignKeyViolationError` — `DELETE FROM cash_sessions` viola la FK
   `fk_tickets_cash_session_id_cash_sessions` (un ticket de prueba referencia la sesión de caja).
-- El helper [`_limpiar()`](../apps/api/tests/test_f7_7_terminales.py:75) borra `cash_sessions`
+- El helper [`_limpiar()`](../apps/api/tests/test_f7_7_terminales.py:75) borraba `cash_sessions`
   **sin borrar antes** los `tickets` que la referencian.
 - **Comprobado con `git stash`:** con los cambios de esta ficha **guardados** (código limpio en
-  `daed18a`), el archivo sigue fallando **28 failed in 12.46s** con el MISMO error. Es un bug de
-  aislamiento de tests, no de la corrección.
+  `daed18a`), el archivo seguía fallando **28 failed in 12.46s** con el MISMO error.
+
+**Corrección del aislamiento (misma ficha):** `_limpiar()` ahora borra en orden
+`TerminalLock → TicketItem → Ticket → CashSession`, respetando la FK. Resultado:
+`test_f7_7_terminales.py` → **28 passed**; suite completa → **315 passed**.
 
 ---
 
