@@ -162,11 +162,19 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
    * el cliente entrega; `cambio` = `recibido − monto`. Para EFECTIVO se aplica
    * `min(capturado, pendiente)` y el excedente queda como `recibido` (vuelto).
    * Para TARJETA/TRANSFERENCIA el monto aplicado es el capturado tal cual.
+   *
+   * 2ª VUELTA (7 Oct 2026) — BUG del caso `pendiente === 0`: cuando el total YA
+   * estaba cubierto por abonos previos, la versión anterior devolvía `capturado`
+   * (el monto completo) en vez de `0`. Así, agregar un 2º abono sobre una cuenta
+   * ya saldada sumaba de más (p. ej. $100 + $50 = $150 ≠ $100) → RN-94 →
+   * `suma_no_cuadra`. Ahora, si no queda nada por aplicar, el monto aplicado es
+   * `0` y `manejarAgregarPago` rechaza el abono (no tiene sentido abonar $0).
    */
   function montoAplicado(metodoReal, capturado) {
     if (metodoReal !== 'EFECTIVO') return capturado;
     const pendiente = Math.max(0, Math.round((total - resumen.abonado) * 100) / 100);
-    return Math.min(capturado, pendiente > 0 ? pendiente : capturado);
+    // Si ya no queda pendiente, no se aplica nada (el excedente sería cambio).
+    return Math.min(capturado, pendiente);
   }
 
   /** Agrega el monto capturado como un abono con el método elegido. */
@@ -224,16 +232,46 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     setEditandoId(null);
   }
 
-  /** Confirma el cobro: con abonos envía N pagos; sin abonos, el pago único. */
+  /**
+   * Confirma el cobro: con abonos envía N pagos; sin abonos, el pago único.
+   *
+   * 3ª VUELTA (7 Oct 2026) — El pago único enviaba `{metodo, recibido, cambio}`
+   * SIN `monto`, confiando en que el backend lo reconstruyera desde el total del
+   * ticket (`_normalizar_pagos`). Eso funcionaba para el total completo, pero
+   * era FRÁGIL: si el monto aplicado no coincidía con el total (p. ej. pago
+   * parcial de un PEDIDO con `montoMinimo < total`), el backend ponía
+   * `monto = total` y la suma NO cuadraba → RN-94 → `suma_no_cuadra`.
+   *
+   * Ahora el pago único envía SIEMPRE un `monto` EXPLÍCITO = lo que se APLICA
+   * al total (nunca más que el total), y `recibido` = el efectivo entregado.
+   * Así el contrato es explícito y el vuelto (`recibido − monto`) queda claro:
+   *   - EFECTIVO: `monto = min(capturado, total)`; `recibido = capturado`;
+   *     `cambio = recibido − monto`.
+   *   - TARJETA/TRANSFERENCIA: `monto = total` (se cobra el total exacto).
+   * El backend sigue aceptando la forma vieja (retrocompatibilidad), pero el
+   * POS ya no depende de ese default.
+   */
   function manejarConfirmar() {
     if (hayAbonos) {
       onConfirmar({ abonos });
       return;
     }
+    const metodoReal = metodoCanonico(metodo);
+    if (esEfectivo) {
+      const monto = Math.min(montoCapturado, total);
+      onConfirmar({
+        metodo: metodoReal,
+        monto,
+        recibido: montoCapturado,
+        cambio: Math.max(montoCapturado - monto, 0),
+      });
+      return;
+    }
     onConfirmar({
-      metodo: metodoCanonico(metodo),
-      recibido: esEfectivo ? montoCapturado : (minimo < total ? minimo : total),
-      cambio: esEfectivo ? Math.max(montoCapturado - minimo, 0) : 0,
+      metodo: metodoReal,
+      monto: total,
+      recibido: total,
+      cambio: 0,
     });
   }
 

@@ -411,3 +411,65 @@ describe('FIX "suma_no_cuadra" — el vuelto no rompe el cobro', () => {
     expect(Number(abono.recibido)).toBe(150);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 10. FIX "suma_no_cuadra" (3ª vuelta) — el PAGO ÚNICO (sin abonos) con vuelto
+//     envía `monto` EXPLÍCITO = lo aplicado al total, no lo recibido.
+//
+//     Este es el path que el cajero usa de verdad: teclea el efectivo recibido
+//     y pulsa CONFIRMAR PAGO sin agregar abonos. La sección 9 solo cubría el
+//     path de abonos; aquí se blinda el path único, que era el que rompía con
+//     `suma_no_cuadra` cuando el monto capturado superaba el total.
+// ---------------------------------------------------------------------------
+
+describe('FIX "suma_no_cuadra" (3ª vuelta) — pago único con vuelto', () => {
+  it('efectivo con vuelto: monto = total, recibido = capturado, cambio = excedente', () => {
+    const { onConfirmar } = montar(100);
+    // El cajero teclea $150 para un total de $100 (prueba del cambio).
+    escribirMonto(150);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const payload = onConfirmar.mock.calls[0][0];
+    // El pago único NO usa `abonos`: manda la forma plana {metodo, monto, ...}.
+    expect(payload.abonos).toBeUndefined();
+    expect(payload.metodo).toBe('EFECTIVO');
+    // `monto` es lo APLICADO al total (100), no lo recibido (150).
+    expect(Number(payload.monto)).toBe(100);
+    expect(Number(payload.recibido)).toBe(150);
+    expect(Number(payload.cambio)).toBe(50);
+  });
+
+  it('efectivo exacto: monto = recibido = total y cambio 0', () => {
+    const { onConfirmar } = montar(100);
+    escribirMonto(100);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const payload = onConfirmar.mock.calls[0][0];
+    expect(Number(payload.monto)).toBe(100);
+    expect(Number(payload.recibido)).toBe(100);
+    expect(Number(payload.cambio)).toBe(0);
+  });
+
+  it('tarjeta: monto = total, recibido = total y cambio 0 (sin captura)', () => {
+    const { onConfirmar } = montar(100);
+    elegirMetodo('Tarjeta');
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const payload = onConfirmar.mock.calls[0][0];
+    expect(payload.metodo).toBe('DEBITO');
+    expect(Number(payload.monto)).toBe(100);
+    expect(Number(payload.recibido)).toBe(100);
+    expect(Number(payload.cambio)).toBe(0);
+  });
+
+  it('efectivo con vuelto: el botón se habilita (no queda muerto)', () => {
+    montar(100);
+    escribirMonto(150);
+    // Con $150 capturados sobre $100, el cobro está permitido.
+    expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(false);
+  });
+
+  it('efectivo insuficiente: el botón sigue bloqueado (sin regresión)', () => {
+    montar(100);
+    escribirMonto(40);
+    // Con $40 sobre $100, falta cubrir el total: no se puede cobrar.
+    expect(screen.getByText('CONFIRMAR PAGO').disabled).toBe(true);
+  });
+});

@@ -17,7 +17,7 @@ en `test_f3_comportamiento.py` (la matriz regla → test es única).
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import pytest
 
@@ -189,6 +189,68 @@ def test_cobro_viejo_normalizado_cuadra():
     pagos = normalizado["pagos"]
     R.rn95_metodos_de_pago_validos(pagos)
     R.rn94_suma_de_pagos_cuadra_total(pagos, Decimal("100.00"))
+
+
+# ===========================================================================
+# Criterio 5b — FICHA_FIX_SUMA_NO_CUADRA_VUELTO (3ª vuelta): defensa de
+# frontera. Un cliente obsoleto que mande `monto = recibido` (p. ej. $150
+# sobre un total de $100) NO debe romper el cobro: `monto` se acota al total
+# y el excedente queda como cambio. El cobro de MENOS sigue rechazándose.
+# ===========================================================================
+
+def test_normalizar_acota_monto_al_total_con_vuelto():
+    """`monto > total` se acota al total (el excedente es cambio, no pago)."""
+    # Cliente obsoleto: manda `monto = recibido = 150` sobre un total de 100.
+    malformado = {"metodo": "EFECTIVO", "monto": "150.00", "recibido": "150.00", "cambio": "0.00"}
+    normalizado = _normalizar_pagos(malformado, Decimal("100.00"))
+    pago = normalizado["pagos"][0]
+    # El monto aplicado se acota al total: 100, no 150.
+    assert Decimal(str(pago["monto"])) == Decimal("100.00")
+    # El recibido se conserva (el cliente SÍ entregó 150).
+    assert pago["recibido"] == "150.00"
+    # Y ahora RN-94 pasa (antes fallaba con suma_no_cuadra).
+    R.rn94_suma_de_pagos_cuadra_total(normalizado["pagos"], Decimal("100.00"))
+
+
+def test_normalizar_vuelto_legitimo_cuadra():
+    """Un vuelto legítimo (`monto = total`, `recibido > total`) cuadra."""
+    con_vuelto = {"metodo": "EFECTIVO", "monto": "100.00", "recibido": "150.00", "cambio": "50.00"}
+    normalizado = _normalizar_pagos(con_vuelto, Decimal("100.00"))
+    pago = normalizado["pagos"][0]
+    assert Decimal(str(pago["monto"])) == Decimal("100.00")
+    R.rn94_suma_de_pagos_cuadra_total(normalizado["pagos"], Decimal("100.00"))
+
+
+def test_normalizar_cobro_de_menos_sigue_rechazandose():
+    """La defensa NO enmascara el cobro de menos: `monto < total` → RN-94 falla."""
+    parcial = {"metodo": "EFECTIVO", "monto": "40.00", "recibido": "40.00", "cambio": "0.00"}
+    normalizado = _normalizar_pagos(parcial, Decimal("100.00"))
+    with pytest.raises(ReglaViolada):
+        R.rn94_suma_de_pagos_cuadra_total(normalizado["pagos"], Decimal("100.00"))
+
+
+def test_normalizar_monto_no_parseable_no_enmascara():
+    """Un `monto` no numérico NO se acota (no es parseable): se conserva tal cual.
+
+    La defensa de frontera solo acota montos NUMÉRICOS mayores al total. Un
+    monto no parseable se deja intacto para no enmascarar el error: RN-94 lo
+    rechazará al intentar convertirlo a Decimal (comportamiento pre-existente,
+    fuera del alcance de esta corrección).
+    """
+    roto = {"metodo": "EFECTIVO", "monto": "no-es-un-numero", "recibido": "150.00"}
+    normalizado = _normalizar_pagos(roto, Decimal("100.00"))
+    # No se acota (no es parseable): se conserva para que RN-94 lo detecte.
+    assert normalizado["pagos"][0]["monto"] == "no-es-un-numero"
+    # RN-94 no puede sumar un monto no numérico: lanza InvalidOperation.
+    with pytest.raises(InvalidOperation):
+        R.rn94_suma_de_pagos_cuadra_total(normalizado["pagos"], Decimal("100.00"))
+
+
+def test_normalizar_sin_total_no_acota():
+    """Sin `total` no hay nada que acotar: el monto se conserva (retrocompat)."""
+    viejo = {"metodo": "EFECTIVO", "monto": "150.00", "recibido": "150.00"}
+    normalizado = _normalizar_pagos(viejo)
+    assert normalizado["pagos"][0]["monto"] == "150.00"
 
 
 # ===========================================================================

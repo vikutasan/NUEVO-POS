@@ -272,7 +272,14 @@ describe('CheckoutScreen — cobro (efectivo, tarjeta, cambio, validación)', ()
     const boton = screen.getByRole('button', { name: /CONFIRMAR PAGO/ });
     expect(boton.disabled).toBe(false);
     fireEvent.click(boton);
-    expect(onConfirmar).toHaveBeenCalledWith({ metodo: 'EFECTIVO', recibido: 200, cambio: 100 });
+    // 3ª vuelta (7 Oct 2026): el pago único envía `monto` EXPLÍCITO = lo que se
+    // aplica al total (min(recibido, total) = 100), no lo recibido (200).
+    expect(onConfirmar).toHaveBeenCalledWith({
+      metodo: 'EFECTIVO',
+      monto: 100,
+      recibido: 200,
+      cambio: 100,
+    });
   });
 
   it('F3.4: con tarjeta cobra el total exacto sin capturar efectivo', () => {
@@ -284,7 +291,13 @@ describe('CheckoutScreen — cobro (efectivo, tarjeta, cambio, validación)', ()
     fireEvent.click(boton);
     // F9.1.3: la UI "Tarjeta" se canoniza a DEBITO (RN-57 solo acepta
     // EFECTIVO/CREDITO/DEBITO/TRANSFERENCIA; "TARJETA" sería rechazado).
-    expect(onConfirmar).toHaveBeenCalledWith({ metodo: 'DEBITO', recibido: 100, cambio: 0 });
+    // 3ª vuelta (7 Oct 2026): el pago único envía `monto` EXPLÍCITO = total.
+    expect(onConfirmar).toHaveBeenCalledWith({
+      metodo: 'DEBITO',
+      monto: 100,
+      recibido: 100,
+      cambio: 0,
+    });
   });
 
   it('F3.4: muestra el error de cobro inline sin cerrar el modal (Regla 19)', () => {

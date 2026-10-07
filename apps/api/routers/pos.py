@@ -36,7 +36,7 @@ Reglas aplicadas, en orden:
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -238,6 +238,17 @@ def _normalizar_pagos(payment_details: dict, total: Decimal | None = None) -> di
     solo mandaba `recibido`/`cambio`. Por eso, cuando falta `monto`, se usa el
     `total` del ticket como monto del abono (el pago único cubre el total). Si
     tampoco hay `total`, se deja sin `monto` para que RN-94 lo detecte.
+
+    FICHA_FIX_SUMA_NO_CUADRA_VUELTO (3ª vuelta, 7 Oct 2026) — DEFENSA DE
+    FRONTERA: en el pago único, `monto` es lo que se APLICA al total y `recibido`
+    es el efectivo que el cliente entrega (el excedente es CAMBIO, no pago). Un
+    cliente viejo/obsoleto podía enviar `monto = recibido` (p. ej. $150 sobre un
+    total de $100) → la suma (150) no cuadraba el total (100) → RN-94 →
+    `suma_no_cuadra` y el cobro se abortaba aunque el cliente SÍ había cubierto
+    el total. Aquí se ACOTA `monto` al total: si `monto > total`, se usa el total
+    (el excedente queda como cambio). Así un vuelto legítimo NUNCA rompe el
+    cobro, sin importar la versión del cliente. El cobro de MENOS sigue
+    detectándose (la suma < total → RN-94).
     """
     detalles = dict(payment_details or {})
     if "pagos" in detalles:
@@ -252,6 +263,19 @@ def _normalizar_pagos(payment_details: dict, total: Decimal | None = None) -> di
         pago["monto"] = detalles["monto"]
     elif total is not None:
         pago["monto"] = str(total)
+    # DEFENSA (3ª vuelta): acota `monto` al total. Un `monto` mayor al total es
+    # un vuelto mal etiquetado (el excedente es cambio, no pago). Sin esto, un
+    # cliente obsoleto que mande `monto = recibido` provoca `suma_no_cuadra`.
+    if total is not None and "monto" in pago:
+        try:
+            monto_dec = Decimal(str(pago["monto"]))
+            total_dec = Decimal(str(total))
+            if monto_dec > total_dec:
+                pago["monto"] = str(total_dec)
+        except (InvalidOperation, ValueError, TypeError):
+            # Si el monto no es parseable, se deja tal cual: RN-94 lo rechazará
+            # con un motivo claro en vez de enmascarar el error.
+            pass
     if "recibido" in detalles:
         pago["recibido"] = detalles["recibido"]
     if "cambio" in detalles:

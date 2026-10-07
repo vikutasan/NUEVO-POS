@@ -671,11 +671,20 @@ export default function RetailVisionPOS({
         }
         paymentDetails = construido.data;
       } else {
+        // 3ª VUELTA (7 Oct 2026) — El pago único ahora trae `monto` EXPLÍCITO
+        // (lo que se aplica al total). Se reenvía tal cual para que el backend
+        // NO tenga que reconstruirlo desde el total (evita `suma_no_cuadra`
+        // cuando el monto aplicado ≠ total, p. ej. pago parcial de PEDIDO).
+        // Si por regresión no viniera `monto`, se omite y el backend cae al
+        // default retrocompatible (`monto = total`).
         paymentDetails = {
           metodo: pago.metodo,
           recibido: pago.recibido,
           cambio: pago.cambio,
         };
+        if (pago.monto != null) {
+          paymentDetails.monto = pago.monto;
+        }
       }
 
       // FIX "confirmar pago no hace nada" (2ª vuelta, 7 Oct 2026) — CAUSA REAL:
