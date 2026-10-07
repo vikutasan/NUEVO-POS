@@ -550,3 +550,65 @@ describe('FIX "suma_no_cuadra" (4ª vuelta) — total con error de coma flotante
     expect(Math.round(suma * 100) / 100).toBe(99.99);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 12. FIX "suma_no_cuadra" (6ª VUELTA) — el acotamiento al pendiente debe ser
+//     UNIVERSAL (todos los métodos) y consistente entre ALTA y EDICIÓN.
+//
+//     CAUSA RAÍZ: `montoAplicado` solo acotaba EFECTIVO; TARJETA/TRANSFERENCIA
+//     se registraban por el monto capturado tal cual. Un abono de tarjeta por
+//     encima del pendiente (p. ej. $10 efectivo + $1000 tarjeta sobre un total
+//     de $47) sumaba 1010 ≠ 47 → RN-94 → `suma_no_cuadra`. La EDICIÓN seguía
+//     con la lógica vieja, reabriendo el bug por esa puerta.
+// ---------------------------------------------------------------------------
+
+describe('FIX "suma_no_cuadra" (6ª vuelta) — acotamiento universal al pendiente', () => {
+  it('abono de TARJETA por encima del pendiente se acota al pendiente (no suma de más)', () => {
+    const { onConfirmar } = montar(47);
+    // Efectivo $10 (cubre parte) + tarjeta $1000 (excede el pendiente de $37).
+    agregarAbono(10);
+    elegirMetodo('Tarjeta');
+    agregarAbono(1000);
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const abonos = onConfirmar.mock.calls[0][0].abonos;
+    const suma = abonos.reduce((acc, a) => acc + Number(a.monto), 0);
+    // La tarjeta se acota a $37 → suma exacta 47 (antes: 1010 → suma_no_cuadra).
+    expect(Math.round(suma * 100) / 100).toBe(47);
+    expect(Number(abonos[1].monto)).toBe(37);
+  });
+
+  it('editar un abono de TARJETA a un monto mayor al pendiente lo acota (mismo criterio que el alta)', () => {
+    const { onConfirmar } = montar(47);
+    // Alta: efectivo $10 + tarjeta $37 (cuadra).
+    agregarAbono(10);
+    elegirMetodo('Tarjeta');
+    agregarAbono(37);
+    // Edición: se cambia la tarjeta a $1000 → debe acotarse al pendiente ($37).
+    // Hay DOS abonos (efectivo $10 y tarjeta $37), cada uno con su botón "Editar";
+    // se apunta al de la tarjeta por su aria-label para no caer en ambigüedad.
+    fireEvent.click(screen.getByLabelText('Editar abono de $37.00'));
+    escribirMonto(1000);
+    fireEvent.click(screen.getByText('Guardar abono'));
+    fireEvent.click(screen.getByText('CONFIRMAR PAGO'));
+    const abonos = onConfirmar.mock.calls[0][0].abonos;
+    const suma = abonos.reduce((acc, a) => acc + Number(a.monto), 0);
+    expect(Math.round(suma * 100) / 100).toBe(47);
+    expect(Number(abonos[1].monto)).toBe(37);
+  });
+
+  it('mixto efectivo+tarjeta con excedente en efectivo: el cambio refleja SOLO lo entregado', () => {
+    montar(47);
+    // Efectivo $50 (entrega $50, aplica $47) → cambio $3.
+    agregarAbono(50);
+    // El resumen muestra el cambio de $3 (no $0).
+    expect(screen.getByText('$3.00')).toBeTruthy();
+  });
+
+  it('la lista muestra el desglose "Entregó … (Aplica: …)" cuando hay excedente en efectivo', () => {
+    montar(47);
+    agregarAbono(50);
+    const lista = screen.getByLabelText('Abonos agregados');
+    expect(lista.textContent).toContain('Entregó');
+    expect(lista.textContent).toContain('Aplica');
+  });
+});

@@ -563,3 +563,78 @@ Si el cajero ingresaba $1000 en tarjeta, el abono se registraba íntegramente po
 
 ### 11.4 Conclusión Final
 Esta iteración erradica por completo la imposibilidad de tener discrepancias de sumatorias locales para la validación de frontera RN-94 sin romper la regla transversal de redondeos DT-02, a la vez que se provee visibilidad de la cantidad exacta de efectivo recibida, preservando intacta la capacidad del cajero para calcular vuelto en la terminal.
+
+### 11.5 Archivos tocados (6ª vuelta)
+
+| Archivo | Cambio |
+|---------|--------|
+| [`CheckoutScreen.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.jsx) | `montoAplicado` acota **todos** los métodos al pendiente (se elimina la rama `if (metodoReal !== 'EFECTIVO') return capturado`). |
+| [`checkoutService.js`](../NUEVO-POS/apps/pos/src/services/checkoutService.js) | `resumenDePagos` calcula el cambio desde `recibido ?? monto` (no desde la suma de `monto`). |
+| [`CheckoutScreen.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.jsx) | La lista de abonos muestra el desglose `Entregó … (Aplica: …)` cuando hay excedente en efectivo. |
+| [`FICHA_FIX_SUMA_NO_CUADRA_VUELTO.md`](../NUEVO-POS/docs/05-plan-de-construccion/FICHA_FIX_SUMA_NO_CUADRA_VUELTO.md) | Esta sección §11. |
+
+### 11.6 Verificación (6ª vuelta)
+
+| Suite | Resultado |
+|-------|-----------|
+| Frontend (`npm run test -- --run`) | 750 passed (65 files) — sin regresiones |
+| Backend (`docker exec nuevo_pos_api python -m pytest -q`) | 320 passed |
+| Guard (`node scripts/guards.mjs`) | 8 greps — verde |
+
+---
+
+## 12. Saldo de Deuda: Consistencia ALTA/EDICIÓN (7ª Vuelta)
+
+**Fecha:** 7 de octubre de 2026
+**Origen:** Revisión de la 6ª vuelta. El fix acotó el **alta** (`montoAplicado`) de
+forma universal, pero la **edición** (`manejarGuardarEdicion`) seguía con la lógica
+vieja: solo acotaba `EFECTIVO` y dejaba `TARJETA`/`TRANSFERENCIA` con el monto
+capturado tal cual. El bug quedaba reabierto por la puerta de la edición.
+
+### 12.1 La Causa Raíz (deuda)
+Duplicación de la lógica de acotamiento en dos funciones con criterios distintos:
+
+```javascript
+// montoAplicado (alta) — 6ª vuelta: universal
+return Math.min(capturado, Math.max(0, pendiente));
+
+// manejarGuardarEdicion (edición) — lógica vieja: solo EFECTIVO
+const monto = metodoReal === 'EFECTIVO'
+  ? Math.min(capturado, pendiente > 0 ? pendiente : capturado)
+  : capturado;   // ← TARJETA/TRANSFERENCIA sin acotar
+```
+
+### 12.2 La Solución
+1. **Helper único `acotarAlPendiente(capturado, pendiente)`** — una sola definición
+   del criterio de acotamiento (`Math.min(capturado, Math.max(0, pendiente))`).
+2. **`montoAplicado` y `manejarGuardarEdicion` usan el MISMO helper** — se elimina
+   la rama por método. Alta y edición quedan consistentes por construcción.
+3. **Tests de regresión** en `CheckoutScreen.f9_1_3.test.jsx` (§12): tarjeta por
+   encima del pendiente se acota; editar tarjeta a un monto mayor también se acota;
+   el cambio en mixto refleja solo lo entregado; la lista muestra el desglose.
+
+### 12.3 Archivos tocados (7ª vuelta)
+
+| Archivo | Cambio |
+|---------|--------|
+| [`CheckoutScreen.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.jsx) | Nuevo helper `acotarAlPendiente`; `montoAplicado` y `manejarGuardarEdicion` lo comparten (sin rama por método). |
+| [`CheckoutScreen.f9_1_3.test.jsx`](../NUEVO-POS/apps/pos/src/components/CheckoutScreen.f9_1_3.test.jsx) | +4 tests de regresión (§12) del acotamiento universal y del cambio en mixto. |
+| [`FICHA_FIX_SUMA_NO_CUADRA_VUELTO.md`](../NUEVO-POS/docs/05-plan-de-construccion/FICHA_FIX_SUMA_NO_CUADRA_VUELTO.md) | Esta sección §12. |
+
+### 12.4 Verificación (7ª vuelta)
+
+| Suite | Resultado |
+|-------|-----------|
+| Frontend (`npm run test -- --run`) | 754 passed (65 files) — +4 tests, sin regresiones |
+| Backend (`docker exec nuevo_pos_api python -m pytest -q`) | 320 passed (sin cambios) |
+| Guard (`node scripts/guards.mjs`) | 8 greps — verde |
+
+### 12.5 Lección de la 7ª vuelta
+
+**Un fix correcto en un punto de entrada no cierra el bug si hay otro punto de
+entrada con la misma lógica duplicada.** La 6ª vuelta acotó el alta pero dejó la
+edición con el criterio viejo. La deuda no era el síntoma (que ya no se reproducía
+por el alta) sino la **duplicación**: dos copias del mismo criterio que pueden
+divergir. La solución no fue parchear la edición, sino **extraer el criterio a un
+único helper** para que no puedan divergir. Regla derivada: cuando dos rutas
+comparten una regla de negocio, la regla vive en **un solo lugar**.

@@ -166,6 +166,26 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
   }
 
   /**
+   * Acota un monto capturado al saldo PENDIENTE del ticket (redondeado a 2
+   * decimales). Es el ÚNICO punto donde se decide cuánto se APLICA al total.
+   *
+   * FIX "suma_no_cuadra" (6ª vuelta, 7 Oct 2026) — el acotamiento debe ser
+   * UNIVERSAL: antes solo aplicaba a EFECTIVO (`if (metodoReal !== 'EFECTIVO')
+   * return capturado`), así que un abono de TARJETA por encima del pendiente
+   * (p. ej. $10 efectivo + $1000 tarjeta sobre un total de $47) se registraba
+   * íntegro ($1000) → suma 1010 ≠ 47 → RN-94 → `suma_no_cuadra`. Ahora cada
+   * método se acota al pendiente; el excedente de efectivo queda como
+   * `recibido` (vuelto), y en tarjeta simplemente no se cobra de más.
+   *
+   * @param {number} capturado  monto que tecleó el cajero
+   * @param {number} pendiente  saldo por cubrir (ya excluye abonos previos)
+   * @returns {number} lo que se APLICA al total (nunca más que el pendiente)
+   */
+  function acotarAlPendiente(capturado, pendiente) {
+    return Math.min(capturado, Math.max(0, pendiente));
+  }
+
+  /**
    * FIX "suma_no_cuadra" (7 Oct 2026) — CAUSA REAL: al capturar un monto MAYOR
    * al pendiente (p. ej. total $100 y el cliente entrega $150 para probar el
    * cambio), el abono guardaba `monto = 150` (lo RECIBIDO) en vez de `monto =
@@ -174,9 +194,7 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
    *
    * El diseño (ver `checkoutService.calcularCambio`) es: `monto` = lo que se
    * APLICA al total (nunca más que el pendiente); `recibido` = el efectivo que
-   * el cliente entrega; `cambio` = `recibido − monto`. Para EFECTIVO se aplica
-   * `min(capturado, pendiente)` y el excedente queda como `recibido` (vuelto).
-   * Para TARJETA/TRANSFERENCIA el monto aplicado es el capturado tal cual.
+   * el cliente entrega; `cambio` = `recibido − monto`.
    *
    * 2ª VUELTA (7 Oct 2026) — BUG del caso `pendiente === 0`: cuando el total YA
    * estaba cubierto por abonos previos, la versión anterior devolvía `capturado`
@@ -188,7 +206,7 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
   function montoAplicado(metodoReal, capturado) {
     const pendiente = Math.max(0, Math.round((total - resumen.abonado) * 100) / 100);
     // Si ya no queda pendiente, no se aplica nada (el excedente sería cambio).
-    return Math.min(capturado, pendiente);
+    return acotarAlPendiente(capturado, pendiente);
   }
 
   /** Agrega el monto capturado como un abono con el método elegido. */
@@ -215,7 +233,16 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     setMetodo(abono.metodo === 'DEBITO' || abono.metodo === 'CREDITO' ? 'TARJETA' : abono.metodo);
   }
 
-  /** Guarda la edición del abono en curso (mismo criterio que agregar). */
+  /**
+   * Guarda la edición del abono en curso (MISMO criterio que agregar).
+   *
+   * FIX "suma_no_cuadra" (6ª vuelta, 7 Oct 2026) — la edición seguía con la
+   * lógica vieja: solo acotaba EFECTIVO al pendiente y dejaba TARJETA/
+   * TRANSFERENCIA con el monto capturado tal cual. Eso reabría el bug por la
+   * puerta de la edición (editar un abono de tarjeta a $1000 sobre un pendiente
+   * de $37 registraba $1000 → RN-94 → `suma_no_cuadra`). Ahora usa el MISMO
+   * helper `acotarAlPendiente` que el alta, sin rama por método.
+   */
   function manejarGuardarEdicion() {
     const capturado = Number(montoAbono);
     if (!Number.isFinite(capturado) || capturado <= 0) return;
@@ -227,10 +254,7 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
       Math.round((resumen.abonado - (Number(anterior?.monto) || 0)) * 100) / 100,
     );
     const pendiente = Math.max(0, Math.round((total - abonadoSinEste) * 100) / 100);
-    const monto =
-      metodoReal === 'EFECTIVO'
-        ? Math.min(capturado, pendiente > 0 ? pendiente : capturado)
-        : capturado;
+    const monto = acotarAlPendiente(capturado, pendiente);
     editarPago(editandoId, {
       metodo: metodoReal,
       monto,
