@@ -204,17 +204,37 @@ export function useTicketActions(opciones = {}) {
 
   /**
    * Cobra el ticket (contrato 4). NUNCA lanza. Toda rama limpia los mismos refs.
+   *
+   * FIX "confirmar pago no hace nada" (2ª vuelta, 7 Oct 2026): el `ticketRef`
+   * interno SOLO se puebla cuando `crearTicket`/`cobrar` corren DENTRO de este
+   * hook. Pero en el flujo real el ticket nace por `asegurarTicket` (al agregar
+   * el primer ítem) o se adopta del pizarrón (`recuperarCuentaAlCarrito`): en
+   * ambos casos el id vive en `RetailVisionPOS.ticketIdRef`, NO aquí. Al cobrar
+   * una cuenta YA ABIERTA, `ticketRef.current` era `null` y `cobrar` devolvía
+   * `sin_ticket_o_api` en silencio: el botón "no hacía nada".
+   *
+   * La corrección: `cobrar` acepta el `ticketId` EXPLÍCITO del llamador (que sí
+   * lo conoce) y cae a `ticketRef.current` solo por retrocompatibilidad. El
+   * `version` también puede venir del llamador; si no, se usa el del ticket
+   * hidratado (o `undefined`, que el backend trata como "sin control de versión").
+   *
    * @param {object} paymentDetails
+   * @param {{ticketId?: string, version?: number}} [opciones]
    * @returns {Promise<import('../utils/outcome.js').Outcome>}
    */
-  const cobrar = useCallback(async (paymentDetails) => {
+  const cobrar = useCallback(async (paymentDetails, opciones = {}) => {
     const cliente = apiRef.current;
     const actual = ticketRef.current;
-    if (!cliente || !actual) {
+    // El id puede venir del llamador (cuenta abierta) o del ticket hidratado.
+    const idTicket = opciones.ticketId || (actual && actual.id) || null;
+    if (!cliente || !idTicket) {
       const r = { outcome: 'error', reason: 'sin_ticket_o_api', data: null };
       setUltimoOutcome(r);
       return r;
     }
+    // La versión: la del llamador si viene; si no, la del ticket hidratado.
+    const version =
+      opciones.version != null ? opciones.version : (actual && actual.version);
 
     // F12.13 — Mutex (REGLA 2): rechazar la 2ª llamada concurrente. Un doble
     // clic en "CONFIRMAR PAGO" no debe cobrar dos veces (RN-23).
@@ -233,9 +253,9 @@ export function useTicketActions(opciones = {}) {
       const resultado = await aOutcome(() =>
         withRetries(
           () =>
-            cliente.cobrarTicket(actual.id, {
+            cliente.cobrarTicket(idTicket, {
               payment_details: paymentDetails,
-              version: actual.version,
+              version,
             }),
           {
             debeReintentar: (err) => {
@@ -259,7 +279,7 @@ export function useTicketActions(opciones = {}) {
         const r = {
           outcome: 'error',
           reason: 'version_conflict',
-          data: { ticket_id: actual.id },
+          data: { ticket_id: idTicket },
         };
         setUltimoOutcome(r);
         return r;

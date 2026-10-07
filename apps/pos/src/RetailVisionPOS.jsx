@@ -678,7 +678,20 @@ export default function RetailVisionPOS({
         };
       }
 
-      const pagado = await acciones.cobrar(paymentDetails);
+      // FIX "confirmar pago no hace nada" (2ª vuelta, 7 Oct 2026) — CAUSA REAL:
+      // `acciones.cobrar` leía `ticketRef.current`, que SOLO se puebla cuando
+      // `crearTicket`/`cobrar` corren DENTRO de `useTicketActions`. Pero en el
+      // flujo real el ticket lo crea `asegurarTicket` (al añadir el 1er ítem) o
+      // lo adopta `recuperarCuentaAlCarrito` (pizarrón): ambos escriben el
+      // `ticketId` de ESTA pantalla, NO el ref interno del hook. Resultado:
+      // `ticketRef.current === null` → `cobrar` devolvía
+      // `{outcome:'error', reason:'sin_ticket_o_api'}` → la venta NUNCA cerraba.
+      // Se pasa el id y la versión REALES del llamador (la pantalla es la dueña
+      // del ticket abierto). El hook cae al ref interno si no vienen (regresión).
+      const pagado = await acciones.cobrar(paymentDetails, {
+        ticketId: ticketIdRef.current,
+        version: carrito.version,
+      });
 
       // F12.13 — Mutex (REGLA 2): si ya hay un cobro en curso (doble clic en
       // CONFIRMAR PAGO), la 2ª llamada se rechaza. NO es un error: el primer

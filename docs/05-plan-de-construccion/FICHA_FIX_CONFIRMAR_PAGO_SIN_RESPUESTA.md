@@ -1,10 +1,17 @@
 # FICHA FIX — "Confirmar pago" no hace nada (botón muerto sin explicación)
 
 > **Tipo:** Corrección de defecto de UX reportado en vivo (caja real)
-> **Fase afectada:** 9.1.3 — UI de pagos mixtos (`CheckoutScreen`) + F4.5.3 — guarda de cobro (`RetailVisionPOS`)
-> **Estado:** ✅ CERRADA — suite completa 718/718 en verde
+> **Fase afectada:** 9.1.3 — UI de pagos mixtos (`CheckoutScreen`) + F4.5.3 — guarda de cobro (`RetailVisionPOS`) + F3.3 — `useTicketActions.cobrar`
+> **Estado:** ✅ CERRADA (2ª vuelta) — suite completa 722/722 en verde
 > **Fecha:** 2026-10-07
 > **Origen:** Reporte del dueño operando la caja real
+>
+> ⚠️ **NOTA DE HONESTIDAD (2ª vuelta):** La 1ª vuelta de esta ficha diagnosticó
+> el no-op como "botón deshabilitado por faltante". Ese diagnóstico era
+> **INCOMPLETO**: el dueño reportó que el botón **seguía sin hacer nada** tras
+> el primer fix. La causa raíz REAL se documenta en la **§8** (al final). La
+> corrección de la 1ª vuelta (motivo junto al botón + releer turno) se conserva
+> porque es correcta y útil, pero **no era la causa del no-op reportado**.
 
 ---
 
@@ -202,3 +209,138 @@ información correcta en el lugar equivocado equivale a no tenerla. Este defecto
 es hermano del de la ficha anterior (`FICHA_FIX_COBRO_PARCIAL_TECLADO`): ambos
 nacen de **fragmentar la superficie de cobro** — allí la captura, aquí la
 explicación.
+
+---
+
+## 8. 2ª VUELTA — la causa raíz REAL (7 Oct 2026)
+
+### 8.1 El reporte que reabrió el caso
+
+Tras desplegar la 1ª vuelta, el dueño volvió a reportar, verbatim:
+
+> "confirmar pago aun no hace nada"
+
+Es decir: el botón **ya no estaba deshabilitado** (la 1ª vuelta lo garantizaba),
+el cajero lo pulsaba y **seguía sin pasar nada**. El diagnóstico de la 1ª vuelta
+era, por tanto, **incompleto**: describía un camino de no-op, pero no el que el
+dueño estaba viviendo.
+
+### 8.2 La causa raíz: `cobrar` leía un `ticketRef` que nunca se poblaba
+
+En `useTicketActions.js`, `cobrar` resolvía el id del ticket así:
+
+```javascript
+const actual = ticketRef.current;
+if (!cliente || !actual || !actual.id) {
+  const r = { outcome: 'error', reason: 'sin_ticket_o_api', data: null };
+  setUltimoOutcome(r);
+  return r;   // ← retorno SILENCIOSO: la pantalla solo pinta el banner
+}
+```
+
+El problema: **`ticketRef.current` SOLO se puebla cuando `crearTicket` o `cobrar`
+corren DENTRO de este hook.** Pero en el flujo real de la caja, el ticket nace
+por **otro camino**:
+
+- **`asegurarTicket`** (en `RetailVisionPOS.jsx`): al añadir el **primer ítem**,
+  crea el ticket con `acciones.crearTicket([], bloque)` y guarda el id en el
+  estado/ref de **la pantalla** (`setTicketId`, `ticketIdRef.current`), **NO** en
+  el `ticketRef` interno del hook.
+- **`recuperarCuentaAlCarrito`** (pizarrón): adopta una cuenta ya abierta y
+  también escribe el id en la pantalla, no en el hook.
+
+Resultado: al pulsar CONFIRMAR PAGO sobre una cuenta **ya abierta**,
+`ticketRef.current` era `null` → `cobrar` devolvía
+`{outcome:'error', reason:'sin_ticket_o_api'}` → `confirmarCobro` hacía
+`setError('sin_ticket_o_api')` → **la venta nunca cerraba**. El botón "no hacía
+nada" porque el cobro rebotaba en la primera línea, con un `reason` críptico
+(`sin_ticket_o_api`) que el cajero no podía interpretar.
+
+**Por qué la 1ª vuelta no lo vio:** el `motivoBloqueo` y la guarda de turno
+actúan ANTES de llegar a `cobrar`. Si el botón ya estaba habilitado y el turno
+era válido, el flujo entraba a `cobrar` y moría ahí — un punto ciego que la 1ª
+vuelta no cubría.
+
+### 8.3 La corrección (2ª vuelta)
+
+**a) `useTicketActions.cobrar` acepta el id EXPLÍCITO del llamador.** La pantalla
+es la dueña del ticket abierto; el hook ya no asume que él lo creó:
+
+```javascript
+const cobrar = useCallback(async (paymentDetails, opciones = {}) => {
+  const cliente = apiRef.current;
+  const actual = ticketRef.current;
+  // El id puede venir del llamador (cuenta abierta) o del ticket hidratado.
+  const idTicket = opciones.ticketId || (actual && actual.id) || null;
+  if (!cliente || !idTicket) {
+    const r = { outcome: 'error', reason: 'sin_ticket_o_api', data: null };
+    setUltimoOutcome(r);
+    return r;
+  }
+  // La versión: la del llamador si viene; si no, la del ticket hidratado.
+  const version =
+    opciones.version != null ? opciones.version : (actual && actual.version);
+  // … cobrarTicket(idTicket, { payment_details, version }) …
+}, [limpiarRefs]);
+```
+
+El `version_conflict` también devuelve `data: { ticket_id: idTicket }` (antes
+`actual.id`, que podía ser `null`).
+
+**b) `RetailVisionPOS.confirmarCobro` pasa el id y la versión REALES:**
+
+```javascript
+const pagado = await acciones.cobrar(paymentDetails, {
+  ticketId: ticketIdRef.current,
+  version: carrito.version,
+});
+```
+
+`ticketIdRef.current` es el id que la pantalla conoce (creado por
+`asegurarTicket` o adoptado del pizarrón); `carrito.version` es la versión viva
+del carrito. Retrocompatibilidad: si no se pasan, el hook cae al `ticketRef`
+interno (el flujo antiguo de `crearTicket` + `cobrar` en el mismo hook sigue
+funcionando).
+
+### 8.4 Tabla de cambios (2ª vuelta)
+
+| Archivo | Cambio |
+|---|---|
+| `apps/pos/src/hooks/useTicketActions.js` | `cobrar(paymentDetails, {ticketId, version})`: usa el id/versión del llamador; cae al ref interno por retrocompatibilidad; `version_conflict` devuelve `idTicket` |
+| `apps/pos/src/RetailVisionPOS.jsx` | `confirmarCobro` pasa `{ ticketId: ticketIdRef.current, version: carrito.version }` a `acciones.cobrar` |
+| `apps/pos/src/hooks/hooks.f3_3.test.jsx` | Nueva sección con 4 pruebas de regresión (cobro de cuenta abierta sin `crearTicket` previo, versión del llamador, `sin_ticket_o_api` sin id, retrocompatibilidad) |
+
+### 8.5 Pruebas de regresión (2ª vuelta)
+
+Se añadieron 4 pruebas que **fallarían** con el código anterior:
+
+| Prueba | Defecto que blinda |
+|---|---|
+| Cobra una cuenta YA ABIERTA aunque `ticketRef` esté vacío (sin `crearTicket` previo) | El no-op real: `sin_ticket_o_api` |
+| Usa la `version` del llamador (no la del ticket hidratado) | Control de concurrencia correcto (RN-25/26) |
+| Sin `ticketId` explícito NI ticket hidratado sigue devolviendo `sin_ticket_o_api` | No se inventa un id fantasma |
+| Retrocompatibilidad: sin opciones usa el ticket hidratado por `crearTicket` | El flujo antiguo no se rompe |
+
+### 8.6 Verificación (2ª vuelta)
+
+```
+npx vitest run   (suite completa del frontend)
+→ 64 archivos, 722 pruebas, todas en verde
+```
+
+(718 antes de la 2ª vuelta + 4 nuevas pruebas de regresión.)
+
+### 8.7 Lección (2ª vuelta)
+
+**Un `reason` críptico en un retorno silencioso es un botón muerto disfrazado.**
+La 1ª vuelta arregló el caso "el botón no se puede pulsar"; la 2ª arregló el caso
+"el botón se pulsa y el cobro rebota en la primera línea". La regla derivada:
+
+> **Cuando un componente delega una acción a un hook, el hook NO debe asumir que
+> él posee el estado que la acción necesita. Si el estado lo posee el llamador
+> (aquí, el `ticketId` de la pantalla), el llamador debe pasarlo explícitamente.**
+
+El `ticketRef` interno era una **fuente de verdad duplicada** del `ticketId` de
+la pantalla. Dos fuentes de verdad para el mismo dato → una se queda vacía → el
+no-op. Este defecto es hermano del de la ficha `FICHA_FIX_COBRO_PARCIAL_TECLADO`:
+los tres nacen de **fragmentar el estado de la superficie de cobro**.

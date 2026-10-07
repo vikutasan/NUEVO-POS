@@ -224,6 +224,96 @@ describe('useTicketActions — simetría de limpieza (Regla 19)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FIX "confirmar pago no hace nada" (2ª vuelta, 7 Oct 2026) — REGRESIÓN
+//
+// CAUSA REAL: `cobrar` leía `ticketRef.current`, que SOLO se puebla cuando
+// `crearTicket`/`cobrar` corren DENTRO de este hook. Pero en el flujo real el
+// ticket lo crea `asegurarTicket` (al añadir el 1er ítem) o lo adopta
+// `recuperarCuentaAlCarrito` (pizarrón): el id vive en `RetailVisionPOS`, NO
+// aquí. Al cobrar una cuenta YA ABIERTA, `ticketRef.current` era `null` y
+// `cobrar` devolvía `sin_ticket_o_api` en silencio → el botón "no hacía nada".
+//
+// La corrección: `cobrar(paymentDetails, { ticketId, version })` acepta el id
+// EXPLÍCITO del llamador y cae al ref interno solo por retrocompatibilidad.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('useTicketActions — cobrar con ticketId explícito (FIX 2ª vuelta)', () => {
+  it('cobra una cuenta YA ABIERTA aunque ticketRef esté vacío (sin crearTicket previo)', async () => {
+    const api = {
+      cobrarTicket: vi.fn(async () => ({ id: 'T-ABIERTA', version: 5, total: 100 })),
+    };
+    // NO se llama crearTicket: el ref interno queda null (cuenta creada fuera).
+    const { result } = renderHook(() => useTicketActions({ api }));
+
+    let salida;
+    await act(async () => {
+      salida = await result.current.cobrar(
+        { pagos: [{ metodo: 'efectivo', monto: 100 }] },
+        { ticketId: 'T-ABIERTA', version: 4 },
+      );
+    });
+
+    // Antes del fix: { outcome:'error', reason:'sin_ticket_o_api' }.
+    expect(salida.outcome).toBe('ok');
+    expect(api.cobrarTicket).toHaveBeenCalledWith('T-ABIERTA', {
+      payment_details: { pagos: [{ metodo: 'efectivo', monto: 100 }] },
+      version: 4,
+    });
+  });
+
+  it('usa la version del llamador (no la del ticket hidratado)', async () => {
+    const api = {
+      cobrarTicket: vi.fn(async () => ({ id: 'T1', version: 9, total: 50 })),
+    };
+    const { result } = renderHook(() => useTicketActions({ api }));
+
+    await act(async () => {
+      await result.current.cobrar({ pagos: [] }, { ticketId: 'T1', version: 7 });
+    });
+
+    expect(api.cobrarTicket).toHaveBeenCalledWith('T1', {
+      payment_details: { pagos: [] },
+      version: 7,
+    });
+  });
+
+  it('sin ticketId explícito NI ticket hidratado sigue devolviendo sin_ticket_o_api', async () => {
+    const api = { cobrarTicket: vi.fn(async () => ({ id: 'T1', version: 1 })) };
+    const { result } = renderHook(() => useTicketActions({ api }));
+
+    let salida;
+    await act(async () => {
+      salida = await result.current.cobrar({ pagos: [] });
+    });
+
+    expect(salida.outcome).toBe('error');
+    expect(salida.reason).toBe('sin_ticket_o_api');
+    expect(api.cobrarTicket).not.toHaveBeenCalled();
+  });
+
+  it('retrocompatibilidad: sin opciones usa el ticket hidratado por crearTicket', async () => {
+    const api = {
+      crearVenta: vi.fn(async () => ({ id: 'T-HIDRATADO', version: 3, total: 10 })),
+      cobrarTicket: vi.fn(async () => ({ id: 'T-HIDRATADO', version: 4, total: 10 })),
+    };
+    const { result } = renderHook(() => useTicketActions({ api }));
+
+    await act(async () => {
+      await result.current.crearTicket([{ product_id: 'P1', quantity: 1 }]);
+    });
+
+    await act(async () => {
+      await result.current.cobrar({ pagos: [] });
+    });
+
+    expect(api.cobrarTicket).toHaveBeenCalledWith('T-HIDRATADO', {
+      payment_details: { pagos: [] },
+      version: 3,
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Criterio 5 — useEffect deps son primitivos (H1)
 // ═══════════════════════════════════════════════════════════════════════════════
 
