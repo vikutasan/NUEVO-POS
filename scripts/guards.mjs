@@ -14,6 +14,7 @@
  *           E-09 Float en models.py · E-10 DateTime() en models.py
  *   F4 (1): A-04 except...pass acotado a la ruta crítica (guards/)
  *   F5 (1): R-01 ancho fijo (w-[...px]) en el contenedor raíz de la superficie
+ *   F12 (1): E-09-FE suma de dinero en el frontend (DT-02 regla 6)
  *
  * Regla: si un grep encuentra 1+ coincidencia, la puerta FALLA (exit 1).
  * En F0 el repo está vacío de código, así que los 5 greps deben dar 0 coincidencias.
@@ -109,10 +110,13 @@ const GREPS = [
   },
   {
     // (D-7) Un TODO está "declarado" si usa `TODO:` o `TODO(scope)`.
+    // Se exige que `TODO` esté en MAYÚSCULAS como marcador de código y que NO
+    // sea la palabra española "todo" en prosa (p. ej. "TODO monto que cruza la
+    // frontera..."). El marcador de código va seguido de `:` o `(`.
     id: 'E-15',
     label: 'TODOs sin formato declarado (TODO sin "TODO:" ni "TODO(...)")',
     onlyModels: false,
-    test: (line) => /\bTODO\b/.test(line) && !/\bTODO[:(]/.test(line),
+    test: (line) => /\bTODO\b/.test(line) && !/\bTODO[:(]/.test(line) && !/\bTODO\s+[a-záéíóúñ]/.test(line),
   },
   {
     // R-01 (F5): la superficie NO puede tener anchos absolutos en píxeles.
@@ -129,6 +133,36 @@ const GREPS = [
     label: 'Dinero en Float (Float en models.py)',
     onlyModels: true,
     test: (line) => /\bFloat\b/.test(line),
+  },
+  {
+    // E-09-FE (F12) — DT-02 regla 6: "El dinero no se suma en el frontend.
+    // Los totales vienen del backend. El frontend solo formatea."
+    //
+    // El guard E-09 original solo miraba `Float` en `models.py` (backend) y
+    // era CIEGO a la suma de dinero en el frontend. Este grep cierra ese punto
+    // ciego: detecta un `reduce` que acumula sobre el precio de una LÍNEA
+    // (`unit_price` / `price`), que es exactamente cómo se derivaba el total
+    // del ticket en el frontend antes del fix arquitectónico.
+    //
+    // NO marca la suma de PAGOS (`monto`): validar que los pagos del usuario
+    // cuadran con el total del backend es un espejo UX de RN-94, no una
+    // derivación del total del ticket. Por eso el patrón exige `unit_price`
+    // o `price`, no `monto`.
+    //
+    // Acotado a la superficie del POS y excluye tests (que sí pueden sumar
+    // para construir fixtures).
+    id: 'E-09-FE',
+    label: 'Suma de dinero en el frontend (reduce sobre unit_price/price) — DT-02 regla 6',
+    onlyModels: false,
+    onlyPath: 'apps/pos/',
+    skipTests: true,
+    test: (line) =>
+      /\.reduce\s*\(/.test(line) &&
+      /\b(unit_price|price)\b/.test(line) &&
+      // Escape hatch EXPLÍCITO y auditable: el único fallback local permitido
+      // (modo sin servidor) se marca con `DT-02-FALLBACK-LOCAL`. Cualquier otra
+      // suma de líneas en el frontend sigue fallando la puerta.
+      !/DT-02-FALLBACK-LOCAL/.test(line),
   },
   {
     id: 'E-10',
@@ -194,6 +228,7 @@ function main() {
   console.log('PUERTA F0 EN VERDE: los greps de estándares están activos y limpios.');
   console.log('PUERTA F4/A-04 EN VERDE: 0 silencios en la ruta crítica (guards/).');
   console.log('PUERTA F5/R-01 EN VERDE: 0 anchos fijos en la superficie (apps/pos/).');
+  console.log('PUERTA F12/E-09-FE EN VERDE: 0 sumas de dinero en el frontend (DT-02 regla 6).');
 }
 
 main();

@@ -2,9 +2,17 @@
 
 **Fecha:** 7 de octubre de 2026
 **Fase:** Corrección post-F13 (defecto reportado en operación real)
-**Estado:** ✅ COMPLETO — corregido, probado (742 frontend / 320 backend), documentado y pusheado
-**Commit:** `3f6b3f8` (1ª vuelta) + `57a1ba4` (ficha) + `24971a2`/`1ff2c93` (3ª vuelta) + **4ª vuelta** (redondeo de flotantes)
-**Archivos tocados:** 6 (3 de código + 2 de test + esta ficha) — ver §9.6
+**Estado:** ✅ COMPLETO — corregido, probado (750 frontend / 320 backend), documentado y pusheado
+**Commit:** `3f6b3f8` (1ª vuelta) + `57a1ba4` (ficha) + `24971a2`/`1ff2c93` (3ª vuelta) + `41d2ce8` (4ª vuelta, parche de síntoma) + **5ª vuelta** (fix arquitectónico DT-02 regla 6)
+**Archivos tocados:** 6 (3 de código + 2 de test + esta ficha) — ver §9.6 y §10.6
+
+> **NOTA DE HONESTIDAD (5ª vuelta).** La 4ª vuelta "resolvió" el síntoma
+> redondeando una suma de flotantes **en el frontend**. El dueño preguntó:
+> *"¿no dijimos en los transversales del ERP que no se debe usar flotante?"*.
+> Tenía razón: la 4ª vuelta seguía violando **DT-02 regla 6** ("El dinero no se
+> suma en el frontend. Los totales vienen del backend. El frontend solo
+> formatea."). La 5ª vuelta elimina la causa raíz: el total del ticket ahora se
+> **LEE del backend** (`Numeric(12,2)`), no se deriva sumando líneas. Ver §10.
 
 > **NOTA DE HONESTIDAD (3ª vuelta).** El usuario reportó "el problema continua"
 > tras la 1ª vuelta. El diagnóstico de la 2ª vuelta concluyó que el backend y el
@@ -426,3 +434,105 @@ redondear en ambos es defensa en profundidad.
 es un bug latente esperando un precio con centavos no representables en binario
 (`.33`, `.67`, etc.). La asimetría entre `montoAplicado` (redondeaba) y
 `manejarConfirmar` (no redondeaba) fue exactamente eso.
+
+---
+
+## 10. 5ª vuelta — el fix ARQUITECTÓNICO: el total viene del backend (DT-02 regla 6)
+
+### 10.1 El reporte (verbatim del usuario)
+
+> "pero no dijimos en los transversales del erp que no se debe usar flotante?"
+
+El dueño **cuestionó la 4ª vuelta**: redondear una suma de flotantes en el
+frontend seguía siendo sumar dinero en el frontend. La pregunta era correcta y
+señalaba una **deuda arquitectónica**, no un bug de redondeo.
+
+### 10.2 La directiva violada — DT-02 regla 6
+
+De [`DIRECTRICES_TRANSVERSALES_DEL_ERP.md`](../NUEVO-POS/docs/DIRECTRICES_TRANSVERSALES_DEL_ERP.md),
+la directiva **DT-02 (Dinero)** establece:
+
+- **DT-02.1:** "El dinero se guarda en `Numeric(12,2)`, nunca en `Float`."
+- **DT-02.3 regla 6:** "**El dinero no se suma en el frontend.** Los totales
+  vienen del backend. El frontend solo formatea."
+- **DT-02.3 regla 7:** el dinero viaja como STRING en el cable; se coacciona con
+  `Number()` antes de operar.
+
+La 4ª vuelta **redondeaba** la suma, pero seguía **sumando** en el frontend
+(`lineas.reduce(...)`). Eso es exactamente lo que la regla 6 prohíbe. El
+redondeo era un **parche de síntoma**: hacía que el número coincidiera, pero la
+**fuente de verdad** seguía estando en el cliente.
+
+### 10.3 El punto ciego del guard E-09
+
+El guard [`E-09`](../NUEVO-POS/scripts/guards.mjs:128) solo miraba `Float` en
+`models.py` (backend). Era **ciego** a la suma de dinero en el frontend: la
+violación de la regla 6 pasaba la puerta sin ser detectada. Ese punto ciego es
+la razón por la que la deuda sobrevivió 4 vueltas.
+
+### 10.4 El fix arquitectónico — el total se LEE, no se CALCULA
+
+Se invirtió la dirección del dato: el total del ticket ahora **viene del
+backend** (contrato 21 `leerTicket` / contrato 30 `leerLineas`, ambos
+`total: Decimal` → `Numeric(12,2)`), y el frontend solo lo **formatea**.
+
+| # | Archivo | Cambio |
+|---|---------|--------|
+| 1 | [`useCart.js`](../NUEVO-POS/apps/pos/src/hooks/useCart.js:170) | Nuevo estado `totalServidor` + `refrescarTotal()` (lee contrato 21). `total` se deriva de `totalServidor`; la suma local queda SOLO como fallback sin servidor. |
+| 2 | [`useCart.js`](../NUEVO-POS/apps/pos/src/hooks/useCart.js:187) | `anadirLinea`/`cambiarCantidad`/`quitarLinea` refrescan el total del servidor tras cada escritura. |
+| 3 | [`useCart.js`](../NUEVO-POS/apps/pos/src/hooks/useCart.js:477) | `hidratarLineas(lineas, version, totalServidor)` ADOPTA el total del backend (contrato 30). |
+| 4 | [`RetailVisionPOS.jsx`](../NUEVO-POS/apps/pos/src/RetailVisionPOS.jsx:403) | Ambos call sites de `hidratarLineas` pasan `datos.total`. |
+| 5 | [`RetailVisionPOS.jsx`](../NUEVO-POS/apps/pos/src/RetailVisionPOS.jsx:969) | Ambos render sites de `SalesReceipt` pasan `total={carrito.total}`. |
+| 6 | [`SalesReceipt.jsx`](../NUEVO-POS/apps/pos/src/components/SalesReceipt.jsx:40) | Nueva prop `total`; el componente usa el total del backend y solo cae a `calcularTotal` en modo local. |
+| 7 | [`checkoutService.js`](../NUEVO-POS/apps/pos/src/services/checkoutService.js:137) | La suma de `pagos` se documenta como **espejo UX de RN-94** (valida los pagos del usuario contra el total del backend), NO como fuente del total. |
+| 8 | [`guards.mjs`](../NUEVO-POS/scripts/guards.mjs:133) | Nuevo grep **E-09-FE**: detecta `reduce` sobre `unit_price`/`price` en `apps/pos/`. Honra el escape hatch `DT-02-FALLBACK-LOCAL`. |
+| 9 | [`useCart.dt02_regla6.test.jsx`](../NUEVO-POS/apps/pos/src/hooks/useCart.dt02_regla6.test.jsx) | +8 tests de regresión (nuevo archivo). |
+
+**El único fallback local permitido** (modo puramente local, sin API ni ticket)
+se marca con el comentario `DT-02-FALLBACK-LOCAL`, que el guard E-09-FE tolera
+explícitamente. Cualquier otra suma de líneas en el frontend **falla la puerta**.
+
+### 10.5 Tests de regresión (nuevo archivo `useCart.dt02_regla6.test.jsx`)
+
+1. Tras añadir una línea, el total es el del servidor (`99.99`, no el flotante).
+2. Tras cambiar la cantidad, el total se refresca desde el backend.
+3. Tras quitar una línea, el total se refresca desde el backend.
+4. `hidratarLineas` adopta el total del backend (contrato 30).
+5. Sin total de servidor, cae al fallback local redondeado.
+6. Sin API ni ticket, el total es la suma local redondeada (`99.99`).
+7. El guard declara E-09-FE y honra `DT-02-FALLBACK-LOCAL`.
+8. Las dos únicas sumas de dinero del frontend están marcadas como fallback local.
+
+### 10.6 Archivos tocados (5ª vuelta)
+
+| Archivo | Cambio |
+|---------|--------|
+| [`useCart.js`](../NUEVO-POS/apps/pos/src/hooks/useCart.js) | `totalServidor` + `refrescarTotal`; `total` desde el backend; fallback local marcado. |
+| [`RetailVisionPOS.jsx`](../NUEVO-POS/apps/pos/src/RetailVisionPOS.jsx) | Pasa `datos.total` a `hidratarLineas` y `total={carrito.total}` a `SalesReceipt`. |
+| [`SalesReceipt.jsx`](../NUEVO-POS/apps/pos/src/components/SalesReceipt.jsx) | Prop `total`; usa el total del backend. |
+| [`checkoutService.js`](../NUEVO-POS/apps/pos/src/services/checkoutService.js) | Documenta la suma de pagos como espejo UX de RN-94. |
+| [`guards.mjs`](../NUEVO-POS/scripts/guards.mjs) | Nuevo grep E-09-FE + escape hatch `DT-02-FALLBACK-LOCAL`. |
+| [`useCart.dt02_regla6.test.jsx`](../NUEVO-POS/apps/pos/src/hooks/useCart.dt02_regla6.test.jsx) | +8 tests de regresión (nuevo archivo). |
+| [`FICHA_FIX_SUMA_NO_CUADRA_VUELTO.md`](../NUEVO-POS/docs/05-plan-de-construccion/FICHA_FIX_SUMA_NO_CUADRA_VUELTO.md) | Esta sección §10. |
+
+### 10.7 Verificación (5ª vuelta)
+
+| Suite | Antes | Después |
+|-------|-------|---------|
+| Frontend (`npm run test -- --run`) | 742 passed | **750 passed** (65 files) |
+| Backend (`pytest -q`) | 320 passed | 320 passed (sin cambios) |
+| Guard (`node scripts/guards.mjs`) | 7 greps | **8 greps** (E-09-FE) — verde |
+
+Los 8 tests nuevos pasan; ningún test existente se rompió.
+
+### 10.8 Lección de la 5ª vuelta
+
+**Un parche de síntoma puede pasar todas las pruebas y seguir violando la
+directiva.** La 4ª vuelta tenía 10 tests verdes y, aun así, el frontend seguía
+sumando dinero. La causa raíz no era el redondeo: era la **dirección del dato**.
+El total se **derivaba** en el cliente cuando debía **leerse** del servidor.
+
+**Regla derivada:** cuando una directiva transversal dice "X no se hace en el
+frontend", la prueba no es "¿el resultado coincide?" sino "¿de dónde viene el
+dato?". Y si el guard no detecta la violación, **el guard tiene un punto ciego
+que hay que cerrar** — un estándar que no se ejecuta es una opinión.

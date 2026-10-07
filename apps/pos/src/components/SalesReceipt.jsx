@@ -26,13 +26,26 @@ function formatearPrecio(valor) {
   return `$${numero.toFixed(2)}`;
 }
 
-/** Calcula el total del ticket (RN-16: suma de subtotales). */
+/**
+ * Calcula el total del ticket sumando subtotales (RN-16).
+ *
+ * DT-02 regla 6: el dinero NO se suma en el frontend. Esta función SOLO se usa
+ * como FALLBACK en modo puramente local (sin ticket en el servidor). Cuando hay
+ * un ticket, el total viene del BACKEND y se pasa por la prop `total`.
+ */
 export function calcularTotal(lineas) {
-  return lineas.reduce((acc, l) => acc + Number(l.unit_price) * l.quantity, 0);
+  // DT-02-FALLBACK-LOCAL: única suma de dinero permitida en el frontend, y SOLO
+  // en modo puramente local (sin ticket en el servidor). El guard E-09-FE la
+  // tolera por el marcador explícito.
+  return lineas.reduce((acc, l) => acc + Number(l.unit_price) * l.quantity, 0); // DT-02-FALLBACK-LOCAL
 }
 
 export default function SalesReceipt({
   lineas,
+  // DT-02 regla 6: el total del ticket viene del BACKEND (`carrito.total`,
+  // `Numeric(12,2)`). Si se provee, se usa tal cual; `calcularTotal` solo es el
+  // fallback de modo local (sin ticket en el servidor).
+  total: totalBackend = null,
   onIncrementar,
   onDecrementar,
   onQuitar,
@@ -61,7 +74,9 @@ export default function SalesReceipt({
   // cablea al botón. Es la 23ª instancia de §10.6 (de adentro hacia afuera).
   sinRed = false,
 }) {
-  const total = calcularTotal(lineas);
+  // DT-02 regla 6: el total viene del BACKEND cuando hay ticket. `calcularTotal`
+  // solo se usa como fallback en modo puramente local (sin ticket en servidor).
+  const total = totalBackend !== null ? Number(totalBackend) : calcularTotal(lineas);
   const vacio = lineas.length === 0;
   // El botón COBRAR se bloquea si el ticket está vacío, si ya se está cobrando
   // o si la caja NO está habilitada (F12.8).

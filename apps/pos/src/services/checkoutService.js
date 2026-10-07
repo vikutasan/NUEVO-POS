@@ -134,7 +134,15 @@ export function construirPaymentDetails({ abonos = [], total = 0, cajero = null 
     pagos.push(pago);
   }
 
-  // RN-94 en la frontera: la suma de los abonos DEBE cuadrar el total.
+  // RN-94 — PRE-CHECK de UX (espejo de la validación del backend).
+  //
+  // DT-02 regla 6: "El dinero no se suma en el frontend. Los totales vienen del
+  // backend." Aquí NO se deriva el total del ticket: `totalNum` es el total que
+  // el BACKEND reportó (contrato 21/30, `Numeric(12,2)`), y lo que se suma es la
+  // ENTRADA del cajero (los abonos que tecleó), para avisarle ANTES de salir del
+  // navegador si no cuadra. La autoridad final sigue siendo el backend (RN-94);
+  // este pre-check solo evita un viaje de red inútil. NO es una fuente de verdad
+  // del dinero y NO produce el total.
   const suma = pagos.reduce((acc, p) => acc + Number(p.monto), 0);
   const sumaRedondeada = Math.round(suma * 100) / 100;
   const totalRedondeado = Math.round(totalNum * 100) / 100;

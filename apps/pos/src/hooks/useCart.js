@@ -33,6 +33,25 @@ export function nuevoItemId() {
 }
 
 /**
+ * ¿El cliente expone `leerTicket` (contrato 21)?
+ *
+ * Se accede a la propiedad dentro de un `try/catch` porque los mocks de Vitest
+ * lanzan al leer un export NO definido (en vez de devolver `undefined`). Sin
+ * esto, un test que mockea `api/client.js` sin `leerTicket` rompería al
+ * refrescar el total (DT-02 regla 6).
+ *
+ * @param {object} cliente
+ * @returns {boolean}
+ */
+function tieneLeerTicket(cliente) {
+  try {
+    return typeof cliente.leerTicket === 'function';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * @param {object} [opciones]
  * @param {object} [opciones.api] - cliente con `anadirItem`, `cambiarCantidad`,
  *   `quitarItem` y `verificarEnvio`. Inyectable para tests.
@@ -47,6 +66,10 @@ export function useCart(opciones = {}) {
   const [lineas, setLineas] = useState([]);
   const [versionActual, setVersionActual] = useState(version);
   const [enviando, setEnviando] = useState(false);
+  // DT-02 regla 6: el dinero NO se suma en el frontend. El total es el que
+  // reporta el BACKEND (`Numeric(12,2)`, contrato 21/30). `null` = aún no se
+  // conoce (modo local sin ticket, o antes de la primera lectura).
+  const [totalServidor, setTotalServidor] = useState(null);
 
   // Refs espejo: los callbacks async leen SIEMPRE de aquí (prohibición #3).
   const lineasRef = useRef(lineas);
@@ -55,12 +78,14 @@ export function useCart(opciones = {}) {
   const enviandoRef = useRef(false);
   const apiRef = useRef(api);
   const alLimpiarRef = useRef(alLimpiar);
+  const totalServidorRef = useRef(totalServidor);
 
   lineasRef.current = lineas;
   versionRef.current = versionActual;
   ticketRef.current = ticketId;
   apiRef.current = api;
   alLimpiarRef.current = alLimpiar;
+  totalServidorRef.current = totalServidor;
 
   // H1: el efecto depende de primitivos, no de objetos recreados en cada render.
   useEffect(() => {
@@ -91,16 +116,53 @@ export function useCart(opciones = {}) {
   const sincronizarVersion = useCallback(async () => {
     const cliente = apiRef.current;
     const idTicket = ticketRef.current;
-    if (!cliente || !idTicket || typeof cliente.leerTicket !== 'function') return null;
+    if (!cliente || !idTicket || !tieneLeerTicket(cliente)) return null;
     const lectura = await aOutcome(() => cliente.leerTicket(idTicket));
     if (!esOk(lectura) || !lectura.data) return null;
     const fresca = lectura.data.version;
     if (Number.isInteger(fresca) && fresca >= 0) {
       setVersionActual(fresca);
       versionRef.current = fresca;
-      return fresca;
     }
-    return null;
+    // DT-02 regla 6: el total SIEMPRE viene del backend. Aprovechamos la misma
+    // lectura (contrato 21) para refrescarlo; `total` viaja como String en el
+    // cable (DT-02 regla 7) y se coerciona con `Number()` en la frontera.
+    const totalFresco = lectura.data.total;
+    if (totalFresco !== undefined && totalFresco !== null) {
+      const n = Number(totalFresco);
+      if (Number.isFinite(n)) {
+        setTotalServidor(n);
+        totalServidorRef.current = n;
+      }
+    }
+    return Number.isInteger(fresca) && fresca >= 0 ? fresca : null;
+  }, []);
+
+  /**
+   * Refresca el total desde el BACKEND (contrato 21).
+   *
+   * DT-02 regla 6: "El dinero no se suma en el frontend. Los totales vienen del
+   * backend. El frontend solo formatea." Este helper es la ÚNICA fuente del
+   * total cuando existe un ticket en el servidor. Se invoca tras CADA escritura
+   * (añadir/cambiar/quitar) y al hidratar una cuenta, de modo que el total que
+   * ve el cajero es EXACTAMENTE el `Numeric(12,2)` que el backend persistió —
+   * nunca una suma de flotantes local.
+   *
+   * @returns {Promise<number|null>} el total del servidor, o `null` si no se pudo.
+   */
+  const refrescarTotal = useCallback(async () => {
+    const cliente = apiRef.current;
+    const idTicket = ticketRef.current;
+    if (!cliente || !idTicket || !tieneLeerTicket(cliente)) return null;
+    const lectura = await aOutcome(() => cliente.leerTicket(idTicket));
+    if (!esOk(lectura) || !lectura.data) return null;
+    const bruto = lectura.data.total;
+    if (bruto === undefined || bruto === null) return null;
+    const n = Number(bruto);
+    if (!Number.isFinite(n)) return null;
+    setTotalServidor(n);
+    totalServidorRef.current = n;
+    return n;
   }, []);
 
   useEffect(() => {
@@ -108,23 +170,34 @@ export function useCart(opciones = {}) {
   }, [ticketId]);
 
   /**
-   * Total local (suma de subtotales). El servidor es la fuente de verdad.
+   * Total del ticket.
    *
-   * FIX "suma_no_cuadra" (4ª vuelta, 7 Oct 2026) — CAUSA RAÍZ: la suma cruda de
-   * `unit_price × quantity` produce errores de coma flotante (p. ej.
-   * `33.33 × 3 = 99.99000000000001`). Ese total viajaba SIN redondear hasta el
-   * `payment_details`, y el backend compara con `Decimal` EXACTO (RN-94, DT-02):
-   * `Decimal("99.99000000000001") != Decimal("99.99")` → `suma_no_cuadra`.
-   * Se redondea a 2 decimales AQUÍ (frontera del dinero) para que TODA la app
-   * (checkout, resumen, payload) hable del MISMO total.
+   * DT-02 regla 6 (FIX arquitectónico, 7 Oct 2026): el dinero NO se suma en el
+   * frontend. El total es el que reporta el BACKEND (`Numeric(12,2)`, contrato
+   * 21/30), leído tras cada escritura. El frontend SOLO formatea.
+   *
+   * La 4ª vuelta del bug `suma_no_cuadra` había "resuelto" el síntoma redondeando
+   * una suma de flotantes local (`Math.round(reduce(...) * 100) / 100`). Eso
+   * seguía violando DT-02 regla 6: el frontend seguía sumando dinero. Aquí se
+   * elimina esa suma por completo.
+   *
+   * Fallback local: SOLO cuando NO hay API ni ticket (carrito puramente en
+   * memoria, sin verdad de servidor). En ese caso no hay `Numeric(12,2)` que
+   * consultar y la suma local es la única opción; se redondea a 2 decimales para
+   * no propagar ruido de coma flotante.
    */
-  const total = useMemo(
-    () =>
+  const total = useMemo(() => {
+    if (totalServidor !== null) return totalServidor;
+    // Modo local (sin ticket en el servidor): no hay verdad de servidor.
+    // DT-02-FALLBACK-LOCAL: única suma de dinero permitida en el frontend, y
+    // SOLO en ausencia total de servidor. El guard E-09-FE la tolera por el
+    // marcador explícito.
+    return (
       Math.round(
-        lineas.reduce((acc, l) => acc + Number(l.unit_price) * Number(l.quantity), 0) * 100
-      ) / 100,
-    [lineas]
-  );
+        lineas.reduce((acc, l) => acc + Number(l.unit_price) * Number(l.quantity), 0) * 100 // DT-02-FALLBACK-LOCAL
+      ) / 100
+    );
+  }, [totalServidor, lineas]);
 
   /**
    * Añade una línea de forma ATÓMICA e IDEMPOTENTE (contrato 18).
@@ -214,8 +287,10 @@ export function useCart(opciones = {}) {
       setVersionActual(resultado.data.version);
       versionRef.current = resultado.data.version;
     }
+    // DT-02 regla 6: tras persistir, el total lo dicta el BACKEND.
+    if (esOk(resultado)) await refrescarTotal();
     return resultado;
-  }, [sincronizarVersion]);
+  }, [sincronizarVersion, refrescarTotal]);
 
   /**
    * Cambia la cantidad de una línea (contrato 19, bloqueo optimista).
@@ -272,8 +347,10 @@ export function useCart(opciones = {}) {
       setVersionActual(resultado.data.version);
       versionRef.current = resultado.data.version;
     }
+    // DT-02 regla 6: tras persistir, el total lo dicta el BACKEND.
+    if (esOk(resultado)) await refrescarTotal();
     return resultado;
-  }, [sincronizarVersion]);
+  }, [sincronizarVersion, refrescarTotal]);
 
   /**
    * Quita una línea (contrato 20, anti-degradación RN-37).
@@ -319,8 +396,10 @@ export function useCart(opciones = {}) {
       setVersionActual(resultado.data.version);
       versionRef.current = resultado.data.version;
     }
+    // DT-02 regla 6: tras persistir, el total lo dicta el BACKEND.
+    if (esOk(resultado)) await refrescarTotal();
     return resultado;
-  }, [sincronizarVersion]);
+  }, [sincronizarVersion, refrescarTotal]);
 
   /**
    * Limpia el carrito SOLO tras HTTP 200 **+ verificación post-envío**.
@@ -342,6 +421,8 @@ export function useCart(opciones = {}) {
     // Sin API o sin ticket: limpieza local (no hay nada que verificar).
     if (!cliente || !idTicket) {
       setLineas([]);
+      setTotalServidor(null);
+      totalServidorRef.current = null;
       if (typeof alLimpiarRef.current === 'function') alLimpiarRef.current();
       return { outcome: 'ok', reason: null, data: { verificado: false, local: true } };
     }
@@ -378,6 +459,8 @@ export function useCart(opciones = {}) {
       // éxito de `clearCart` nunca se ejercitó en producción hasta que F12.9
       // lo usó para enviar la cuenta al pizarrón sin caja.
       setLineas([]);
+      setTotalServidor(null);
+      totalServidorRef.current = null;
       aplicarReset(
         { versionRef, ticketRef, enviandoRef },
         buildResetPatch({ versionRef, ticketRef, enviandoRef })
@@ -405,9 +488,12 @@ export function useCart(opciones = {}) {
    *
    * @param {Array<{item_id: string, product_id: string, name?: string, quantity: number, unit_price: number|string}>} lineasServidor
    * @param {number} [versionServidor] - versión optimista del ticket (RN-25).
+   * @param {number|string} [totalServidor] - total del ticket (contrato 30,
+   *   `Numeric(12,2)`). DT-02 regla 6: se ADOPTA el total del backend en vez de
+   *   recalcularlo sumando las líneas en el frontend.
    * @returns {{outcome: 'ok', reason: null, data: {hidratadas: number}}}
    */
-  const hidratarLineas = useCallback((lineasServidor, versionServidor) => {
+  const hidratarLineas = useCallback((lineasServidor, versionServidor, totalServidor) => {
     const normalizadas = (Array.isArray(lineasServidor) ? lineasServidor : []).map((l) => ({
       item_id: l.item_id,
       product_id: l.product_id,
@@ -424,6 +510,15 @@ export function useCart(opciones = {}) {
       versionRef.current = versionServidor;
     }
 
+    // DT-02 regla 6: el total de una cuenta recuperada es el del BACKEND.
+    if (totalServidor !== undefined && totalServidor !== null) {
+      const n = Number(totalServidor);
+      if (Number.isFinite(n)) {
+        setTotalServidor(n);
+        totalServidorRef.current = n;
+      }
+    }
+
     return { outcome: 'ok', reason: null, data: { hidratadas: normalizadas.length } };
   }, []);
 
@@ -437,6 +532,7 @@ export function useCart(opciones = {}) {
     quitarLinea,
     clearCart,
     hidratarLineas,
+    refrescarTotal,
   };
 }
 

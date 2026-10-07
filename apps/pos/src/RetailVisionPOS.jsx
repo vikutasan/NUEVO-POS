@@ -400,7 +400,9 @@ export default function RetailVisionPOS({
         return;
       }
 
-      carrito.hidratarLineas(lineas, datos.version);
+      // DT-02 regla 6: se adopta el total del BACKEND (contrato 30), no se
+      // recalcula sumando las líneas en el frontend.
+      carrito.hidratarLineas(lineas, datos.version, datos.total);
       setTicketId(cuenta.id);
 
       // (b) CONTEXTO DE PEDIDO: se restaura desde el `postit` (contrato 23),
@@ -717,9 +719,11 @@ export default function RetailVisionPOS({
         const fresco = await aOutcome(() => api.leerLineas(ticketIdRef.current));
         if (esOk(fresco)) {
           const datos = fresco.data || {};
+          // DT-02 regla 6: se adopta el total del BACKEND (contrato 30).
           carrito.hidratarLineas(
             Array.isArray(datos.lineas) ? datos.lineas : [],
             datos.version,
+            datos.total,
           );
           setBanner({
             tipo: 'aviso',
@@ -964,6 +968,9 @@ export default function RetailVisionPOS({
         <div className="hidden lg:flex lg:flex-shrink-0">
           <SalesReceipt
             lineas={carrito.lineas}
+            // DT-02 regla 6: el total viene del BACKEND (`carrito.total`), no se
+            // recalcula sumando líneas en el frontend.
+            total={carrito.total}
             onIncrementar={incrementar}
             onDecrementar={decrementar}
             onQuitar={quitar}
@@ -1003,6 +1010,8 @@ export default function RetailVisionPOS({
           <div className="w-full max-h-[85vh] overflow-y-auto">
             <SalesReceipt
               lineas={carrito.lineas}
+              // DT-02 regla 6: mismo total del backend que el panel lateral.
+              total={carrito.total}
               onIncrementar={incrementar}
               onDecrementar={decrementar}
               onQuitar={quitar}
