@@ -123,7 +123,15 @@ export default function RetailVisionPOS({
   // de los tests que montan la pantalla sin props.
   const terminalEfectiva = terminalId || CONFIG.TERMINAL_ID;
   const { modo, esMovil } = useModo();
-  const red = useNetworkHealth();
+  // FIX_PIZARRON_SIN_RED (8 Oct 2026) — El sondeo de red usaba la URL RELATIVA
+  // `/health`, que el navegador resuelve contra el origen de Vite (5100). Como
+  // `vite.config.js` NO proxya `/health`, Vite devolvía 404 → `res.ok === false`
+  // → tras 2 fallos consecutivos `estado='down'` → `botonBloqueado=true`. Eso
+  // deshabilitaba el botón ENVIAR CUENTA (F12.14) de forma PERMANENTE, aunque
+  // la red estuviera bien: el usuario no podía enviar pedidos al pizarrón.
+  // El sondeo debe apuntar al API PROPIO del POS nuevo (`CONFIG.API_BASE_URL`),
+  // que sí expone `GET /health` (apps/api/main.py).
+  const red = useNetworkHealth({ url: `${CONFIG.API_BASE_URL}/health` });
 
   // FICHA_FIX_TURNO_CAJA_USUARIO_ID (7 Oct 2026) — IDENTIDAD DEL OPERADOR.
   // El operador es el usuario AUTENTICADO por el ERP (`currentUser`), no la
