@@ -54,9 +54,18 @@ services:
         condition: service_healthy
     # P2.7: en vez de quedarse dormido con `tail -f /dev/null`, el contenedor
     # instala dependencias y levanta el servidor HTTP del POS nuevo.
+    #
+    # `--reload` (F12.20): el código vive en un volumen montado (./apps/api:/app),
+    # así que editar un archivo en el host NO reinicia el proceso. Sin `--reload`,
+    # uvicorn mantiene en memoria la tabla de rutas del arranque y un endpoint
+    # nuevo (p. ej. el contrato 31, PATCH /pos/tickets/{id}/order) responde 404
+    # hasta reiniciar el contenedor. Ese fue el bug real reportado en vivo
+    # ("aun no cambia el aspecto del post it cuando es pedido"): el código estaba
+    # correcto y commiteado, pero el contenedor llevaba 13 h con la versión vieja.
+    # `--reload` cierra ese trap de forma permanente en desarrollo.
     command: >
       sh -c "pip install --quiet --no-cache-dir -r requirements.txt &&
-             uvicorn main:app --host 0.0.0.0 --port 5101"
+             uvicorn main:app --host 0.0.0.0 --port 5101 --reload"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5101/health').status==200 else 1)\""]
       interval: 10s
