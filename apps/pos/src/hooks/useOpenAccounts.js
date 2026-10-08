@@ -37,6 +37,14 @@ import * as cliente from '../api/client.js';
 import { aOutcome, esOk } from '../utils/outcome.js';
 
 /**
+ * FIX_PIZARRON_POLLING (8 Oct 2026) — Cadencia del auto-refresco del pizarrón.
+ * El corcho vuelve a descargar la lista cada 5 s mientras está montado, de modo
+ * que un post-it nuevo aparece solo (misma pantalla o pantalla separada) sin
+ * depender de que la señal externa llegue. Es una lectura ligera (contrato 23).
+ */
+export const INTERVALO_POLLING_MS = 5000;
+
+/**
  * @param {object} [opciones]
  * @param {string} [opciones.terminalId] - terminal cuyas cuentas se listan
  * @param {object} [opciones.servicioCuentas] - inyectable para tests
@@ -132,6 +140,24 @@ export function useOpenAccounts(opciones = {}) {
   useEffect(() => {
     refrescar();
   }, [terminalId, todasLasTerminales, refrescar, refrescarSenal]);
+
+  // FIX_PIZARRON_POLLING (8 Oct 2026) — Auto-refresco del pizarrón.
+  //
+  // POR QUÉ: el pizarrón solo descargaba la lista al montarse (y con la señal
+  // externa). En el flujo real "envío la cuenta y LUEGO abro el pizarrón", el
+  // montaje debía bastar; pero si el pizarrón es una pantalla SEPARADA (otro
+  // monitor/ventana) o si la señal se pierde por un re-render, el post-it nunca
+  // aparecía. Un corcho real debe reflejar el estado del servidor por sí solo.
+  //
+  // El sondeo es ligero (contrato 23, proyección escalar) y se detiene solo al
+  // desmontar (cleanup). No pisa la carga inicial: el primer `refrescar()` ya
+  // corrió arriba; el intervalo solo repite cada `INTERVALO_POLLING_MS`.
+  useEffect(() => {
+    const temporizador = setInterval(() => {
+      refrescar();
+    }, INTERVALO_POLLING_MS);
+    return () => clearInterval(temporizador);
+  }, [refrescar]);
 
   return { cuentas, cargando, error, refrescar, recuperarCuenta };
 }
