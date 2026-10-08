@@ -43,6 +43,34 @@ function motivo(err) {
 }
 
 /**
+ * PATCH /pos/tickets/{id}/order — persiste la programación de un ticket ya
+ * creado (contrato 31, F12.20).
+ *
+ * Cierra el hueco del flujo REAL del POS "productos primero, pedido después":
+ * el ticket nace VENTA_DIRECTA (contrato 29) y LUEGO se programa como PEDIDO.
+ * Sin este contrato, `guardarPedido` no podía persistir el bloque y el post-it
+ * del pizarrón no se distinguía de una cuenta normal.
+ *
+ * NO se reintenta: es una ESCRITURA con concurrencia optimista (RN-25). Un
+ * reintento ciego tras un 409 reenviaría un `version` ya obsoleto. El hook
+ * decide si refresca el `version` y reintenta.
+ *
+ * @param {string} ticketId
+ * @param {{version: number} & Record<string, unknown>} cuerpo
+ * @returns {Promise<{outcome: string, reason: string|null, data: object|null}>}
+ */
+export function actualizarPedidoDelTicket(ticketId, cuerpo) {
+  const id = typeof ticketId === 'string' ? ticketId.trim() : '';
+  if (!id) {
+    return Promise.resolve(fallo('ticket_invalido', null));
+  }
+  if (!cuerpo || typeof cuerpo !== 'object') {
+    return Promise.resolve(fallo('datos_invalidos', null));
+  }
+  return aOutcome(() => cliente.actualizarPedidoTicket(id, cuerpo), motivo);
+}
+
+/**
  * GET /orders/by-ticket/{ticket_id} — el pedido de un ticket (contrato 16).
  *
  * Es una lectura idempotente: se reintenta con backoff centralizado
@@ -66,4 +94,5 @@ export function obtenerPedidoDelTicket(ticketId) {
 
 export default {
   obtenerPedidoDelTicket,
+  actualizarPedidoDelTicket,
 };

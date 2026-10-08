@@ -77,6 +77,7 @@ from rules.registry import (
 )
 from services.orders_service import proyectar_pedido
 from schemas import (
+    ActualizarPedidoEntrada,
     AnadirItemEntrada,
     CambiarCantidadEntrada,
     CobrarTicketEntrada,
@@ -782,6 +783,86 @@ async def leer_lineas(
         total=ticket.total,
         lineas=_lineas_atomicas(ticket),
     )
+
+
+# ---------------------------------------------------------------------------
+# Contrato 31 — PATCH /pos/tickets/{id}/order
+# ---------------------------------------------------------------------------
+
+@router.patch("/tickets/{ticket_id}/order", response_model=TicketSalida)
+async def actualizar_pedido(
+    ticket_id: UUID,
+    entrada: ActualizarPedidoEntrada,
+    db: AsyncSession = Depends(get_db),
+) -> TicketSalida:
+    """Actualiza la programación de un ticket OPEN ya creado (contrato 31).
+
+    ─────────────────────────────────────────────────────────────────────────────
+    Por qué existe este endpoint
+    ─────────────────────────────────────────────────────────────────────────────
+    El flujo REAL del POS es "productos primero, pedido después": el cajero
+    agrega productos (el ticket nace como VENTA_DIRECTA por el contrato 29) y
+    LUEGO abre el modal 📌 para programarlo como PEDIDO. Antes de este contrato,
+    `guardarPedido` (RetailVisionPOS.jsx) solo guardaba el bloque en memoria y,
+    como el ticket ya existía, NUNCA lo persistía: el `order_type` se quedaba en
+    VENTA_DIRECTA y el post-it del pizarrón no se distinguía de una cuenta
+    normal. Este endpoint cierra ese hueco.
+
+    ─────────────────────────────────────────────────────────────────────────────
+    Garantías
+    ─────────────────────────────────────────────────────────────────────────────
+    - Solo se aplican los campos PRESENTES en la entrada (semántica PATCH). Un
+      campo ausente NO se toca; un campo presente con `null` limpia el valor.
+    - Valida concurrencia optimista (RN-25): `version` debe coincidir, si no 409.
+    - Un ticket PAID no se modifica (RN-23): el pedido ya se preparó/cobró.
+    - Re-proyecta el pedido (contrato 15) en la MISMA transacción, para que el
+      cambio de `order_type` se refleje en `orders` de inmediato (idempotencia
+      por `ticket_id`, RN-68). El commit es único y atómico.
+    """
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+
+    # RN-23: un ticket PAID ya no se modifica. RN-25: el version debe coincidir.
+    rn23_no_modificar_paid(ticket.status)
+    rn25_validar_version(entrada.version, ticket.version)
+
+    # Semántica PATCH: solo se aplican los campos que el cliente envió. Se usa
+    # `model_fields_set` (Pydantic v2) para distinguir "ausente" de "null".
+    enviados = entrada.model_fields_set
+
+    if "order_type" in enviados:
+        ticket.order_type = entrada.order_type or "VENTA_DIRECTA"
+    if "order_status" in enviados:
+        ticket.order_status = entrada.order_status or "PROGRAMADO PARA SER PREPARADO"
+    if "delivery_type" in enviados:
+        ticket.delivery_type = entrada.delivery_type
+    if "customer_name" in enviados:
+        ticket.customer_name = entrada.customer_name
+    if "customer_phone" in enviados:
+        ticket.customer_phone = entrada.customer_phone
+    if "committed_at" in enviados:
+        ticket.committed_at = entrada.committed_at
+    if "packaging_type" in enviados:
+        ticket.packaging_type = entrada.packaging_type
+    if "delivery_address" in enviados:
+        ticket.delivery_address = entrada.delivery_address
+    if "order_notes" in enviados:
+        ticket.order_notes = entrada.order_notes
+
+    # RN-27: toda escritura incrementa el version (concurrencia optimista).
+    ticket.version = rn27_incrementar_version(ticket.version)
+
+    await db.flush()
+
+    # FASE 7.5.2 — Re-proyección del pedido (contrato 15) en la MISMA
+    # transacción. Si el ticket pasó a PEDIDO, nace/actualiza su `Order`; si
+    # volvió a VENTA_DIRECTA, `proyectar_pedido` no hace nada (no hay pedido).
+    await proyectar_pedido(db, ticket)
+
+    await db.commit()
+
+    # Recargar con las líneas para proyectar la salida completa (contrato 3/5).
+    ticket = await _ticket_con_items_o_404(db, ticket_id)
+    return _ticket_a_salida(ticket)
 
 
 # ---------------------------------------------------------------------------

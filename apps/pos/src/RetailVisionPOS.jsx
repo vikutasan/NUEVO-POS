@@ -92,6 +92,12 @@ import { descargarCatalogoPDF } from './components/CatalogoPDF.jsx';
 // viejo POS (§6.8): el pizarrón se abre desde el header y recupera al carrito.
 import OpenAccountsCorkboard from './components/OpenAccountsCorkboard.jsx';
 import { listarCuentasAbiertas } from './services/openAccountsService.js';
+// F12.20 — Persistir la programación de un ticket YA creado (contrato 31).
+// Cierra el hueco del flujo REAL "productos primero, pedido después": el ticket
+// nace VENTA_DIRECTA (contrato 29) y LUEGO se programa como PEDIDO. Sin esto,
+// `guardarPedido` no escribía nada cuando el ticket ya existía y el post-it del
+// pizarrón no se distinguía de una cuenta normal.
+import { actualizarPedidoDelTicket } from './services/ordersService.js';
 // P5 — Política de pago mínimo para pedidos (Vista General → POS).
 import { getSettingValue } from './api/client.js';
 
@@ -769,21 +775,63 @@ export default function RetailVisionPOS({
     [acciones, carrito, turnoCaja]
   );
 
-  // ── F7.5.6 — Programación de pedido (puente POS → Pedidos) ─────────────────
-  // El modal captura los datos y devuelve el bloque `order_*`. Si el ticket aún
-  // no existe, se crea CON el bloque (el backend proyecta el pedido en la misma
-  // transacción, contrato 15). Si ya existe, el bloque se guarda para el
-  // siguiente ticket (el pedido se programa ANTES de abrir la cuenta).
+  // ── F7.5.6 / F12.20 — Programación de pedido (puente POS → Pedidos) ────────
+  // El modal captura los datos y devuelve el bloque `order_*`.
+  //
+  // DOS CAMINOS (el flujo REAL del POS es "productos primero, pedido después"):
+  //   a) El ticket AÚN NO existe → se crea CON el bloque (contrato 29); el
+  //      backend proyecta el pedido en la misma transacción (contrato 15).
+  //   b) El ticket YA existe (nació VENTA_DIRECTA al agregar el primer ítem) →
+  //      se PERSISTE el bloque con el contrato 31 (`PATCH /pos/tickets/{id}/order`).
+  //
+  // CICATRIZ (bug reportado en vivo): antes, el camino (b) solo guardaba el
+  // bloque en estado local y NO escribía en el backend. El ticket quedaba
+  // VENTA_DIRECTA para siempre y su post-it en el pizarrón era idéntico al de
+  // una cuenta normal (sin badge TENTATIVO ni datos de entrega). El contrato 31
+  // cierra ese hueco A-02.
   const guardarPedido = useCallback(
     async (bloque) => {
       setPedidoAbierto(false);
       setBloquePedido(bloque);
+
+      // (a) Ticket inexistente: nace CON el bloque (contrato 29).
       if (!ticketIdRef.current) {
         const listo = await asegurarTicket(bloque);
         if (!listo) return;
+        return;
+      }
+
+      // (b) Ticket existente: persistir la programación (contrato 31).
+      // El bloque vacío (`{}`, venta directa) NO se envía: no hay nada que
+      // programar y un PATCH sin campos solo incrementaría la versión.
+      if (!bloque || Object.keys(bloque).length === 0) return;
+
+      const resultado = await actualizarPedidoDelTicket(ticketIdRef.current, {
+        ...bloque,
+        version: carrito.version,
+      });
+
+      if (!esOk(resultado)) {
+        // Un 409 (RN-25) significa que otro vendedor tocó el ticket: se avisa
+        // y se deja que el pizarrón/recuperación traiga la versión fresca.
+        setBanner({
+          tipo: 'error',
+          mensaje:
+            resultado.reason === 'version_conflict'
+              ? 'La cuenta cambió en otra terminal. Vuelve a abrirla e inténtalo de nuevo.'
+              : 'No se pudo guardar la programación del pedido.',
+        });
+        return;
+      }
+
+      // Adoptar la versión fresca del servidor (RN-25) para que la siguiente
+      // escritura (añadir/quitar ítem, cobrar) encadene sin un 409 espurio.
+      const datos = resultado.data;
+      if (datos && typeof datos.version === 'number') {
+        carrito.hidratarLineas(carrito.lineas, datos.version, datos.total);
       }
     },
-    [asegurarTicket]
+    [asegurarTicket, carrito]
   );
 
   // ── F9.0.1 — Salvaguarda de salida con cuenta abierta ──────────────────────

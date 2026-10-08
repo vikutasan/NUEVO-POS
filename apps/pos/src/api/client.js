@@ -188,6 +188,27 @@ export function leerLineas(ticketId) {
 }
 
 /**
+ * PATCH /pos/tickets/{id}/order — actualiza la programación de un ticket YA
+ * creado (contrato 31, F12.20). Cierra el hueco A-02 del flujo REAL del POS
+ * "productos primero, pedido después": el ticket nace VENTA_DIRECTA (contrato
+ * 29) y LUEGO se programa como PEDIDO. Sin este contrato, `guardarPedido` no
+ * podía persistir el bloque y el post-it del pizarrón no se distinguía de una
+ * cuenta normal.
+ *
+ * Semántica PATCH: solo se aplican los campos PRESENTES en `cuerpo`. Un campo
+ * ausente NO se toca; un campo presente con `null` limpia el valor.
+ *
+ * @param {string} ticketId
+ * @param {{version: number} & Record<string, unknown>} cuerpo
+ */
+export function actualizarPedidoTicket(ticketId, cuerpo) {
+  return peticion(`/pos/tickets/${ticketId}/order`, {
+    method: 'PATCH',
+    body: JSON.stringify(cuerpo),
+  });
+}
+
+/**
  * POST /pos/tickets/{id}/verify — verificación post-envío (contrato 22).
  * Confirma en BD que el ticket y sus ítems existen antes de limpiar el carrito.
  * @param {string} ticketId
@@ -475,6 +496,8 @@ export default {
   cambiarCantidad,
   quitarItem,
   leerTicket,
+  leerLineas,
+  actualizarPedidoTicket,
   verificarEnvio,
   latir,
   tomarLock,

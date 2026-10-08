@@ -46,8 +46,11 @@ MODULOS_AJENOS = (
 # existía sin contrato declarado) más el contrato 30 de la FASE 12.10 (lectura
 # de líneas — cierra el hueco A-02 que dejó abierto la Regla 15: el contrato 21
 # devuelve 5 campos escalares y NO las líneas, así que recuperar una cuenta del
-# pizarrón no podía hidratar el carrito).
-LOS_31_CONTRATOS = (
+# pizarrón no podía hidratar el carrito) más el contrato 31 de la FASE 12.20
+# (actualización de pedido — cierra el hueco A-02 del endpoint
+# `PATCH /pos/tickets/{id}/order`, que permite persistir la programación de un
+# ticket ya creado: el flujo real del POS es "productos primero, pedido después").
+LOS_32_CONTRATOS = (
     "catalogo.productos_para_venta",
     "almacenes.consumir_por_venta",
     "almacenes.disponibilidad",
@@ -85,6 +88,8 @@ LOS_31_CONTRATOS = (
     "pos.leer_lineas",
     # ── FASE 12.9.1 — Creación de ticket (proveedor: POS — cierra A-02) ────
     "pos.crear_ticket",
+    # ── FASE 12.20 — Actualización de pedido (proveedor: POS — cierra A-02) ─
+    "pos.actualizar_pedido",
     # ── FASE 10.4 — Contexto diario post-corte (proveedor: POS) ────────────
     "pos.contexto_diario",
 )
@@ -167,11 +172,11 @@ def test_criterio1_los_contratos_no_importan_modelos():
 # ── Criterio 2: cada contrato tiene su firma ───────────────────────────────
 
 
-def test_criterio2_hay_exactamente_31_contratos():
-    """El registro declara los 31 contratos (17 F2 + 5 F3.2 + 1 F5.0 + 2 F7.0 + 2 F8.0 + 1 F10.4 + 1 F10.6.2 + 1 F12.9.1 + 1 F12.10)."""
-    assert len(CONTRATOS) == 31, f"Se esperaban 31 contratos, hay {len(CONTRATOS)}"
+def test_criterio2_hay_exactamente_32_contratos():
+    """El registro declara los 32 contratos (17 F2 + 5 F3.2 + 1 F5.0 + 2 F7.0 + 2 F8.0 + 1 F10.4 + 1 F10.6.2 + 1 F12.9.1 + 1 F12.10 + 1 F12.20)."""
+    assert len(CONTRATOS) == 32, f"Se esperaban 32 contratos, hay {len(CONTRATOS)}"
     nombres = tuple(c.nombre for c in CONTRATOS)
-    assert nombres == LOS_31_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
+    assert nombres == LOS_32_CONTRATOS, f"Los nombres no coinciden:\n{nombres}"
 
 
 def test_criterio2_cada_contrato_tiene_firma_documentada():
@@ -237,10 +242,11 @@ def test_criterio3_el_pos_es_proveedor_en_sus_contratos():
         "pos.cuentas_abiertas",
         "pos.leer_lineas",
         "pos.crear_ticket",
+        "pos.actualizar_pedido",
         "pos.contexto_diario",
     ], f"El POS es proveedor en contratos inesperados: {proveedor_pos}"
 
 
-def test_listar_contratos_devuelve_los_31():
-    """La función pública del paquete devuelve los 31 contratos."""
-    assert len(listar_contratos()) == 31
+def test_listar_contratos_devuelve_los_32():
+    """La función pública del paquete devuelve los 32 contratos."""
+    assert len(listar_contratos()) == 32

@@ -1,4 +1,4 @@
-"""Registro de los 31 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario) + FASE 12.9.1 (Creación de ticket) + FASE 12.10 (Lectura de líneas).
+"""Registro de los 32 contratos — FASE 2 (Frontera) + FASE 3.2 (Atómico) + FASE 7.0 (IA) + FASE 8.0 (CRM) + FASE 10.4 (Contexto diario) + FASE 12.9.1 (Creación de ticket) + FASE 12.10 (Lectura de líneas) + FASE 12.20 (Actualización de pedido).
 
 Cada contrato se declara aquí con su firma completa (entrada/salida) y su
 proveedor. El registro es la fuente única de verdad: el test de la puerta F2
@@ -52,6 +52,12 @@ Contrato de la FASE 12.9.1 (creación de ticket — cierra el hueco A-02 del
 endpoint `POST /pos/tickets`, que existía sin contrato declarado):
 
   29  pos.crear_ticket                    POS                 POS          FASE 12.9.1
+
+Contrato de la FASE 12.20 (actualización de pedido — cierra el hueco A-02 del
+endpoint `PATCH /pos/tickets/{id}/order`, que existía sin contrato declarado y
+que permite persistir la programación de un ticket ya creado):
+
+  31  pos.actualizar_pedido               POS                 POS          FASE 12.20
 
 ──────────────────────────────────────────────────────────────────────────────
 NOTA DE FRONTERA — CRM Y NOTIFICACIONES (FASE 8.0) — añadida 30 Sep 2026
@@ -861,6 +867,61 @@ CONTRATOS: tuple[Contrato, ...] = (
         ),
         estado_hoy="FASE 12.9.1",
     ),
+    # ── §15 POS — Actualización de pedido (proveedor: POS — FASE 12.20) ─────
+    Contrato(
+        numero=31,
+        nombre="pos.actualizar_pedido",
+        consumidor="POS",
+        proveedor="POS",
+        operacion="PATCH /pos/tickets/{id}/order",
+        entrada={
+            "ticket_id": "UUID (path)",
+            "version": "Integer (RN-25)",
+            "order_type": "String | None",
+            "order_status": "String | None",
+            "delivery_type": "String | None",
+            "customer_name": "String | None",
+            "customer_phone": "String | None",
+            "committed_at": "Datetime | None",
+            "packaging_type": "String | None",
+            "delivery_address": "String | None",
+            "order_notes": "String | None",
+        },
+        salida={
+            "id": "UUID",
+            "account_num": "String (folio V####, RN-10)",
+            "status": "String (OPEN, RN-14)",
+            "total": "Numeric(12,2)",
+            "version": "Integer",
+            "terminal_id": "String",
+            "channel": "String",
+            "items": "List[LineaSalida]",
+            "payment_details": "Dict | None",
+        },
+        garantias=(
+            "Cierra el hueco del flujo REAL del POS 'productos primero, pedido "
+            "después': el ticket nace VENTA_DIRECTA (contrato 29) y LUEGO se "
+            "programa como PEDIDO. Sin este contrato, `guardarPedido` no podía "
+            "persistir el bloque y el post-it del pizarrón no se distinguía de "
+            "una cuenta normal.",
+            "Semántica PATCH: solo se aplican los campos PRESENTES en la entrada. "
+            "Un campo ausente NO se toca; un campo presente con `null` limpia el "
+            "valor (permite revertir un pedido a venta directa).",
+            "Valida concurrencia optimista (RN-25): `version` debe coincidir, si "
+            "no responde 409.",
+            "Un ticket PAID no se modifica (RN-23).",
+            "Re-proyecta el pedido (contrato 15) en la MISMA transacción, con "
+            "idempotencia por `ticket_id` (RN-68): el cambio se refleja en "
+            "`orders` de inmediato.",
+            "Devuelve una PROYECCIÓN, no la fila completa de `tickets` (O-23).",
+        ),
+        errores=(
+            "404 si el ticket no existe.",
+            "409 si el `version` no coincide (RN-25).",
+            "400 si el ticket ya está PAID (RN-23).",
+        ),
+        estado_hoy="FASE 12.20",
+    ),
     # ── §14 Estadísticas — Contexto diario (proveedor: POS — FASE 10.4) ─────
     Contrato(
         numero=28,
@@ -896,5 +957,5 @@ CONTRATOS: tuple[Contrato, ...] = (
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 31 contratos del registro."""
+    """Devuelve los 32 contratos del registro."""
     return CONTRATOS

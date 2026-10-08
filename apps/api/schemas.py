@@ -285,6 +285,46 @@ class QuitarItemEntrada(BaseModel):
     version: int = Field(ge=0, description="Version esperado (RN-25)")
 
 
+class ActualizarPedidoEntrada(BaseModel):
+    """Entrada del contrato 31: actualizar la programación de un ticket YA creado.
+
+    ─────────────────────────────────────────────────────────────────────────────
+    Por qué existe este contrato
+    ─────────────────────────────────────────────────────────────────────────────
+    El flujo REAL del POS es "productos primero, pedido después": el cajero
+    agrega productos (el ticket nace como VENTA_DIRECTA por el contrato 29) y
+    LUEGO abre el modal 📌 para programarlo como PEDIDO. Antes de este contrato,
+    `guardarPedido` solo guardaba el bloque en memoria y, como el ticket ya
+    existía, NUNCA lo persistía: el `order_type` se quedaba en VENTA_DIRECTA y
+    el post-it del pizarrón no se distinguía de una cuenta normal.
+
+    Este contrato cierra ese hueco: permite ACTUALIZAR los 9 campos `order_*`
+    de un ticket OPEN ya creado y re-proyectar el pedido (contrato 15) en la
+    MISMA transacción. Es la contraparte de escritura del contrato 29 (que solo
+    fija la programación al CREAR).
+
+    Todos los campos son OPCIONALES: solo se aplican los que vienen con valor
+    (semántica PATCH). Un campo ausente NO se toca; un campo presente con `null`
+    limpia el valor (permite revertir un pedido a venta directa).
+
+    `version` es obligatorio: la actualización es una escritura y valida
+    concurrencia optimista (RN-25). Si no coincide, el servidor responde 409.
+    """
+
+    version: int = Field(ge=0, description="Version esperado (RN-25)")
+
+    # ── Programación de pedido (los 9 campos del modelo Ticket) ───────────
+    order_type: str | None = None
+    order_status: str | None = None
+    delivery_type: str | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    committed_at: datetime | None = None
+    packaging_type: str | None = None
+    delivery_address: str | None = None
+    order_notes: str | None = None
+
+
 class TicketLigeroSalida(BaseModel):
     """Salida del contrato 21: EXACTAMENTE 5 campos escalares (Regla 15).
 

@@ -52,11 +52,20 @@ HORAS_PREPARACION_POR_DEFECTO = 24
 def _mapear_estado(status_ticket: str) -> str:
     """Mapea el estado del ticket al estado del pedido (lo decide Pedidos).
 
-    OPEN → TENTATIVO (aún no confirmado). PAID → PAGADO (cobrado).
+    OPEN → PENDIENTE (aún no confirmado). PAID → PAGADO (cobrado).
+
+    HALLAZGO F12.20: antes se mapeaba OPEN → "TENTATIVO", pero `TENTATIVO` NO
+    es uno de los 14 estados válidos de RN-69 (la lista es PENDIENTE,
+    CONFIRMADO, EN_PREPARACION, LISTO, EN_RUTA, ENTREGADO, CANCELADO,
+    DEVUELTO, REPROGRAMADO, EN_ESPERA, PARCIAL, FACTURADO, PAGADO, ARCHIVADO).
+    `rn69_catorce_estados("TENTATIVO")` lanzaba `ReglaViolada` (400), así que
+    la proyección de CUALQUIER ticket OPEN bajo política SIN_PAGO/ANTICIPO
+    fallaba. El estado correcto para un pedido recién proyectado y aún no
+    confirmado es PENDIENTE (el mismo que usa `rn67_ticket_a_pedido`).
     """
     if status_ticket == "PAID":
         return rn69_catorce_estados("PAGADO")
-    return rn69_catorce_estados("TENTATIVO")
+    return rn69_catorce_estados("PENDIENTE")
 
 
 def _calcular_earliest_ready_at(ticket: Ticket) -> datetime:
