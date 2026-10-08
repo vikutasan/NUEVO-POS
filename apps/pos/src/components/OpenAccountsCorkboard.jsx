@@ -140,6 +140,10 @@ export default function OpenAccountsCorkboard({
   cajaHabilitada = false,
   servicioCuentas,
   clienteApi,
+  // FIX_PIZARRON_NO_REFRESCA (8 Oct 2026) — Señal externa de refresco. El padre
+  // la incrementa al enviar una cuenta al pizarrón; al cambiar, `useOpenAccounts`
+  // vuelve a descargar la lista y el post-it nuevo aparece sin cerrar/reabrir.
+  refrescarSenal = 0,
   onRecuperar,
   onCerrar,
 }) {
@@ -148,6 +152,7 @@ export default function OpenAccountsCorkboard({
     todasLasTerminales: cajaHabilitada,
     servicioCuentas,
     clienteApi,
+    refrescarSenal,
   });
 
   /**

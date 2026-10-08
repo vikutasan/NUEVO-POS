@@ -212,6 +212,12 @@ export default function RetailVisionPOS({
   // de verdad de la lista (su hook `useOpenAccounts` la descarga).
   const [pizarronAbierto, setPizarronAbierto] = useState(false);
   const [cuentasAbiertas, setCuentasAbiertas] = useState(0);
+  // FIX_PIZARRON_NO_REFRESCA (8 Oct 2026) — Señal de refresco del pizarrón.
+  // `useOpenAccounts` descarga la lista SOLO al montarse (sin polling). Si el
+  // pizarrón ya está abierto al enviar una cuenta, su lista queda obsoleta y el
+  // post-it nuevo no aparece. Este contador se incrementa al enviar y se pasa al
+  // pizarrón como dependencia para forzar un re-fetch de la lista.
+  const [refrescarSenal, setRefrescarSenal] = useState(0);
 
   // (D-12) Ticket OPEN en el servidor. Nace al agregar el PRIMER ítem y se
   // cablea a `useCart`, de modo que la persistencia atómica por ítem opere
@@ -840,10 +846,23 @@ export default function RetailVisionPOS({
     setTicketId(null);
     ticketIdRef.current = null;
 
-    // 4) Refrescar el conteo del pizarrón (badge del header).
-    setCuentasAbiertas((n) => n + 1);
+    // 4) Refrescar el conteo REAL del pizarrón (badge del header) y avisar al
+    //    pizarrón abierto para que vuelva a descargar la lista.
+    //
+    // FIX_PIZARRON_NO_REFRESCA (8 Oct 2026) — Antes se hacía un incremento LOCAL
+    // (`setCuentasAbiertas((n) => n + 1)`) y NADA más. El pizarrón
+    // (`OpenAccountsCorkboard` → `useOpenAccounts`) descarga la lista SOLO al
+    // montarse (su `useEffect` depende de `[terminalId, todasLasTerminales]`),
+    // sin polling. Por eso, si el pizarrón YA estaba abierto al enviar la cuenta,
+    // su lista quedaba obsoleta y el post-it NUEVO nunca aparecía — aunque la
+    // cuenta SÍ estaba persistida y OPEN en el servidor (verificado por psql:
+    // V0002 OPEN en TERM-01). El conteo local además podía desincronizarse.
+    // Ahora: (a) se relee el conteo real desde el servidor, y (b) se incrementa
+    // `refrescarSenal`, que el pizarrón usa como dependencia para re-descargar.
+    await refrescarConteoCuentas();
+    setRefrescarSenal((n) => n + 1);
     setBanner({ tipo: 'ok', mensaje: 'Cuenta enviada al pizarrón' });
-  }, [asegurarTicket, carrito]);
+  }, [asegurarTicket, carrito, refrescarConteoCuentas]);
 
   // "Salir sin enviar — perder cuenta": acción destructiva. Se descarta la
   // cuenta (clearCart) y se sale.
@@ -1203,6 +1222,7 @@ export default function RetailVisionPOS({
           <OpenAccountsCorkboard
             terminalId={terminalEfectiva}
             cajaHabilitada={Boolean(turnoCaja)}
+            refrescarSenal={refrescarSenal}
             onRecuperar={recuperarCuentaAlCarrito}
             onCerrar={() => {
               setPizarronAbierto(false);

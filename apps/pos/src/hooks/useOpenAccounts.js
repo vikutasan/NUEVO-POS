@@ -55,6 +55,10 @@ export function useOpenAccounts(opciones = {}) {
     todasLasTerminales = false,
     servicioCuentas = servicio,
     clienteApi = cliente,
+    // FIX_PIZARRON_NO_REFRESCA (8 Oct 2026) — Señal externa de refresco. El
+    // pizarrón la incrementa al enviar una cuenta; al cambiar, el `useEffect`
+    // de carga vuelve a disparar `refrescar()` y la lista se re-descarga.
+    refrescarSenal = 0,
   } = opciones;
 
   const [cuentas, setCuentas] = useState([]);
@@ -122,10 +126,12 @@ export function useOpenAccounts(opciones = {}) {
     return aOutcome(() => clienteRef.current.leerTicket(id));
   }, []);
 
-  // Carga inicial y recarga al cambiar de terminal o modo (H1: dep primitiva).
+  // Carga inicial y recarga al cambiar de terminal, modo o señal externa
+  // (H1: dep primitiva). `refrescarSenal` permite al padre forzar un re-fetch
+  // cuando envía una cuenta al pizarrón (FIX_PIZARRON_NO_REFRESCA).
   useEffect(() => {
     refrescar();
-  }, [terminalId, todasLasTerminales, refrescar]);
+  }, [terminalId, todasLasTerminales, refrescar, refrescarSenal]);
 
   return { cuentas, cargando, error, refrescar, recuperarCuenta };
 }
