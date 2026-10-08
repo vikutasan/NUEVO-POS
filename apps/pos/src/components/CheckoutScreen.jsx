@@ -101,7 +101,80 @@ function etiquetaMetodo(metodo) {
   return metodo;
 }
 
-export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesando, error, montoMinimo }) {
+/**
+ * F12.21 — Etiqueta legible del tipo de entrega de un pedido.
+ * Paridad con el viejo POS (`CheckoutScreen.jsx` §6.8).
+ */
+function etiquetaEntrega(deliveryType) {
+  if (deliveryType === 'DOMICILIO') return 'Domicilio';
+  if (deliveryType === 'PICKUP') return 'Recoger en tienda';
+  return deliveryType || '—';
+}
+
+/**
+ * F12.21 — Etiqueta legible del tipo de empaque de un pedido.
+ */
+function etiquetaEmpaque(packagingType) {
+  if (packagingType === 'PROPIO') return 'Empaque propio (del cliente)';
+  if (packagingType === 'VENTA') return 'Empaque de venta (se cobra)';
+  return packagingType || '—';
+}
+
+/**
+ * F12.21 — Formatea una fecha ISO a hora local legible (es-MX).
+ * Devuelve '—' si no hay fecha válida.
+ */
+function formatearFechaHora(fecha) {
+  if (!fecha) return '—';
+  const d = new Date(fecha);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * F12.21 — Fila etiqueta/valor del panel "Confirmar con el Cliente".
+ * Paridad con el `OrderDetailRow` del viejo POS (§6.8).
+ */
+function OrderDetailRow({ label, value, highlight = false }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs uppercase tracking-wide text-crema-ticket/50">
+        {label}
+      </span>
+      <span
+        className={`text-sm font-semibold ${
+          highlight ? 'text-acento' : 'text-crema-ticket'
+        }`}
+      >
+        {value || '—'}
+      </span>
+    </div>
+  );
+}
+
+export default function CheckoutScreen({
+  total,
+  onConfirmar,
+  onCancelar,
+  procesando,
+  error,
+  montoMinimo,
+  // F12.21 — Revisión pre-cobro de un PEDIDO (paridad con el viejo POS §6.8).
+  // Cuando viene el bloque `order_*` (contrato 3), el modal muestra un panel
+  // derecho "Confirmar con el Cliente" para que el cajero valide los datos
+  // (entrega, cliente, teléfono, compromiso, empaque, dirección, notas) ANTES
+  // de cobrar. En una VENTA DIRECTA llega `null` y el panel NO se pinta.
+  orderData = null,
+  // F12.21 — Líneas del pedido (para el "Contenido del Pedido" del panel).
+  lineas = [],
+}) {
+  const esPedido = Boolean(orderData && orderData.order_type === 'PEDIDO');
   // P5 — El monto mínimo para confirmar. Default: total (pago completo).
   const minimo = (montoMinimo != null && montoMinimo > 0 && montoMinimo < total)
     ? montoMinimo
@@ -342,10 +415,16 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
       aria-modal="true"
       aria-label="Cobro del ticket"
     >
-      <div className="w-full max-w-[1100px] mx-auto bg-fondo-panel rounded-canon50 overflow-hidden flex flex-col lg:flex-row">
+      <div
+        className={`w-full ${
+          esPedido ? 'max-w-[1400px]' : 'max-w-[1100px]'
+        } mx-auto bg-fondo-panel rounded-canon50 overflow-hidden flex flex-col lg:flex-row`}
+      >
         {/* Columna principal: métodos de pago */}
         <div className="flex-1 p-6 flex flex-col gap-4">
-          <h2 className="text-2xl font-bold text-crema-ticket">Cobrar ticket</h2>
+          <h2 className="text-2xl font-bold text-crema-ticket">
+            {esPedido ? 'Cobrar pedido' : 'Cobrar ticket'}
+          </h2>
 
           {error ? (
             <div role="alert" className="rounded-canon35 bg-peligro/20 text-peligro px-4 py-3 text-sm font-semibold">
@@ -461,6 +540,83 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
           </div>
 
         </div>
+
+        {/* F12.21 — Panel "Confirmar con el Cliente" (paridad con el viejo POS
+            §6.8). Solo aparece en un PEDIDO: el cajero valida los datos de
+            entrega con el cliente ANTES de cobrar. En una VENTA DIRECTA no se
+            pinta y el modal conserva su ancho original. */}
+        {esPedido ? (
+          <div className="w-full lg:w-[320px] lg:flex-shrink-0 bg-fondo-profundo/60 border-y lg:border-y-0 lg:border-x border-white/10 p-6 flex flex-col gap-4 overflow-y-auto">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-lg font-bold text-acento">
+                Confirmar con el Cliente
+              </h3>
+              <p className="text-xs text-crema-ticket/60">
+                Verifica estos datos antes de cobrar.
+              </p>
+            </div>
+
+            <OrderDetailRow
+              label="Tipo de entrega"
+              value={etiquetaEntrega(orderData.delivery_type)}
+              highlight
+            />
+            <OrderDetailRow label="Cliente" value={orderData.customer_name} />
+            <OrderDetailRow label="Teléfono" value={orderData.customer_phone} />
+            <OrderDetailRow
+              label="Entrega compromiso"
+              value={formatearFechaHora(orderData.committed_at)}
+            />
+
+            {/* Contenido del pedido (líneas del carrito) */}
+            <div className="flex flex-col gap-1">
+              <span className="text-xs uppercase tracking-wide text-crema-ticket/50">
+                Contenido del pedido
+              </span>
+              {Array.isArray(lineas) && lineas.length > 0 ? (
+                <ul className="flex flex-col gap-1">
+                  {lineas.map((l, i) => (
+                    <li
+                      key={l.item_id || l.product_id || i}
+                      className="flex items-center justify-between gap-2 text-sm text-crema-ticket"
+                    >
+                      <span className="truncate">
+                        {l.quantity}× {l.name}
+                      </span>
+                      <span className="text-crema-ticket/70 whitespace-nowrap">
+                        {formatearPrecio(
+                          (Number(l.unit_price) || 0) * (Number(l.quantity) || 0),
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="text-sm text-crema-ticket/50">—</span>
+              )}
+            </div>
+
+            <OrderDetailRow
+              label="Empaque"
+              value={etiquetaEmpaque(orderData.packaging_type)}
+            />
+            {orderData.delivery_type === 'DOMICILIO' ? (
+              <OrderDetailRow
+                label="Dirección"
+                value={orderData.delivery_address}
+              />
+            ) : null}
+            {orderData.order_notes ? (
+              <OrderDetailRow label="Notas" value={orderData.order_notes} />
+            ) : null}
+
+            {procesando ? (
+              <div className="mt-auto rounded-canon35 bg-acento/20 text-acento px-4 py-3 text-sm font-bold text-center">
+                ✅ PAGADO — EN ESPERA DE PRODUCCIÓN
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Columna lateral: pagos + resumen + acciones (w-full lg:w-1/3, R-01).
             F9.1.5.2 — los abonos se cargan AQUÍ (panel derecho), como el viejo

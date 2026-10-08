@@ -174,6 +174,13 @@ class TicketSalida(BaseModel):
     desglosar los N pagos del cobro mixto (antes el dato se persistía pero
     nunca llegaba al cliente, así que el papel no podía mostrar el desglose).
     Es `None` mientras el ticket no se ha cobrado.
+
+    F12.21 — Los campos `order_*` viajan desde FASE 12.21 para que el ticket
+    IMPRESO al cobrar pueda decidir la DOBLE COPIA (copia CLIENTE + copia
+    COMERCIO) de un PEDIDO y pintar su sección de datos de entrega. Antes, el
+    cobro devolvía un ticket SIN `order_type`, así que el POS no podía saber si
+    era un pedido y siempre imprimía copia única. Es una PROYECCIÓN (O-23), no
+    una tabla: solo los campos que el papel necesita.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -187,6 +194,17 @@ class TicketSalida(BaseModel):
     channel: str
     items: list[LineaSalida] = Field(default_factory=list)
     payment_details: dict[str, Any] | None = None
+    # F12.21 — Datos de pedido para la impresión (doble copia + sección de
+    # entrega). En una VENTA_DIRECTA viajan con sus defaults (`order_type`
+    # = 'VENTA_DIRECTA' y el resto `None`).
+    order_type: str = "VENTA_DIRECTA"
+    delivery_type: str | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    committed_at: datetime | None = None
+    packaging_type: str | None = None
+    delivery_address: str | None = None
+    order_notes: str | None = None
 
 
 # ---------------------------------------------------------------------------

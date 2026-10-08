@@ -170,6 +170,10 @@ def _ticket_a_salida(ticket: Ticket) -> TicketSalida:
 
     F9.1.4 — `payment_details` viaja al cliente para que el ticket impreso
     pueda desglosar los N pagos del cobro mixto. Es `None` antes del cobro.
+
+    F12.21 — Los campos `order_*` viajan al cliente para que el ticket IMPRESO
+    al cobrar decida la DOBLE COPIA de un PEDIDO y pinte su sección de entrega.
+    Es una PROYECCIÓN (O-23): solo los campos que el papel necesita.
     """
     return TicketSalida(
         id=ticket.id,
@@ -181,6 +185,14 @@ def _ticket_a_salida(ticket: Ticket) -> TicketSalida:
         channel=ticket.channel,
         items=[LineaSalida.model_validate(i) for i in ticket.items],
         payment_details=ticket.payment_details,
+        order_type=ticket.order_type,
+        delivery_type=ticket.delivery_type,
+        customer_name=ticket.customer_name,
+        customer_phone=ticket.customer_phone,
+        committed_at=ticket.committed_at,
+        packaging_type=ticket.packaging_type,
+        delivery_address=ticket.delivery_address,
+        order_notes=ticket.order_notes,
     )
 
 

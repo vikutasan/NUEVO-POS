@@ -100,6 +100,14 @@ import { listarCuentasAbiertas } from './services/openAccountsService.js';
 import { actualizarPedidoDelTicket } from './services/ordersService.js';
 // P5 — Política de pago mínimo para pedidos (Vista General → POS).
 import { getSettingValue } from './api/client.js';
+// F12.21 — Impresión AUTOMÁTICA al cobrar (paridad con el viejo POS §6.8):
+// `handleTicketAction` imprimía en la rama PAID. Un PEDIDO se imprime DOBLE
+// (copia CLIENTE + copia COMERCIO) en un solo trabajo; una VENTA DIRECTA en
+// copia única. Se reutiliza el generador (F6.0) y el servicio (F6.2) ya
+// existentes; el `TicketDeliveryPanel` (F8.5) queda como REIMPRESIÓN manual
+// (RN-87: imprimir siempre disponible).
+import { imprimirTicket } from './services/printService.js';
+import { generarTicketHTML, combinarCopiasPedido } from './utils/ticketGenerator.js';
 
 /**
  * F7.7d — LA TERMINAL ES UN PROP, NO UNA CONSTANTE.
@@ -764,6 +772,30 @@ export default function RetailVisionPOS({
         return;
       }
 
+      // F12.21 — IMPRESIÓN AUTOMÁTICA al cobrar (paridad con el viejo POS
+      // §6.8: `handleTicketAction` imprimía en la rama PAID). Un PEDIDO se
+      // imprime DOBLE (copia CLIENTE + copia COMERCIO) en un solo trabajo; una
+      // VENTA DIRECTA en copia única. Se dispara ANTES de limpiar el carrito
+      // porque el ticket cobrado (`pagado.data`) ya trae sus líneas y su
+      // `order_type` proyectado por el backend. Un fallo de impresión NO
+      // revierte el cobro (RN-87/DT-07): la venta ya está cerrada y el
+      // `TicketDeliveryPanel` (F8.5) queda como reimpresión manual.
+      const ticketCobrado = pagado.data;
+      if (ticketCobrado) {
+        const esPedidoCobrado = ticketCobrado.order_type === 'PEDIDO';
+        const html = esPedidoCobrado
+          ? combinarCopiasPedido(ticketCobrado)
+          : generarTicketHTML(ticketCobrado);
+        const impresion = imprimirTicket(html);
+        if (!impresion || impresion.outcome !== 'ok') {
+          setBanner({
+            tipo: 'aviso',
+            mensaje:
+              'La venta se cobró, pero no se pudo imprimir el ticket. Usa "Imprimir" en el paso de entrega.',
+          });
+        }
+      }
+
       // Cobro verificado: limpieza del carrito (prohibición #2).
       await carrito.clearCart();
       setCheckoutAbierto(false);
@@ -1127,6 +1159,11 @@ export default function RetailVisionPOS({
           onCancelar={() => setCheckoutAbierto(false)}
           procesando={acciones.enviando}
           error={error}
+          // F12.21 — Revisión pre-cobro de un PEDIDO (paridad con el viejo POS
+          // §6.8). Se pasa el bloque `order_*` y las líneas para que el modal
+          // muestre el panel "Confirmar con el Cliente" antes de cobrar.
+          orderData={bloquePedido}
+          lineas={carrito.lineas}
           // P5 — Monto mínimo para pedidos con política parcial.
           // Solo aplica si es un PEDIDO con política < 100%.
           montoMinimo={
