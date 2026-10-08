@@ -24,7 +24,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from routers import catalog, cash, ia, orders, pos, terminals
+from routers import catalog, cash, ia, notifications, orders, pos, terminals
 from rules import ReglaViolada
 
 app = FastAPI(
@@ -72,6 +72,10 @@ app.include_router(terminals.router)
 app.include_router(cash.router)
 app.include_router(ia.router)
 app.include_router(orders.router)
+# F12.22 — Contrato 27: encolado del ticket (Outbox). Estaba declarado desde
+# la FASE 8.0 pero nunca implementado; el POS recibía 404 al enviar por
+# WhatsApp/email. Este router cierra ese hueco.
+app.include_router(notifications.router)
 
 
 @app.get("/health", tags=["salud"])

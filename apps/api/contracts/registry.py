@@ -749,25 +749,28 @@ CONTRATOS: tuple[Contrato, ...] = (
         proveedor="Notificaciones",
         operacion="POST /notifications/enqueue-ticket",
         entrada={
-            "ticket_id": "String",
-            "canal": "String = 'whatsapp'",
-            "destino": "String",
-            "payload": "Dict",
+            "evento_id": "String (clave de idempotencia, RN-86)",
+            "ticket_uuid": "UUID | None",
+            "canales": "List[String] (WHATSAPP | EMAIL, RN-89)",
+            "destinatario": "Dict ({telefono} | {email}, RN-90)",
+            "payload": "Dict (folio, total, items, fecha)",
         },
         salida={
             "encolado": "Boolean",
-            "envio_id": "String",
+            "mensajes": "List[{canal, estado, envio_id}]",
         },
         garantias=(
             "ENCOLA el envío del ticket (patrón Outbox, Regla de Oro #7).",
             "El POS encola dentro de la transacción del ticket; el worker envía después.",
             "El POS NUNCA envía directamente: solo encola.",
+            "Idempotente por `evento_id` + canal (RN-86): reintentar no duplica.",
         ),
         errores=(
-            "400 si `destino` está vacío o `canal` no es soportado.",
+            "400 si `canales` está vacío, un canal no es soportado (RN-89) "
+            "o el destino no corresponde al canal (RN-90).",
             "503 `NOTIFICACIONES_NO_DISPONIBLE` si la cola no responde; el POS no bloquea la venta.",
         ),
-        estado_hoy="FASE 8.0",
+        estado_hoy="FASE 12.22",
     ),
     # ── §15 Caja — Eliminar movimiento (proveedor: Caja — FASE 10.6.2) ─────
     Contrato(

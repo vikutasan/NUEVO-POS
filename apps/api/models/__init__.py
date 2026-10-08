@@ -18,6 +18,7 @@ from .audit import PosAuditLog
 from .cash import CashMovement, CashSession
 from .catalog import Category, Product, ProductTechnicalSheet
 from .heladeria import HeladeriaProductConfig, TicketItemComponent
+from .notifications import NotificationOutbox
 from .orders import Order
 from .pos import TerminalLock, TerminalSession, Ticket, TicketItem
 from .settings import SystemSetting
@@ -44,6 +45,8 @@ __all__ = [
     "ProductTechnicalSheet",
     # Pedidos
     "Order",
+    # Notificaciones (Outbox — FASE 12.22, contrato 27)
+    "NotificationOutbox",
     # Configuración transversal (DT-06 — FASE 7.5.1a)
     "SystemSetting",
     # Almacén (ledger)
