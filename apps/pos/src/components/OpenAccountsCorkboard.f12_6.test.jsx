@@ -17,7 +17,9 @@
  *   2. Cada post-it lleva un pin (el círculo rojo que lo sujeta).
  *   3. La rotación es DETERMINISTA (estable entre renders, no `Math.random`).
  *   4. El color del post-it depende de la terminal (mapa heredado).
- *   5. Se muestra el tipo de pedido, el cliente y el teléfono.
+ *   5. Se muestra el tipo de pedido, el cliente y la entrega (paridad con el
+ *      viejo POS: badge "PEDIDO TENTATIVO" + línea "🚗 DOMICILIO"/"🏪 PICK UP";
+ *      el teléfono NO se muestra, igual que el viejo POS).
  *   6. Se muestra el capturista (nombre resuelto, no UUID).
  *   7. Se muestra la hora formateada a partir del instante UTC (RN-78).
  *   8. Un `reason` desconocido no rompe: cae a un mensaje genérico.
@@ -203,8 +205,8 @@ describe('F12.6 — criterio 4: el color del post-it depende de la terminal', ()
 // 5. Tipo de pedido, cliente y teléfono
 // ---------------------------------------------------------------------------
 
-describe('F12.6 — criterio 5: tipo de pedido, cliente y teléfono', () => {
-  it('muestra el tipo de pedido, el cliente y el teléfono', async () => {
+describe('F12.6 — criterio 5: tipo de pedido, cliente y entrega', () => {
+  it('muestra el badge TENTATIVO, el cliente y la entrega (sin teléfono)', async () => {
     render(
       <OpenAccountsCorkboard
         terminalId="T6"
@@ -216,9 +218,30 @@ describe('F12.6 — criterio 5: tipo de pedido, cliente y teléfono', () => {
       expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
-    expect(screen.getByText(/PEDIDO/)).toBeTruthy();
+    // PARIDAD con el viejo POS: badge exacto "PEDIDO TENTATIVO".
+    expect(screen.getByText(/PEDIDO TENTATIVO/)).toBeTruthy();
     expect(screen.getByText(/Juan Pérez/)).toBeTruthy();
-    expect(screen.getByText(/5512345678/)).toBeTruthy();
+    // Línea de entrega con emoji (DOMICILIO → 🚗 DOMICILIO).
+    expect(screen.getByText(/🚗 DOMICILIO/)).toBeTruthy();
+    // El viejo POS NO mostraba el teléfono: no debe aparecer.
+    expect(screen.queryByText(/5512345678/)).toBeNull();
+  });
+
+  it('mapea PICKUP a la etiqueta "🏪 PICK UP"', async () => {
+    render(
+      <OpenAccountsCorkboard
+        terminalId="T6"
+        servicioCuentas={servicioCon([
+          cuentaCompleta({ delivery_type: 'PICKUP' }),
+        ])}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
+    });
+
+    expect(screen.getByText(/🏪 PICK UP/)).toBeTruthy();
   });
 
   it('una venta directa NO muestra el bloque de pedido', async () => {

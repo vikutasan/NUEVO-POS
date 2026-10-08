@@ -111,6 +111,24 @@ function formatearTotal(valor) {
 }
 
 /**
+ * Etiqueta de entrega del post-it — heredada del viejo POS.
+ *
+ * POR QUÉ: el viejo POS mostraba, como línea propia, `🚗 DOMICILIO` o
+ * `🏪 PICK UP` según `delivery_type`. El nuevo POS concatenaba el valor CRUDO
+ * al badge (`📦 PEDIDO · DOMICILIO`), perdiendo el emoji y la separación visual.
+ * Aquí se restaura el mapeo exacto del viejo POS (FIX_PIZARRON_PARIDAD_POSTIT).
+ */
+function etiquetaEntrega(deliveryType) {
+  if (!deliveryType) return null;
+  const valor = String(deliveryType).toUpperCase();
+  if (valor === 'DOMICILIO' || valor === 'DELIVERY') return '🚗 DOMICILIO';
+  if (valor === 'PICKUP' || valor === 'PICK UP' || valor === 'RECOLECCION') {
+    return '🏪 PICK UP';
+  }
+  return String(deliveryType);
+}
+
+/**
  * Traduce el `reason` del contrato a un mensaje humano.
  */
 function mensajeDeError(reason) {
@@ -301,23 +319,23 @@ export default function OpenAccountsCorkboard({
                     )}
                   </div>
 
-                  {/* Tipo de pedido + cliente */}
+                  {/* Tipo de pedido + cliente — PARIDAD con el viejo POS
+                      (FIX_PIZARRON_PARIDAD_POSTIT): badge "PEDIDO TENTATIVO",
+                      línea de entrega con emoji y SIN teléfono (el viejo no lo
+                      mostraba). */}
                   {cuenta.order_type === 'PEDIDO' ? (
                     <div className="mb-2 lg:mb-4">
                       <span className="inline-block bg-orange-600 text-white text-[10px] md:text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded shadow-sm mb-1">
-                        📦 PEDIDO
-                        {cuenta.delivery_type
-                          ? ` · ${cuenta.delivery_type}`
-                          : ''}
+                        📦 PEDIDO TENTATIVO
                       </span>
                       {cuenta.customer_name && (
                         <h4 className="text-sm md:text-xl font-black uppercase tracking-tighter leading-none mb-1 text-black truncate">
                           {cuenta.customer_name}
                         </h4>
                       )}
-                      {cuenta.customer_phone && (
+                      {etiquetaEntrega(cuenta.delivery_type) && (
                         <p className="text-[10px] md:text-xs font-bold text-orange-900 uppercase truncate">
-                          📞 {cuenta.customer_phone}
+                          {etiquetaEntrega(cuenta.delivery_type)}
                         </p>
                       )}
                     </div>
