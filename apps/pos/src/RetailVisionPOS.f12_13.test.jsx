@@ -209,7 +209,7 @@ async function agregarYAbrirPago() {
   });
   fireEvent.click(cobrar);
 
-  fireEvent.click(await screen.findByRole('button', { name: /Tarjeta/i }));
+  fireEvent.click(await screen.findByRole('button', { name: /Débito/i }));
   const confirmar = await screen.findByRole('button', { name: /CONFIRMAR PAGO/i });
   await waitFor(() => {
     expect(confirmar.disabled).toBe(false);

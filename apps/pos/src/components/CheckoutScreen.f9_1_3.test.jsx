@@ -65,9 +65,17 @@ function escribirMonto(valor) {
   fireEvent.change(inputMonto(), { target: { value: String(valor) } });
 }
 
-/** Selecciona un método de pago por su etiqueta visible. */
+/**
+ * Selecciona un método de pago por su etiqueta visible.
+ *
+ * F9.1.5.0 — la tarjeta se desdobla en Débito y Crédito (sin QR). Los tests
+ * históricos llaman `elegirMetodo('Tarjeta')`; se mapea a "Débito" para no
+ * tocar cada llamada (el comportamiento verificado — cobro con tarjeta — es el
+ * mismo: se envía `metodo: 'DEBITO'`).
+ */
 function elegirMetodo(etiqueta) {
-  fireEvent.click(screen.getByText(etiqueta));
+  const visible = etiqueta === 'Tarjeta' ? 'Débito' : etiqueta;
+  fireEvent.click(screen.getByText(visible));
 }
 
 /** Localiza el botón "Agregar pago" (su etiqueta incluye el método). */
@@ -265,7 +273,8 @@ describe('FIX cobro parcial — D2: el teclado NO desaparece al elegir tarjeta',
     fireEvent.click(botonAgregarPago());
     const lista = screen.getByLabelText('Abonos agregados');
     expect(lista.querySelectorAll('li')).toHaveLength(1);
-    expect(lista.textContent).toContain('Tarjeta');
+    // F9.1.5.0 — el abono de tarjeta se etiqueta "Débito".
+    expect(lista.textContent).toContain('Débito');
   });
 
   it('permite un pago mixto: efectivo parcial + tarjeta parcial', () => {

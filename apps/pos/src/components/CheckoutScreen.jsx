@@ -76,9 +76,18 @@ function formatearPrecio(valor) {
   });
 }
 
+/**
+ * F9.1.5.0 — Métodos de pago de primer nivel (UX heredada del viejo POS).
+ *
+ * El viejo POS desdobla la tarjeta en DEBITO / CREDITO (y un QR que el nuevo
+ * POS NUNCA tuvo). Aquí se hereda ese desdoble SIN el QR: cuatro botones de
+ * primer nivel. El backend ya acepta DEBITO y CREDITO como métodos de primera
+ * clase (`METODOS_VALIDOS`), así que no hay cambio de contrato.
+ */
 const METODOS_PAGO = [
   { id: 'EFECTIVO', etiqueta: 'Efectivo', icono: '💵' },
-  { id: 'TARJETA', etiqueta: 'Tarjeta', icono: '💳' },
+  { id: 'DEBITO', etiqueta: 'Débito', icono: '💳' },
+  { id: 'CREDITO', etiqueta: 'Crédito', icono: '💳' },
   { id: 'TRANSFERENCIA', etiqueta: 'Transferencia', icono: '🏦' },
 ];
 
@@ -89,8 +98,6 @@ const BILLETES_RAPIDOS = [50, 100, 200, 500];
 function etiquetaMetodo(metodo) {
   const encontrado = METODOS_PAGO.find((m) => m.id === metodo);
   if (encontrado) return encontrado.etiqueta;
-  if (metodo === 'DEBITO') return 'Tarjeta (débito)';
-  if (metodo === 'CREDITO') return 'Tarjeta (crédito)';
   return metodo;
 }
 
@@ -159,7 +166,14 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
     return null;
   }, [procesando, hayAbonos, resumen.faltante, esEfectivo, montoCapturado, minimo]);
 
-  /** Método real que se envía al backend (TARJETA → DEBITO por defecto). */
+  /**
+   * Método real que se envía al backend.
+   *
+   * F9.1.5.0 — ya no existe el id de UI `TARJETA`: la tarjeta se desdobla en
+   * `DEBITO` / `CREDITO` como botones de primer nivel. Se conserva el mapeo
+   * `TARJETA → DEBITO` por retrocompatibilidad (tests/llamadas antiguas), pero
+   * la UI ya no lo produce.
+   */
   function metodoCanonico(m) {
     if (m === 'TARJETA') return 'DEBITO';
     return METODOS_VALIDOS.includes(m) ? m : 'EFECTIVO';
@@ -230,7 +244,8 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
   function manejarEditar(abono) {
     setEditandoId(abono.id);
     setMontoAbono(String(abono.monto));
-    setMetodo(abono.metodo === 'DEBITO' || abono.metodo === 'CREDITO' ? 'TARJETA' : abono.metodo);
+    // F9.1.5.0 — DEBITO/CREDITO son métodos de primer nivel; se cargan tal cual.
+    setMetodo(abono.metodo);
   }
 
   /**
@@ -338,8 +353,8 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
             </div>
           ) : null}
 
-          {/* 1. Método de pago */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* 1. Método de pago (F9.1.5.0: 4 métodos de primer nivel, sin QR) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {METODOS_PAGO.map((m) => (
               <button
                 key={m.id}
@@ -392,28 +407,75 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
               </div>
             ) : null}
 
-            {/* Teclado numérico táctil (F9.0.2) — SIEMPRE visible (FIX D2):
-                antes vivía dentro del bloque `esEfectivo` y desaparecía al
-                elegir tarjeta/transferencia. */}
-            <TecladoNumerico
-              valor={montoAbono}
-              onCambiar={setMontoAbono}
-              deshabilitado={procesando}
-            />
+            {/* F9.1.5.1 — Teclado + "+ Agregar pago" en la MISMA fila, con el
+                botón a la DERECHA y grande (UX heredada del viejo POS). El
+                texto se conserva ("+ Agregar pago"), solo cambia de posición. */}
+            <div className="flex gap-3">
+              <div className="flex-grow">
+                {/* Teclado numérico táctil (F9.0.2) — SIEMPRE visible (FIX D2):
+                    antes vivía dentro del bloque `esEfectivo` y desaparecía al
+                    elegir tarjeta/transferencia. */}
+                <TecladoNumerico
+                  valor={montoAbono}
+                  onCambiar={setMontoAbono}
+                  deshabilitado={procesando}
+                />
+              </div>
+
+              {editandoId ? (
+                <div className="w-24 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={manejarGuardarEdicion}
+                    disabled={procesando}
+                    className="flex-1 min-h-tactil rounded-canon35 bg-acento text-fondo-profundo font-bold text-xs uppercase leading-tight transition hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Guardar abono
+                  </button>
+                  <button
+                    type="button"
+                    onClick={manejarCancelarEdicion}
+                    disabled={procesando}
+                    className="flex-1 min-h-tactil rounded-canon35 text-crema-ticket border border-white/20 hover:border-peligro hover:text-peligro text-xs uppercase leading-tight transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={manejarAgregarPago}
+                  disabled={procesando || montoCapturado <= 0}
+                  className="w-24 min-h-tactil rounded-canon35 bg-acento text-fondo-profundo font-bold flex flex-col items-center justify-center gap-1 transition hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span aria-hidden="true" className="text-2xl">➕</span>
+                  <span className="text-xs uppercase leading-none">Agregar</span>
+                  <span className="text-xs uppercase leading-none">pago</span>
+                </button>
+              )}
+            </div>
 
             {!hayAbonos && mensajeValidacion ? (
               <p className="text-sm text-peligro font-semibold">{mensajeValidacion}</p>
             ) : null}
           </div>
 
-          {/* 3. Abonos del ticket (F9.1.3) — el botón "Agregar pago" es la
-              acción primaria y está SIEMPRE disponible (FIX D1). */}
-          <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
+        </div>
+
+        {/* Columna lateral: pagos + resumen + acciones (w-full lg:w-1/3, R-01).
+            F9.1.5.2 — los abonos se cargan AQUÍ (panel derecho), como el viejo
+            POS; se elimina el resumen duplicado que vivía en la izquierda. */}
+        <div className="w-full lg:w-1/3 lg:flex-shrink-0 bg-fondo-profundo p-6 flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm text-crema-ticket/60">Total a cobrar</span>
+            <span className="text-3xl font-bold text-acento">{formatearPrecio(total)}</span>
+          </div>
+
+          {/* Lista de abonos agregados (F9.1.5.2 — panel derecho) */}
+          <div className="flex flex-col gap-2">
             <span className="text-sm font-semibold text-crema-ticket/70">
               Abonos del ticket
             </span>
-
-            {/* Lista de abonos agregados */}
             {hayAbonos ? (
               <ul className="flex flex-col gap-2" aria-label="Abonos agregados">
                 {abonos.map((a) => (
@@ -459,51 +521,6 @@ export default function CheckoutScreen({ total, onConfirmar, onCancelar, procesa
                 Sin abonos: se cobrará el total con el método seleccionado.
               </p>
             )}
-
-            {/* Acción primaria: agregar el monto capturado como abono. */}
-            <div className="flex items-center gap-2">
-              {editandoId ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={manejarGuardarEdicion}
-                    disabled={procesando}
-                    className="flex-1 min-h-tactil px-4 rounded-canon35 bg-acento text-fondo-profundo font-bold transition hover:brightness-95"
-                  >
-                    Guardar abono
-                  </button>
-                  <button
-                    type="button"
-                    onClick={manejarCancelarEdicion}
-                    disabled={procesando}
-                    className="min-h-tactil px-4 rounded-canon35 text-crema-ticket border border-white/20 hover:border-peligro hover:text-peligro transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={manejarAgregarPago}
-                  disabled={procesando || montoCapturado <= 0}
-                  className="flex-1 min-h-tactil px-4 rounded-canon35 bg-acento text-fondo-profundo font-bold transition hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  + Agregar pago ({esEfectivo ? 'Efectivo' : etiquetaMetodo(metodoCanonico(metodo))})
-                </button>
-              )}
-            </div>
-
-            {hayAbonos && mensajeValidacion ? (
-              <p className="text-sm text-peligro font-semibold">{mensajeValidacion}</p>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Columna lateral: resumen y acciones (w-full lg:w-1/3, fluida R-01) */}
-        <div className="w-full lg:w-1/3 lg:flex-shrink-0 bg-fondo-profundo p-6 flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm text-crema-ticket/60">Total a cobrar</span>
-            <span className="text-3xl font-bold text-acento">{formatearPrecio(total)}</span>
           </div>
 
           {hayAbonos ? (

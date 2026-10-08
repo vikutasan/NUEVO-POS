@@ -184,9 +184,9 @@ async function agregarYCobrar() {
   fireEvent.click(cobrar);
   // El modal arranca en EFECTIVO, y con EFECTIVO el botón "CONFIRMAR PAGO"
   // queda deshabilitado hasta capturar un monto >= total (`puedeCobrar`).
-  // Se elige "Tarjeta" para habilitarlo sin capturar efectivo: así el clic
+  // Se elige "Débito" para habilitarlo sin capturar efectivo: así el clic
   // llega a `onConfirmar` y el cobro se dispara.
-  fireEvent.click(await screen.findByRole('button', { name: /Tarjeta/i }));
+  fireEvent.click(await screen.findByRole('button', { name: /Débito/i }));
   const confirmar = await screen.findByRole('button', {
     name: /CONFIRMAR PAGO/i,
   });
@@ -277,9 +277,9 @@ describe('F8.6 — Cableado end-to-end (CRM + Notificaciones)', () => {
       expect(cobrar.disabled).toBe(false);
     });
     fireEvent.click(cobrar);
-    // Igual que `agregarYCobrar`: "Tarjeta" habilita "CONFIRMAR PAGO" sin
+    // Igual que `agregarYCobrar`: "Débito" habilita "CONFIRMAR PAGO" sin
     // capturar efectivo (con EFECTIVO el botón queda deshabilitado).
-    fireEvent.click(await screen.findByRole('button', { name: /Tarjeta/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Débito/i }));
     const confirmar = await screen.findByRole('button', {
       name: /CONFIRMAR PAGO/i,
     });

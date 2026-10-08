@@ -231,7 +231,7 @@ function botonProductoA() {
 
 /**
  * Agrega el producto A al carrito y cobra, replicando el flujo real:
- * producto → COBRAR (abre el modal) → Tarjeta (habilita sin capturar efectivo)
+ * producto → COBRAR (abre el modal) → Débito (habilita sin capturar efectivo)
  * → CONFIRMAR PAGO. El cobro dispara `cobrarTicket`.
  */
 async function agregarYCobrar() {
@@ -250,8 +250,8 @@ async function agregarYCobrar() {
   fireEvent.click(cobrar);
 
   // El modal arranca en EFECTIVO (CONFIRMAR PAGO deshabilitado hasta capturar
-  // un monto >= total). Se elige "Tarjeta" para habilitarlo sin capturar.
-  fireEvent.click(await screen.findByRole('button', { name: /Tarjeta/i }));
+  // un monto >= total). Se elige "Débito" para habilitarlo sin capturar.
+  fireEvent.click(await screen.findByRole('button', { name: /Débito/i }));
   const confirmar = await screen.findByRole('button', { name: /CONFIRMAR PAGO/i });
   await waitFor(() => {
     expect(confirmar.disabled).toBe(false);

@@ -168,9 +168,9 @@ async function agregarYAbrirPago({ conCaja = false } = {}) {
     return cobrar;
   }
   fireEvent.click(cobrar);
-  // El modal arranca en EFECTIVO; se elige "Tarjeta" para habilitar el botón
+  // El modal arranca en EFECTIVO; se elige "Débito" para habilitar el botón
   // "CONFIRMAR PAGO" sin capturar efectivo.
-  fireEvent.click(await screen.findByRole('button', { name: /Tarjeta/i }));
+  fireEvent.click(await screen.findByRole('button', { name: /Débito/i }));
   const confirmar = await screen.findByRole('button', {
     name: /CONFIRMAR PAGO/i,
   });

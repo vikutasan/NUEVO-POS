@@ -221,10 +221,13 @@ describe('SalesReceipt — ticket (cantidad, banner, total)', () => {
 // ---------------------------------------------------------------------------
 
 describe('CheckoutScreen — cobro (efectivo, tarjeta, cambio, validación)', () => {
-  it('renderiza los 3 métodos de pago y el total', () => {
+  it('renderiza los 4 métodos de pago y el total', () => {
     render(<CheckoutScreen total={100} onConfirmar={() => {}} onCancelar={() => {}} />);
+    // F9.1.5.0 — la tarjeta se desdobla en Débito y Crédito (sin QR), como el
+    // viejo POS. Cuatro métodos de primer nivel.
     expect(screen.getByText('Efectivo')).toBeTruthy();
-    expect(screen.getByText('Tarjeta')).toBeTruthy();
+    expect(screen.getByText('Débito')).toBeTruthy();
+    expect(screen.getByText('Crédito')).toBeTruthy();
     expect(screen.getByText('Transferencia')).toBeTruthy();
     expect(screen.getByText('$100.00')).toBeTruthy();
   });
@@ -285,12 +288,12 @@ describe('CheckoutScreen — cobro (efectivo, tarjeta, cambio, validación)', ()
   it('F3.4: con tarjeta cobra el total exacto sin capturar efectivo', () => {
     const onConfirmar = vi.fn();
     render(<CheckoutScreen total={100} onConfirmar={onConfirmar} onCancelar={() => {}} />);
-    fireEvent.click(screen.getByText('Tarjeta'));
+    // F9.1.5.0 — "Débito" es un método de primer nivel (ya no hay "Tarjeta").
+    fireEvent.click(screen.getByText('Débito'));
     const boton = screen.getByRole('button', { name: /CONFIRMAR PAGO/ });
     expect(boton.disabled).toBe(false);
     fireEvent.click(boton);
-    // F9.1.3: la UI "Tarjeta" se canoniza a DEBITO (RN-57 solo acepta
-    // EFECTIVO/CREDITO/DEBITO/TRANSFERENCIA; "TARJETA" sería rechazado).
+    // RN-57 solo acepta EFECTIVO/CREDITO/DEBITO/TRANSFERENCIA.
     // 3ª vuelta (7 Oct 2026): el pago único envía `monto` EXPLÍCITO = total.
     expect(onConfirmar).toHaveBeenCalledWith({
       metodo: 'DEBITO',
