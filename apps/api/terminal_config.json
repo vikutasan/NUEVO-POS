@@ -2,31 +2,43 @@
   {
     "id": "TERM-01",
     "name": "Terminal 1",
-    "icon": "🖥️"
+    "icon": "🖥️",
+    "color": null
   },
   {
     "id": "TERM-02",
     "name": "Terminal 2",
-    "icon": "🖥️"
+    "icon": "🖥️",
+    "color": null
   },
   {
     "id": "TERM-03",
     "name": "Terminal 3",
-    "icon": "🖥️"
+    "icon": "🖥️",
+    "color": null
   },
   {
     "id": "TERM-04",
     "name": "Terminal 4",
-    "icon": "🖥️"
+    "icon": "🖥️",
+    "color": null
   },
   {
     "id": "TERM-05",
     "name": "Terminal 5",
-    "icon": "🖥️"
+    "icon": "🖥️",
+    "color": null
   },
   {
     "id": "TERM-06",
     "name": "Terminal 6",
-    "icon": "🖥️"
+    "icon": "🖥️",
+    "color": null
+  },
+  {
+    "id": "CAJA",
+    "name": "Caja",
+    "icon": "💰",
+    "color": null
   }
 ]

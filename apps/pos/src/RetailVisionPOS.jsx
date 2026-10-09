@@ -92,6 +92,12 @@ import { descargarCatalogoPDF } from './components/CatalogoPDF.jsx';
 // viejo POS (§6.8): el pizarrón se abre desde el header y recupera al carrito.
 import OpenAccountsCorkboard from './components/OpenAccountsCorkboard.jsx';
 import { listarCuentasAbiertas } from './services/openAccountsService.js';
+// FASE 13.3 — Color de post-it por terminal. La pantalla lee la config de
+// terminales (contrato de `/pos/terminals/config`) y construye el mapa
+// `coloresPorTerminal` que el pizarrón usa para pintar cada post-it. Antes el
+// mapa vivía como constante local en el pizarrón; ahora es CONFIGURABLE desde
+// el gestor de terminales (decisión del usuario, 9 Oct 2026).
+import { fetchTerminalConfig } from './services/terminalService.js';
 // F12.20 — Persistir la programación de un ticket YA creado (contrato 31).
 // Cierra el hueco del flujo REAL "productos primero, pedido después": el ticket
 // nace VENTA_DIRECTA (contrato 29) y LUEGO se programa como PEDIDO. Sin esto,
@@ -166,6 +172,12 @@ export default function RetailVisionPOS({
   const [checkoutAbierto, setCheckoutAbierto] = useState(false);
   const [ticketAbierto, setTicketAbierto] = useState(false);
   const [banner, setBanner] = useState(null);
+  // FASE 13.3 — Color de post-it por terminal. Mapa `{ [terminal_id]: token }`
+  // construido desde la config de terminales (contrato de `/pos/terminals/config`).
+  // El pizarrón lo usa para pintar cada post-it; un terminal sin color cae al
+  // amarillo por defecto (`COLOR_SIN_ASIGNAR`). Sin semilla: el dueño lo
+  // configura desde el gestor (decisión del usuario, 9 Oct 2026).
+  const [coloresPorTerminal, setColoresPorTerminal] = useState({});
   // F7.5/F7.6 — Visibilidad de los paneles de IA.
   //   - Tema: reubicado a la landing (TerminalSelector) — es preferencia, no acción.
   //   - Voz: overlay abierto desde el header, con gate de disponibilidad.
@@ -327,6 +339,32 @@ export default function RetailVisionPOS({
         if (activo) setError(causa.message || 'Error al cargar el catálogo');
       } finally {
         if (activo) setCargando(false);
+      }
+    })();
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  // ── FASE 13.3 — Color de post-it por terminal ──────────────────────────────
+  // Se lee la config de terminales (contrato de `/pos/terminals/config`) y se
+  // construye el mapa `{ [terminal_id]: token }` que el pizarrón usa para pintar
+  // cada post-it. Los terminales SIN color se omiten del mapa: el pizarrón cae
+  // al amarillo por defecto (`COLOR_SIN_ASIGNAR`). Es un fallo SILENCIOSO: si el
+  // API no responde, el pizarrón sigue funcionando con el color por defecto.
+  useEffect(() => {
+    let activo = true;
+    (async () => {
+      try {
+        const config = await fetchTerminalConfig();
+        if (!activo) return;
+        const mapa = {};
+        for (const t of config || []) {
+          if (t && t.id && t.color) mapa[t.id] = t.color;
+        }
+        setColoresPorTerminal(mapa);
+      } catch {
+        // Sin color configurado: el pizarrón usa el amarillo por defecto.
       }
     })();
     return () => {
@@ -1307,6 +1345,7 @@ export default function RetailVisionPOS({
           <OpenAccountsCorkboard
             terminalId={terminalEfectiva}
             cajaHabilitada={Boolean(turnoCaja)}
+            coloresPorTerminal={coloresPorTerminal}
             refrescarSenal={refrescarSenal}
             onRecuperar={recuperarCuentaAlCarrito}
             onCerrar={() => {

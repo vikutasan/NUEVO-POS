@@ -72,6 +72,30 @@ async def entorno():
         await ent.cerrar()
 
 
+@pytest.fixture(autouse=True)
+def aislar_config_terminales():
+    """Aísla `terminal_config.json` entre tests (autouse).
+
+    La config de terminales se persiste en un ARCHIVO real junto al API, no en
+    la BD. Los tests que la escriben (`POST /config`) contaminaban a los demás:
+    un test dejaba 2 terminales en el archivo y los siguientes fallaban con
+    `KeyError` al buscar `TERM-03`, `CAJA`, etc. Este fixture guarda el archivo
+    antes de cada test y lo RESTAURA al terminar, sin importar el orden de
+    ejecución. Si el archivo no existía, lo elimina al final.
+    """
+    from routers.terminals import _RUTA_CONFIG
+
+    existia = _RUTA_CONFIG.exists()
+    respaldo = _RUTA_CONFIG.read_text(encoding="utf-8") if existia else None
+    try:
+        yield
+    finally:
+        if existia and respaldo is not None:
+            _RUTA_CONFIG.write_text(respaldo, encoding="utf-8")
+        elif _RUTA_CONFIG.exists():
+            _RUTA_CONFIG.unlink()
+
+
 async def _limpiar(ent: _Entorno) -> None:
     """Borra los datos de prueba (deja las tablas limpias).
 
@@ -456,15 +480,23 @@ async def test_criterio8_guardar_y_releer_config(entorno):
         assert r.status_code == 200, r.text
         leidas = (await cliente.get("/pos/terminals/config")).json()
     assert [t["id"] for t in leidas] == ["C1", "C2"]
-    # Restaurar la configuración por defecto para no contaminar otros tests.
+    # Restaurar la configuración por defecto (6 terminales + CAJA, sin color)
+    # para no contaminar otros tests. El fixture autouse también la restaura,
+    # pero dejarla explícita mantiene el test autocontenido.
     async with _cliente() as cliente:
         await cliente.post(
             "/pos/terminals/config",
             json={
                 "terminals": [
-                    {"id": f"TERM-{n:02d}", "name": f"Terminal {n}", "icon": "🖥️"}
+                    {
+                        "id": f"TERM-{n:02d}",
+                        "name": f"Terminal {n}",
+                        "icon": "🖥️",
+                        "color": None,
+                    }
                     for n in range(1, 7)
                 ]
+                + [{"id": "CAJA", "name": "Caja", "icon": "💰", "color": None}]
             },
         )
 
@@ -585,3 +617,106 @@ async def test_criterio11_caja_y_candado_son_independientes(entorno):
     # TERM-02: candado vigente, sin caja.
     assert estado["TERM-02"]["caja_habilitada"] is False
     assert estado["TERM-02"]["occupier_id"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Criterio 12 — Color de post-it por terminal (selector de color, 9 Oct 2026).
+#
+# Decisiones del usuario:
+#   - SIN semilla: las terminales arrancan sin color (el pizarrón las pinta
+#     amarillas, `bg-yellow-100`).
+#   - CAJA es configurable (entra como una terminal más).
+#   - NO se permiten colores repetidos (400 si dos terminales comparten color).
+#   - La paleta son los 21 colores de `PALETA_POST_ITS`.
+# ---------------------------------------------------------------------------
+
+
+def _config_base() -> list[dict]:
+    """Config mínima de dos terminales para los tests de color."""
+    return [
+        {"id": "TERM-01", "name": "Terminal 1", "icon": "🖥️"},
+        {"id": "TERM-02", "name": "Terminal 2", "icon": "🖥️"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_criterio12_config_incluye_color_none_por_defecto(entorno):
+    """Sin config guardada, cada terminal trae `color = None` (sin semilla)."""
+    await _limpiar(entorno)
+    async with _cliente() as cliente:
+        datos = (await cliente.get("/pos/terminals/config")).json()
+    assert all("color" in t for t in datos)
+    assert all(t["color"] is None for t in datos)
+
+
+@pytest.mark.asyncio
+async def test_criterio12_caja_es_terminal_configurable(entorno):
+    """CAJA aparece en la config por defecto (decisión del usuario)."""
+    await _limpiar(entorno)
+    async with _cliente() as cliente:
+        datos = (await cliente.get("/pos/terminals/config")).json()
+    ids = {t["id"] for t in datos}
+    assert "CAJA" in ids
+
+
+@pytest.mark.asyncio
+async def test_criterio12_guardar_color_valido_persiste(entorno):
+    """Guardar un color del catálogo responde 200 y se relee igual."""
+    await _limpiar(entorno)
+    config = _config_base()
+    config[0]["color"] = "bg-cyan-300"
+    async with _cliente() as cliente:
+        r = await cliente.post("/pos/terminals/config", json={"terminals": config})
+        assert r.status_code == 200, r.text
+        datos = (await cliente.get("/pos/terminals/config")).json()
+    por_id = {t["id"]: t for t in datos}
+    assert por_id["TERM-01"]["color"] == "bg-cyan-300"
+    assert por_id["TERM-02"]["color"] is None
+
+
+@pytest.mark.asyncio
+async def test_criterio12_color_fuera_del_catalogo_400(entorno):
+    """Un color que no está en `PALETA_POST_ITS` responde 400."""
+    await _limpiar(entorno)
+    config = _config_base()
+    config[0]["color"] = "bg-magenta-999"
+    async with _cliente() as cliente:
+        r = await cliente.post("/pos/terminals/config", json={"terminals": config})
+    assert r.status_code == 400, r.text
+    assert "paleta" in r.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_criterio12_color_repetido_400(entorno):
+    """Dos terminales con el MISMO color responde 400 (no se permiten repetidos)."""
+    await _limpiar(entorno)
+    config = _config_base()
+    config[0]["color"] = "bg-pink-300"
+    config[1]["color"] = "bg-pink-300"
+    async with _cliente() as cliente:
+        r = await cliente.post("/pos/terminals/config", json={"terminals": config})
+    assert r.status_code == 400, r.text
+    assert "ya está en uso" in r.text
+
+
+@pytest.mark.asyncio
+async def test_criterio12_varias_sin_color_es_valido(entorno):
+    """Varias terminales SIN color a la vez es válido (None no cuenta para unicidad)."""
+    await _limpiar(entorno)
+    config = _config_base()
+    # Ambas sin color (color ausente) → 200.
+    async with _cliente() as cliente:
+        r = await cliente.post("/pos/terminals/config", json={"terminals": config})
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.asyncio
+async def test_criterio12_colores_distintos_es_valido(entorno):
+    """Dos terminales con colores DISTINTOS del catálogo es válido (200)."""
+    await _limpiar(entorno)
+    config = _config_base()
+    config[0]["color"] = "bg-cyan-300"
+    config[1]["color"] = "bg-pink-300"
+    async with _cliente() as cliente:
+        r = await cliente.post("/pos/terminals/config", json={"terminals": config})
+    assert r.status_code == 200, r.text

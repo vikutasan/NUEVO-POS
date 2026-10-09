@@ -169,14 +169,16 @@ describe('F12.6 — criterio 3: la rotación es determinista', () => {
 
 describe('F12.6 — criterio 4: el color del post-it depende de la terminal', () => {
   // BUG-02 (9 Oct 2026): el mapa de colores usa el vocabulario REAL del nuevo
-  // POS (`TERM-0X`, ver useTerminals.js F7.7d), no los ids viejos (`T6`). El
-  // viejo `T6` ahora cae al fallback; el equivalente es `TERM-06`.
-  // BUG-03 (Modificación colores): Se emplea la paleta expandida de 21 colores.
-  it('la terminal TERM-06 pinta el post-it de amarillo', async () => {
+  // POS (`TERM-0X`, ver useTerminals.js F7.7d), no los ids viejos (`T6`).
+  // FASE 13.3 (9 Oct 2026): el mapa ya NO es una constante local; el pizarrón
+  // recibe `coloresPorTerminal` como prop (lo construye RetailVisionPOS desde
+  // la config de terminales). El test lo pasa explícitamente.
+  it('la terminal TERM-06 pinta el post-it con el color configurado', async () => {
     const { container } = render(
       <OpenAccountsCorkboard
         terminalId="TERM-06"
         servicioCuentas={servicioCon([cuentaCompleta({ terminal_id: 'TERM-06' })])}
+        coloresPorTerminal={{ 'TERM-06': 'bg-yellow-300' }}
       />
     );
 
@@ -188,11 +190,12 @@ describe('F12.6 — criterio 4: el color del post-it depende de la terminal', ()
     expect(postIt.className).toContain('bg-yellow-300');
   });
 
-  it('la terminal CAJA pinta el post-it de naranja', async () => {
+  it('la terminal CAJA pinta el post-it con el color configurado', async () => {
     const { container } = render(
       <OpenAccountsCorkboard
         terminalId="CAJA"
         servicioCuentas={servicioCon([cuentaCompleta({ terminal_id: 'CAJA' })])}
+        coloresPorTerminal={{ CAJA: 'bg-orange-300' }}
       />
     );
 
@@ -202,6 +205,23 @@ describe('F12.6 — criterio 4: el color del post-it depende de la terminal', ()
 
     const postIt = container.querySelector('li');
     expect(postIt.className).toContain('bg-orange-300');
+  });
+
+  it('una terminal sin color configurado cae al amarillo por defecto', async () => {
+    const { container } = render(
+      <OpenAccountsCorkboard
+        terminalId="TERM-06"
+        servicioCuentas={servicioCon([cuentaCompleta({ terminal_id: 'TERM-06' })])}
+        coloresPorTerminal={{}}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
+    });
+
+    const postIt = container.querySelector('li');
+    expect(postIt.className).toContain('bg-yellow-100');
   });
 });
 

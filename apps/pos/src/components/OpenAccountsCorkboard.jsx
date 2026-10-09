@@ -41,6 +41,13 @@
 import React from 'react';
 
 import useOpenAccounts from '../hooks/useOpenAccounts.js';
+import {
+  PALETA_POST_ITS,
+  COLOR_SIN_ASIGNAR,
+} from '../constants/paletaPostIts.js';
+
+// Re-export para no romper a los consumidores históricos (tests, RetailVisionPOS).
+export { PALETA_POST_ITS };
 
 /**
  * Rotaciones deterministas de los post-its.
@@ -60,45 +67,23 @@ const ROTACIONES = [
 ];
 
 /**
- * Catálogo de colores disponibles para los post-its.
- *
- * Gama extraída de la imagen de diseño `COLORES-POST-ITS.png` (21 tonos:
- * azules/morados, rosas/rojos, amarillos/verdes). Se eligen pesos (200-400)
- * que garanticen contraste con el texto oscuro (#3d2b1f).
- *
- * BUG-03 (9 Oct 2026): este arreglo es el CATÁLOGO de dónde elegir. La
- * asignación de color por terminal es MANUAL (ver `COLOR_POR_TERMINAL`); NO se
- * elige por hash. Cuando se agregue una terminal nueva, se le asigna a mano un
- * color de esta lista. (Futuro: selector de color en el gestor de terminales.)
- */
-export const PALETA_POST_ITS = [
-  'bg-blue-400', 'bg-blue-300', 'bg-cyan-300', 'bg-sky-200', 'bg-violet-400', 'bg-purple-300', 'bg-fuchsia-200',
-  'bg-pink-300', 'bg-rose-400', 'bg-pink-400', 'bg-pink-200', 'bg-red-400', 'bg-red-300', 'bg-orange-400',
-  'bg-orange-300', 'bg-yellow-200', 'bg-amber-300', 'bg-yellow-300', 'bg-green-400', 'bg-lime-300', 'bg-emerald-300'
-];
-
-/**
- * Color del post-it por terminal — asignación MANUAL.
+ * Color del post-it por terminal — asignación MANUAL (FASE 13.3).
  *
  * POR QUÉ: el color es una señal visual de un vistazo ("¿de qué terminal es
- * esta cuenta?"). Se asigna a mano un color de `PALETA_POST_ITS` a cada
- * terminal. Una terminal que NO esté aquí sale AMARILLA CLARA (`bg-yellow-100`),
- * que es el aviso de "esta terminal no tiene color asignado".
+ * esta cuenta?"). El usuario asigna a mano un color de `PALETA_POST_ITS` a cada
+ * terminal desde el gestor de terminales; la elección se persiste en el backend
+ * (`terminal_config.json`) y llega aquí como la prop `coloresPorTerminal`.
+ *
+ * Una terminal que NO tenga color asignado sale AMARILLA CLARA
+ * (`COLOR_SIN_ASIGNAR`), que es el aviso de "esta terminal no tiene color".
  *
  * BUG-02 (9 Oct 2026): el mapa se heredó del viejo POS con las claves VIEJAS
  * (`T6`, `T3`, …), pero el nuevo POS unificó los ids a `TERM-01..TERM-06`
  * (ver `useTerminals.js`, F7.7d). Se tradujo al vocabulario real.
  * BUG-03 (9 Oct 2026): se adoptó la paleta nueva de la imagen de diseño.
+ * FASE 13.3 (9 Oct 2026): el mapa dejó de ser una constante local; ahora se
+ * recibe por prop (`coloresPorTerminal`) desde el gestor de terminales.
  */
-export const COLOR_POR_TERMINAL = {
-  'TERM-06': 'bg-yellow-300',
-  'TERM-05': 'bg-blue-300',
-  'TERM-04': 'bg-lime-300',
-  'TERM-03': 'bg-pink-300',
-  'TERM-02': 'bg-purple-300',
-  'TERM-01': 'bg-cyan-300',
-  CAJA: 'bg-orange-300',
-};
 
 /** Rotación estable para el post-it en la posición `indice`. */
 function rotacionDe(indice) {
@@ -108,12 +93,15 @@ function rotacionDe(indice) {
 /**
  * Color del post-it según la terminal.
  *
- * Asignación MANUAL: si la terminal está en `COLOR_POR_TERMINAL`, usa su color;
- * si no (terminal desconocida o sin color asignado), cae al amarillo claro
- * `bg-yellow-100`, que es el aviso visual de "sin color asignado".
+ * Asignación MANUAL: si la terminal tiene color en `coloresPorTerminal`, usa su
+ * color; si no (terminal desconocida o sin color asignado), cae al amarillo
+ * claro `COLOR_SIN_ASIGNAR`, que es el aviso visual de "sin color asignado".
+ *
+ * @param {string} terminal — el id de la terminal (p. ej. `TERM-01`).
+ * @param {Record<string, string>} [coloresPorTerminal] — mapa id → token.
  */
-export function colorDe(terminal) {
-  return COLOR_POR_TERMINAL[terminal] || 'bg-yellow-100';
+export function colorDe(terminal, coloresPorTerminal = {}) {
+  return coloresPorTerminal[terminal] || COLOR_SIN_ASIGNAR;
 }
 
 /**
@@ -181,6 +169,9 @@ function mensajeDeError(reason) {
  * @param {boolean} [props.cajaHabilitada]
  * @param {object} [props.servicioCuentas]
  * @param {object} [props.clienteApi]
+ * @param {Record<string, string>} [props.coloresPorTerminal] — mapa id → token
+ *   de color (FASE 13.3). Lo construye `RetailVisionPOS` desde la config de
+ *   terminales. Si falta, todos los post-its salen amarillos (`COLOR_SIN_ASIGNAR`).
  * @param {(ticket: object) => void} [props.onRecuperar]
  * @param {() => void} [props.onCerrar]
  */
@@ -189,6 +180,7 @@ export default function OpenAccountsCorkboard({
   cajaHabilitada = false,
   servicioCuentas,
   clienteApi,
+  coloresPorTerminal = {},
   // FIX_PIZARRON_NO_REFRESCA (8 Oct 2026) — Señal externa de refresco. El padre
   // la incrementa al enviar una cuenta al pizarrón; al cambiar, `useOpenAccounts`
   // vuelve a descargar la lista y el post-it nuevo aparece sin cerrar/reabrir.
@@ -315,6 +307,7 @@ export default function OpenAccountsCorkboard({
                 key={cuenta.id}
                 className={`group relative aspect-square min-h-tactil rounded-sm p-4 lg:p-6 shadow-[5px_15px_30px_-5px_rgba(0,0,0,0.3)] hover:shadow-[10px_25px_50px_-10px_rgba(0,0,0,0.4)] hover:-translate-y-2 hover:rotate-0 transition-all cursor-pointer flex flex-col justify-between ${colorDe(
                   cuenta.terminal_id,
+                  coloresPorTerminal,
                 )} ${rotacionDe(indice)}`}
                 onClick={() => manejarRecuperar(cuenta)}
                 role="button"

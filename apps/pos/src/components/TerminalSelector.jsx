@@ -16,6 +16,7 @@ import React, { useState } from 'react';
 import { useTerminals } from '../hooks/useTerminals.js';
 import { useTheme } from '../hooks/useTheme.js';
 import ThemeSelector from './ThemeSelector.jsx';
+import { PALETA_POST_ITS, etiquetaDeColor } from '../constants/paletaPostIts.js';
 const PRESET_ICONS = [
   { label: 'Monitor', value: '🖥️' },
   { label: 'Laptop', value: '💻' },
@@ -148,6 +149,7 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [editIcon, setEditIcon] = useState('');
+  const [editColor, setEditColor] = useState(null);
   const [toast, setToast] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -181,9 +183,31 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
   }
 
   /* ─── Gestión ─── */
-  function startEdit(t) { setEditingId(t.id); setEditName(t.name); setEditIcon(t.icon); }
-  function cancelEdit() { setEditingId(null); setEditName(''); setEditIcon(''); }
-  function applyEdit() { updateTerminal(editingId, { name: editName, icon: editIcon }); cancelEdit(); }
+  function startEdit(t) {
+    setEditingId(t.id);
+    setEditName(t.name);
+    setEditIcon(t.icon);
+    setEditColor(t.color ?? null);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditName('');
+    setEditIcon('');
+    setEditColor(null);
+  }
+  function applyEdit() {
+    updateTerminal(editingId, { name: editName, icon: editIcon, color: editColor });
+    cancelEdit();
+  }
+
+  /* ─── FASE 13.3 — Colores de post-it ──────────────────────────────────────
+     Decisión del usuario (9 Oct 2026): NO se permiten colores repetidos. Un
+     color ya asignado a OTRA terminal se bloquea (no se puede elegir). El
+     color de la terminal que se está editando NO cuenta como "en uso" (se
+     puede conservar). `null` (sin color) siempre es válido y no colisiona. */
+  function colorEnUso(token, exceptoId) {
+    return terminals.some(t => t.id !== exceptoId && t.color === token);
+  }
 
   /* ─── B-01 (F10.2) — Copiar URL de acceso directo ─────────────────────────
      UX heredada del viejo POS (§6.8): el gestor permite copiar la URL con el
@@ -315,6 +339,56 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
                           {p.value}
                         </button>
                       ))}
+                    </div>
+
+                    {/* FASE 13.3 — Selector de color del post-it.
+                        Los colores ya asignados a OTRAS terminales se bloquean
+                        (decisión del usuario: sin colores repetidos). */}
+                    <div data-testid={`paleta-color-${t.id}`}
+                         style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <span style={{ fontSize: '0.55rem', fontWeight: 900, textTransform: 'uppercase',
+                                     letterSpacing: '0.15em', opacity: 0.4, color: '#fff', textAlign: 'center' }}>
+                        Color del post-it
+                      </span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', justifyContent: 'center' }}>
+                        {/* Opción "sin color" (amarillo por defecto) */}
+                        <button
+                          type="button"
+                          data-testid={`color-${t.id}-ninguno`}
+                          title="Sin color (amarillo por defecto)"
+                          onClick={() => setEditColor(null)}
+                          style={{
+                            width: 26, height: 26, borderRadius: '0.4rem',
+                            border: editColor === null ? '2px solid #ea580c' : '1px solid rgba(255,255,255,0.2)',
+                            background: 'rgba(255,255,255,0.05)', color: '#fff',
+                            fontSize: '0.6rem', cursor: 'pointer', lineHeight: 1,
+                          }}>
+                          ∅
+                        </button>
+                        {PALETA_POST_ITS.map(token => {
+                          const enUso = colorEnUso(token, t.id);
+                          const seleccionado = editColor === token;
+                          return (
+                            <button
+                              key={token}
+                              type="button"
+                              data-testid={`color-${t.id}-${token}`}
+                              title={enUso ? `${etiquetaDeColor(token)} (en uso)` : etiquetaDeColor(token)}
+                              disabled={enUso}
+                              onClick={() => { if (!enUso) setEditColor(token); }}
+                              style={{
+                                width: 26, height: 26, borderRadius: '0.4rem',
+                                border: seleccionado ? '2px solid #ea580c' : '1px solid rgba(255,255,255,0.2)',
+                                cursor: enUso ? 'not-allowed' : 'pointer',
+                                opacity: enUso ? 0.2 : 1,
+                                transform: seleccionado ? 'scale(1.15)' : 'scale(1)',
+                                padding: 0,
+                              }}
+                              className={token}
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
                       <button onClick={applyEdit}

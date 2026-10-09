@@ -83,7 +83,26 @@ _RUTA_CONFIG = Path(__file__).resolve().parent.parent / "terminal_config.json"
 CONFIG_POR_DEFECTO: list[dict[str, str]] = [
     {"id": f"TERM-{n:02d}", "name": f"Terminal {n}", "icon": "🖥️"}
     for n in range(1, 7)
+] + [
+    # CAJA es una terminal configurable más (decisión del usuario, 9 Oct 2026).
+    # Las cuentas creadas en CAJA llevan `terminal_id = "CAJA"`, así que su
+    # post-it se pinta con el color que aquí se configure.
+    {"id": "CAJA", "name": "Caja", "icon": "💰"},
 ]
+
+# Catálogo de colores válidos para el post-it de cada terminal.
+#
+# Espejo EXACTO de `PALETA_POST_ITS` del frontend
+# (`apps/pos/src/constants/paletaPostIts.js`). El backend valida contra esta
+# lista para no aceptar clases Tailwind arbitrarias (R3 del plan). Si se cambia
+# la paleta, hay que cambiar AMBOS lados.
+PALETA_POST_ITS: tuple[str, ...] = (
+    "bg-blue-400", "bg-blue-300", "bg-cyan-300", "bg-sky-200", "bg-violet-400",
+    "bg-purple-300", "bg-fuchsia-200", "bg-pink-300", "bg-rose-400",
+    "bg-pink-400", "bg-pink-200", "bg-red-400", "bg-red-300", "bg-orange-400",
+    "bg-orange-300", "bg-yellow-200", "bg-amber-300", "bg-yellow-300",
+    "bg-green-400", "bg-lime-300", "bg-emerald-300",
+)
 
 # TTL del candado en minutos (RN-04). Un candado más viejo se considera libre.
 TTL_MINUTOS = 15
@@ -94,11 +113,19 @@ TTL_MINUTOS = 15
 # ---------------------------------------------------------------------------
 
 class TerminalConfigItem(BaseModel):
-    """Una terminal configurada: id, nombre visible e icono."""
+    """Una terminal configurada: id, nombre visible, icono y color de post-it.
+
+    `color` es OPCIONAL (decisión del usuario, 9 Oct 2026): las terminales
+    arrancan SIN color (el pizarrón las pinta amarillas, `bg-yellow-100`) hasta
+    que el usuario asigne uno desde el gestor. Cuando viene, debe pertenecer a
+    `PALETA_POST_ITS` y NO puede repetirse entre terminales (se valida en
+    `guardar_config`).
+    """
 
     id: str = Field(min_length=1)
     name: str = Field(min_length=1)
     icon: str = "🖥️"
+    color: str | None = None
 
 
 class GuardarConfigEntrada(BaseModel):
@@ -176,15 +203,32 @@ def _a_uuid(valor: str) -> UUID:
 
 
 def _leer_config() -> list[dict[str, str]]:
-    """Lee la configuración de terminales; si falta o está corrupta, la default."""
+    """Lee la configuración de terminales; si falta o está corrupta, la default.
+
+    Tolerante a la ausencia de `color` (R2 del plan): un `terminal_config.json`
+    escrito ANTES de esta feature no tiene el campo. Se normaliza cada item para
+    que SIEMPRE traiga las cuatro claves (`id`, `name`, `icon`, `color`), con
+    `color = None` cuando falte. Así el frontend recibe una forma estable.
+    """
+    datos: list[dict[str, str]] | None = None
     try:
         if _RUTA_CONFIG.exists():
-            datos = json.loads(_RUTA_CONFIG.read_text(encoding="utf-8"))
-            if isinstance(datos, list) and datos:
-                return datos
+            leido = json.loads(_RUTA_CONFIG.read_text(encoding="utf-8"))
+            if isinstance(leido, list) and leido:
+                datos = leido
     except (OSError, json.JSONDecodeError):
         pass
-    return CONFIG_POR_DEFECTO
+    if datos is None:
+        datos = CONFIG_POR_DEFECTO
+    return [
+        {
+            "id": item.get("id", ""),
+            "name": item.get("name", ""),
+            "icon": item.get("icon", "🖥️"),
+            "color": item.get("color"),
+        }
+        for item in datos
+    ]
 
 
 def _escribir_config(terminals: list[dict[str, str]]) -> None:
@@ -297,14 +341,54 @@ async def estado_terminales(db: AsyncSession = Depends(get_db)) -> dict[str, obj
 
 
 @router.get("/config")
-async def leer_config() -> list[dict[str, str]]:
-    """Configuración de terminales: lista de `{id, name, icon}`."""
+async def leer_config() -> list[dict[str, str | None]]:
+    """Configuración de terminales: lista de `{id, name, icon, color}`.
+
+    `color` puede ser `None` (terminal sin color asignado). Por eso el tipo de
+    retorno admite `None` — si se anota como `str`, FastAPI rechaza la respuesta
+    con `ResponseValidationError` al encontrar un `None`.
+    """
     return _leer_config()
 
 
 @router.post("/config")
 async def guardar_config(entrada: GuardarConfigEntrada) -> ResultadoSimple:
-    """Guarda la configuración de terminales (lista + iconos)."""
+    """Guarda la configuración de terminales (lista + iconos + color de post-it).
+
+    Valida DOS invariantes antes de persistir (decisiones del usuario, 9 Oct 2026):
+
+      1. **Catálogo:** cada `color` presente debe pertenecer a `PALETA_POST_ITS`.
+         Un color fuera del catálogo responde 400 (no se aceptan clases
+         Tailwind arbitrarias).
+      2. **Unicidad:** un mismo color NO puede estar asignado a dos terminales.
+         Si se repite, responde 400 indicando qué terminal ya lo usa.
+
+    Un `color = None` (sin asignar) es válido y NO cuenta para la unicidad:
+    varias terminales pueden estar "sin color" a la vez.
+    """
+    colores_vistos: dict[str, str] = {}
+    for terminal in entrada.terminals:
+        color = terminal.color
+        if color is None:
+            continue
+        if color not in PALETA_POST_ITS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"El color '{color}' de la terminal '{terminal.id}' no "
+                    "pertenece a la paleta de post-its."
+                ),
+            )
+        if color in colores_vistos:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"El color '{color}' ya está en uso por la terminal "
+                    f"'{colores_vistos[color]}'. Elige otro color."
+                ),
+            )
+        colores_vistos[color] = terminal.id
+
     _escribir_config([t.model_dump() for t in entrada.terminals])
     return ResultadoSimple(success=True, message="Configuración guardada")
 
