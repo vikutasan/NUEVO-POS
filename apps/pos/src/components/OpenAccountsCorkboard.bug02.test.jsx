@@ -94,12 +94,12 @@ async function renderPostIt(terminalId) {
 
 describe('BUG-02 — el color del post-it depende de la TERMINAL (ids TERM-0X)', () => {
   const casos = [
-    ['TERM-06', 'bg-yellow-200'],
-    ['TERM-05', 'bg-blue-200'],
-    ['TERM-04', 'bg-green-200'],
-    ['TERM-03', 'bg-pink-200'],
-    ['TERM-02', 'bg-purple-200'],
-    ['CAJA', 'bg-orange-200'],
+    ['TERM-06', 'bg-yellow-300'],
+    ['TERM-05', 'bg-blue-300'],
+    ['TERM-04', 'bg-lime-300'],
+    ['TERM-03', 'bg-pink-300'],
+    ['TERM-02', 'bg-purple-300'],
+    ['CAJA', 'bg-orange-300'],
   ];
 
   for (const [terminalId, claseEsperada] of casos) {
@@ -107,18 +107,20 @@ describe('BUG-02 — el color del post-it depende de la TERMINAL (ids TERM-0X)',
       const postIt = await renderPostIt(terminalId);
       expect(postIt).toBeTruthy();
       expect(postIt.className).toContain(claseEsperada);
-      // Y NO debe caer al fallback amarillo claro.
+      // Y NO debe caer al fallback absoluto.
       expect(postIt.className).not.toContain('bg-yellow-100');
     });
   }
 });
 
 // ---------------------------------------------------------------------------
-// 7 — Terminal desconocida: fallback sin romper
+// 7 — Terminal desconocida: fallback amarillo (aviso "sin color asignado")
 // ---------------------------------------------------------------------------
-
-describe('BUG-02 — terminal desconocida cae al fallback', () => {
-  it('una terminal fuera del mapa usa bg-yellow-100 (no rompe)', async () => {
+// BUG-03 (9 Oct 2026): la asignación de color es MANUAL. Una terminal que no
+// esté en el mapa NO recibe un color por hash: cae al amarillo claro, que es el
+// aviso visual de "esta terminal no tiene color asignado".
+describe('BUG-02 — terminal desconocida cae al fallback amarillo', () => {
+  it('una terminal fuera del mapa (ej. TERM-99) usa bg-yellow-100 (no rompe)', async () => {
     const postIt = await renderPostIt('TERM-99');
     expect(postIt).toBeTruthy();
     expect(postIt.className).toContain('bg-yellow-100');
@@ -151,8 +153,8 @@ describe('BUG-02 — dos terminales distintas se distinguen por color', () => {
     expect(postIts.length).toBe(2);
 
     const clases = Array.from(postIts).map((li) => li.className);
-    const amarillo = clases.find((c) => c.includes('bg-yellow-200'));
-    const rosa = clases.find((c) => c.includes('bg-pink-200'));
+    const amarillo = clases.find((c) => c.includes('bg-yellow-300'));
+    const rosa = clases.find((c) => c.includes('bg-pink-300'));
 
     expect(amarillo).toBeTruthy();
     expect(rosa).toBeTruthy();

@@ -171,7 +171,8 @@ describe('F12.6 — criterio 4: el color del post-it depende de la terminal', ()
   // BUG-02 (9 Oct 2026): el mapa de colores usa el vocabulario REAL del nuevo
   // POS (`TERM-0X`, ver useTerminals.js F7.7d), no los ids viejos (`T6`). El
   // viejo `T6` ahora cae al fallback; el equivalente es `TERM-06`.
-  it('la terminal TERM-06 pinta el post-it de amarillo (mapa heredado)', async () => {
+  // BUG-03 (Modificación colores): Se emplea la paleta expandida de 21 colores.
+  it('la terminal TERM-06 pinta el post-it de amarillo', async () => {
     const { container } = render(
       <OpenAccountsCorkboard
         terminalId="TERM-06"
@@ -184,7 +185,7 @@ describe('F12.6 — criterio 4: el color del post-it depende de la terminal', ()
     });
 
     const postIt = container.querySelector('li');
-    expect(postIt.className).toContain('bg-yellow-200');
+    expect(postIt.className).toContain('bg-yellow-300');
   });
 
   it('la terminal CAJA pinta el post-it de naranja', async () => {
@@ -200,7 +201,7 @@ describe('F12.6 — criterio 4: el color del post-it depende de la terminal', ()
     });
 
     const postIt = container.querySelector('li');
-    expect(postIt.className).toContain('bg-orange-200');
+    expect(postIt.className).toContain('bg-orange-300');
   });
 });
 

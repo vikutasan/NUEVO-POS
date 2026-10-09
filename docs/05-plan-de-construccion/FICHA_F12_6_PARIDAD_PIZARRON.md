@@ -124,15 +124,23 @@ libro mayor de Auditoría y Control lo **posee** para efectos contables.
 **`apps/pos/src/components/OpenAccountsCorkboard.jsx`** — reconstruido (313 líneas):
 
 - `ROTACIONES` (6 clases de rotación) + `rotacionDe(indice)` — rotación determinista.
-- `COLOR_POR_TERMINAL` (**TERM-06** amarillo, **TERM-05** azul, **TERM-04** verde,
-  **TERM-03** rosa, **TERM-02** morado, **TERM-01** teal, CAJA naranja)
-  + `colorDe(terminal)`.
+- `PALETA_POST_ITS` — catálogo de 21 colores (gama de la imagen de diseño
+  `COLORES-POST-ITS.png`). Es el "de dónde elegir" para asignar color a mano.
+- `COLOR_POR_TERMINAL` — asignación **MANUAL** de color por terminal (**TERM-06**
+  `bg-yellow-300`, **TERM-05** `bg-blue-300`, **TERM-04** `bg-lime-300`,
+  **TERM-03** `bg-pink-300`, **TERM-02** `bg-purple-300`, **TERM-01** `bg-cyan-300`,
+  CAJA `bg-orange-300`) + `colorDe(terminal)`.
   > **BUG-02 (9 Oct 2026) — vocabulario de IDs.** El mapa se heredó del viejo POS
   > con las claves VIEJAS (`T6`, `T3`, …), pero el nuevo POS unificó los ids a
   > `TERM-01..TERM-06` (ver `useTerminals.js`, F7.7d). Como `colorDe('TERM-03')`
   > no encontraba la clave, TODOS los post-its caían al fallback `bg-yellow-100`
   > (amarillos). Se tradujo el mapa al vocabulario real conservando el color por
   > número de terminal. Ver `OpenAccountsCorkboard.bug02.test.jsx`.
+  > **BUG-03 (9 Oct 2026) — paleta nueva + asignación manual.** Se adoptó la gama
+  > de 21 colores de la imagen de diseño. La asignación es MANUAL: una terminal
+  > que no esté en `COLOR_POR_TERMINAL` cae al amarillo claro `bg-yellow-100`
+  > (aviso "sin color asignado"). NO se usa hash ni color automático.
+  > (Futuro: selector de color en el gestor de terminales.)
 - `formatearHora(instante)` — RN-78: formatea UTC a hora local `es-MX`; `'—'` si inválido.
 - `formatearTotal(valor)` — `es-MX` MXN.
 - `mensajeDeError(reason)` — mapea `sin_conexion` / `terminal_invalida` / `datos_invalidos`;
@@ -170,7 +178,7 @@ aria-label="Cuentas abiertas"` y le pasa `onCerrar`.
 1. El corcho usa `.bg-madera-panel` y `border-madera-veta`.
 2. Cada `<li>` tiene un pin (`span[aria-hidden="true"]` con `bg-red-600`).
 3. La rotación es determinista (idéntica entre renders).
-4. TERM-06 → `bg-yellow-200`; CAJA → `bg-orange-200` (mapa con vocabulario `TERM-0X`, BUG-02).
+4. TERM-06 → `bg-yellow-300`; CAJA → `bg-orange-300` (mapa con vocabulario `TERM-0X`, BUG-02, extendido en BUG-03).
 5. PEDIDO/cliente/teléfono se muestran; VENTA_DIRECTA oculta el bloque.
 6. El nombre del capturista se muestra.
 7. La hora es `🕒 \d{2}:\d{2}`; `null` → `🕒 —`.

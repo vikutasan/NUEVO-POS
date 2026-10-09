@@ -60,29 +60,44 @@ const ROTACIONES = [
 ];
 
 /**
- * Color del post-it por terminal — heredado del viejo POS.
+ * Catálogo de colores disponibles para los post-its.
+ *
+ * Gama extraída de la imagen de diseño `COLORES-POST-ITS.png` (21 tonos:
+ * azules/morados, rosas/rojos, amarillos/verdes). Se eligen pesos (200-400)
+ * que garanticen contraste con el texto oscuro (#3d2b1f).
+ *
+ * BUG-03 (9 Oct 2026): este arreglo es el CATÁLOGO de dónde elegir. La
+ * asignación de color por terminal es MANUAL (ver `COLOR_POR_TERMINAL`); NO se
+ * elige por hash. Cuando se agregue una terminal nueva, se le asigna a mano un
+ * color de esta lista. (Futuro: selector de color en el gestor de terminales.)
+ */
+export const PALETA_POST_ITS = [
+  'bg-blue-400', 'bg-blue-300', 'bg-cyan-300', 'bg-sky-200', 'bg-violet-400', 'bg-purple-300', 'bg-fuchsia-200',
+  'bg-pink-300', 'bg-rose-400', 'bg-pink-400', 'bg-pink-200', 'bg-red-400', 'bg-red-300', 'bg-orange-400',
+  'bg-orange-300', 'bg-yellow-200', 'bg-amber-300', 'bg-yellow-300', 'bg-green-400', 'bg-lime-300', 'bg-emerald-300'
+];
+
+/**
+ * Color del post-it por terminal — asignación MANUAL.
  *
  * POR QUÉ: el color es una señal visual de un vistazo ("¿de qué terminal es
- * esta cuenta?"). Se conserva el mapa de COLORES del viejo POS (mismo color por
- * número de terminal) para no romper la memoria muscular del personal.
+ * esta cuenta?"). Se asigna a mano un color de `PALETA_POST_ITS` a cada
+ * terminal. Una terminal que NO esté aquí sale AMARILLA CLARA (`bg-yellow-100`),
+ * que es el aviso de "esta terminal no tiene color asignado".
  *
- * FIX_PIZARRON_COLOR_TERMINAL (9 Oct 2026) — VOCABULARIO DE IDs:
- *   El viejo POS usaba ids `T2..T6` + `CAJA`; el nuevo POS los unificó a
- *   `TERM-01..TERM-06` (ver `useTerminals.js`, F7.7d). El mapa se portó con las
- *   claves VIEJAS, así que `colorDe('TERM-03')` no encontraba la clave y caía al
- *   fallback `bg-yellow-100`: TODOS los post-its salían amarillos. Aquí se
- *   traduce el mapa al vocabulario real del nuevo POS, conservando el color por
- *   número de terminal (T6→TERM-06 amarillo, T5→TERM-05 azul, T4→TERM-04 verde,
- *   T3→TERM-03 rosa, T2→TERM-02 morado, CAJA naranja).
+ * BUG-02 (9 Oct 2026): el mapa se heredó del viejo POS con las claves VIEJAS
+ * (`T6`, `T3`, …), pero el nuevo POS unificó los ids a `TERM-01..TERM-06`
+ * (ver `useTerminals.js`, F7.7d). Se tradujo al vocabulario real.
+ * BUG-03 (9 Oct 2026): se adoptó la paleta nueva de la imagen de diseño.
  */
-const COLOR_POR_TERMINAL = {
-  'TERM-06': 'bg-yellow-200',
-  'TERM-05': 'bg-blue-200',
-  'TERM-04': 'bg-green-200',
-  'TERM-03': 'bg-pink-200',
-  'TERM-02': 'bg-purple-200',
-  'TERM-01': 'bg-teal-200',
-  CAJA: 'bg-orange-200',
+export const COLOR_POR_TERMINAL = {
+  'TERM-06': 'bg-yellow-300',
+  'TERM-05': 'bg-blue-300',
+  'TERM-04': 'bg-lime-300',
+  'TERM-03': 'bg-pink-300',
+  'TERM-02': 'bg-purple-300',
+  'TERM-01': 'bg-cyan-300',
+  CAJA: 'bg-orange-300',
 };
 
 /** Rotación estable para el post-it en la posición `indice`. */
@@ -90,8 +105,14 @@ function rotacionDe(indice) {
   return ROTACIONES[indice % ROTACIONES.length];
 }
 
-/** Color del post-it según la terminal; amarillo claro si es desconocida. */
-function colorDe(terminal) {
+/**
+ * Color del post-it según la terminal.
+ *
+ * Asignación MANUAL: si la terminal está en `COLOR_POR_TERMINAL`, usa su color;
+ * si no (terminal desconocida o sin color asignado), cae al amarillo claro
+ * `bg-yellow-100`, que es el aviso visual de "sin color asignado".
+ */
+export function colorDe(terminal) {
   return COLOR_POR_TERMINAL[terminal] || 'bg-yellow-100';
 }
 
