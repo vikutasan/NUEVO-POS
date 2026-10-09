@@ -98,7 +98,12 @@ export function useOpenAccounts(opciones = {}) {
    */
   const refrescar = useCallback(async () => {
     const id = terminalRef.current;
-    if (!id) {
+    // FIX_PIZARRON_CAJA_SIN_TERMINAL (9 Oct 2026) — El modo CAJA (D1) lista las
+    // cuentas de TODAS las terminales y NO tiene `terminalId` propio. Antes se
+    // salía aquí en cuanto `id` era vacío, ANTES de mirar `todasLasTerminales`,
+    // así que el pizarrón de caja quedaba SIEMPRE vacío. Solo se sale si no hay
+    // ni terminal ni modo "todas".
+    if (!id && !todasLasTerminalesRef.current) {
       setCuentas([]);
       setError(null);
       setCargando(false);

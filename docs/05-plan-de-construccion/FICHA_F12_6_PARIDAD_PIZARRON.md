@@ -124,8 +124,15 @@ libro mayor de Auditoría y Control lo **posee** para efectos contables.
 **`apps/pos/src/components/OpenAccountsCorkboard.jsx`** — reconstruido (313 líneas):
 
 - `ROTACIONES` (6 clases de rotación) + `rotacionDe(indice)` — rotación determinista.
-- `COLOR_POR_TERMINAL` (T6 amarillo, T5 azul, T4 verde, T3 rosa, T2 morado, CAJA naranja)
+- `COLOR_POR_TERMINAL` (**TERM-06** amarillo, **TERM-05** azul, **TERM-04** verde,
+  **TERM-03** rosa, **TERM-02** morado, **TERM-01** teal, CAJA naranja)
   + `colorDe(terminal)`.
+  > **BUG-02 (9 Oct 2026) — vocabulario de IDs.** El mapa se heredó del viejo POS
+  > con las claves VIEJAS (`T6`, `T3`, …), pero el nuevo POS unificó los ids a
+  > `TERM-01..TERM-06` (ver `useTerminals.js`, F7.7d). Como `colorDe('TERM-03')`
+  > no encontraba la clave, TODOS los post-its caían al fallback `bg-yellow-100`
+  > (amarillos). Se tradujo el mapa al vocabulario real conservando el color por
+  > número de terminal. Ver `OpenAccountsCorkboard.bug02.test.jsx`.
 - `formatearHora(instante)` — RN-78: formatea UTC a hora local `es-MX`; `'—'` si inválido.
 - `formatearTotal(valor)` — `es-MX` MXN.
 - `mensajeDeError(reason)` — mapea `sin_conexion` / `terminal_invalida` / `datos_invalidos`;
@@ -149,11 +156,12 @@ aria-label="Cuentas abiertas"` y le pasa `onCerrar`.
 
 | Compuerta | Archivo | Tests | Qué prueba |
 |---|---|---|---|
-| Presentación F12.6 | `OpenAccountsCorkboard.f12_6.test.jsx` | 12 | Corcho, pin, rotación, color, datos, hora, error verbatim |
+| Presentación F12.6 | `OpenAccountsCorkboard.f12_6.test.jsx` | 13 | Corcho, pin, rotación, color, datos, hora, error verbatim |
 | Presentación F5.3 | `OpenAccountsCorkboard.f5_3.test.jsx` | 8 | Contrato de props, folio/total, recuperar, ancho, táctil |
 | Integración F12.5 | `RetailVisionPOS.f12_5.test.jsx` | 7 | Botón → diálogo → cuentas → recuperar → error verbatim |
+| **BUG-02** | `OpenAccountsCorkboard.bug02.test.jsx` | 8 | Color por terminal con vocabulario `TERM-0X` (6 terminales + fallback + 2 distintas) |
 
-**Total: 27/27 verde.**
+**Total: 36/36 verde.**
 
 ---
 
@@ -162,7 +170,7 @@ aria-label="Cuentas abiertas"` y le pasa `onCerrar`.
 1. El corcho usa `.bg-madera-panel` y `border-madera-veta`.
 2. Cada `<li>` tiene un pin (`span[aria-hidden="true"]` con `bg-red-600`).
 3. La rotación es determinista (idéntica entre renders).
-4. T6 → `bg-yellow-200`; CAJA → `bg-orange-200`.
+4. TERM-06 → `bg-yellow-200`; CAJA → `bg-orange-200` (mapa con vocabulario `TERM-0X`, BUG-02).
 5. PEDIDO/cliente/teléfono se muestran; VENTA_DIRECTA oculta el bloque.
 6. El nombre del capturista se muestra.
 7. La hora es `🕒 \d{2}:\d{2}`; `null` → `🕒 —`.
@@ -188,6 +196,8 @@ aria-label="Cuentas abiertas"` y le pasa `onCerrar`.
 - `components/OpenAccountsCorkboard.jsx`
 - `components/OpenAccountsCorkboard.f12_6.test.jsx`
 - `components/OpenAccountsCorkboard.f5_3.test.jsx`
+- `components/OpenAccountsCorkboard.bug02.test.jsx` *(BUG-02)*
+- `hooks/useOpenAccounts.js` *(BUG-02 — modo CAJA sin `terminalId`)*
 - `RetailVisionPOS.jsx`
 - `RetailVisionPOS.f12_5.test.jsx`
 
@@ -223,3 +233,5 @@ aria-label="Cuentas abiertas"` y le pasa `onCerrar`.
 | R-01 | Sin anchos fijos | `OpenAccountsCorkboard.f5_3.test.jsx` (criterio 7) |
 | R-04 | Objetivo táctil ≥ 44px (`min-h-tactil`) | `OpenAccountsCorkboard.f5_3.test.jsx` (criterio 8) |
 | §6.8 | La integración se hereda; la implementación se reescribe | `OpenAccountsCorkboard.f12_6.test.jsx` (paridad de presentación) |
+| BUG-02 | El color del post-it usa el vocabulario real `TERM-0X` (no los ids viejos `T6`) | `OpenAccountsCorkboard.bug02.test.jsx` (8 criterios) |
+| BUG-02 | El modo CAJA (`terminalId=""`) carga las cuentas de todas las terminales | `OpenAccountsCorkboard.bug02.test.jsx` (criterio 8) |

@@ -63,15 +63,25 @@ const ROTACIONES = [
  * Color del post-it por terminal — heredado del viejo POS.
  *
  * POR QUÉ: el color es una señal visual de un vistazo ("¿de qué terminal es
- * esta cuenta?"). Se conserva el mapa exacto del viejo POS para no romper la
- * memoria muscular del personal.
+ * esta cuenta?"). Se conserva el mapa de COLORES del viejo POS (mismo color por
+ * número de terminal) para no romper la memoria muscular del personal.
+ *
+ * FIX_PIZARRON_COLOR_TERMINAL (9 Oct 2026) — VOCABULARIO DE IDs:
+ *   El viejo POS usaba ids `T2..T6` + `CAJA`; el nuevo POS los unificó a
+ *   `TERM-01..TERM-06` (ver `useTerminals.js`, F7.7d). El mapa se portó con las
+ *   claves VIEJAS, así que `colorDe('TERM-03')` no encontraba la clave y caía al
+ *   fallback `bg-yellow-100`: TODOS los post-its salían amarillos. Aquí se
+ *   traduce el mapa al vocabulario real del nuevo POS, conservando el color por
+ *   número de terminal (T6→TERM-06 amarillo, T5→TERM-05 azul, T4→TERM-04 verde,
+ *   T3→TERM-03 rosa, T2→TERM-02 morado, CAJA naranja).
  */
 const COLOR_POR_TERMINAL = {
-  T6: 'bg-yellow-200',
-  T5: 'bg-blue-200',
-  T4: 'bg-green-200',
-  T3: 'bg-pink-200',
-  T2: 'bg-purple-200',
+  'TERM-06': 'bg-yellow-200',
+  'TERM-05': 'bg-blue-200',
+  'TERM-04': 'bg-green-200',
+  'TERM-03': 'bg-pink-200',
+  'TERM-02': 'bg-purple-200',
+  'TERM-01': 'bg-teal-200',
   CAJA: 'bg-orange-200',
 };
 

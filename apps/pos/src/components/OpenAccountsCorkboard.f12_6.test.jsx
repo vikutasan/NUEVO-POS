@@ -168,11 +168,14 @@ describe('F12.6 — criterio 3: la rotación es determinista', () => {
 // ---------------------------------------------------------------------------
 
 describe('F12.6 — criterio 4: el color del post-it depende de la terminal', () => {
-  it('la terminal T6 pinta el post-it de amarillo (mapa heredado)', async () => {
+  // BUG-02 (9 Oct 2026): el mapa de colores usa el vocabulario REAL del nuevo
+  // POS (`TERM-0X`, ver useTerminals.js F7.7d), no los ids viejos (`T6`). El
+  // viejo `T6` ahora cae al fallback; el equivalente es `TERM-06`.
+  it('la terminal TERM-06 pinta el post-it de amarillo (mapa heredado)', async () => {
     const { container } = render(
       <OpenAccountsCorkboard
-        terminalId="T6"
-        servicioCuentas={servicioCon([cuentaCompleta({ terminal_id: 'T6' })])}
+        terminalId="TERM-06"
+        servicioCuentas={servicioCon([cuentaCompleta({ terminal_id: 'TERM-06' })])}
       />
     );
 
