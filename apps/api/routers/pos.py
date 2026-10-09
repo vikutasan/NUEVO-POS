@@ -91,6 +91,7 @@ from schemas import (
     LineasTicketSalida,
     QuitarItemEntrada,
     SesionActiva,
+    SesionTerminalEntrada,
     TicketAtomicoSalida,
     TicketLigeroSalida,
     TicketSalida,
@@ -329,6 +330,49 @@ def _recalcular_total(ticket: Ticket) -> Decimal:
 # ---------------------------------------------------------------------------
 # Contrato 9 — GET /pos/session-active
 # ---------------------------------------------------------------------------
+
+@router.post("/sessions", response_model=SesionActiva, status_code=201)
+async def abrir_sesion(
+    entrada: SesionTerminalEntrada,
+    db: AsyncSession = Depends(get_db),
+) -> TerminalSession:
+    """Abre (o reutiliza) la sesión de terminal — paridad con el viejo POS.
+
+    El viejo POS crea la `TerminalSession` al seleccionar la terminal
+    (`POST /pos/sessions`). El nuevo POS tomaba el candado pero NUNCA creaba la
+    sesión, así que cualquier terminal distinta de la que ya tenía una sesión
+    fallaba con RN-24 al primer ticket (BUG-01).
+
+    Este endpoint es IDEMPOTENTE: si la terminal ya tiene una sesión activa, la
+    devuelve tal cual (200→201 con la misma fila); si no, crea una nueva. Así el
+    frontend puede llamarlo sin miedo cada vez que se selecciona una terminal,
+    sin duplicar sesiones (RN-01: una sola sesión activa por terminal).
+
+    No se reabre una sesión cerrada: se crea una fila nueva, preservando el
+    histórico de aperturas/cierres (auditoría).
+    """
+    terminal_id = entrada.terminal_id.strip()
+    if not terminal_id:
+        raise ReglaViolada("RN-24", "El terminal_id es obligatorio", 400)
+
+    # Idempotencia: si ya hay una sesión activa, se devuelve sin crear otra.
+    existente = (
+        await db.execute(
+            select(TerminalSession).where(
+                TerminalSession.terminal_id == terminal_id,
+                TerminalSession.is_active.is_(True),
+            )
+        )
+    ).scalars().first()
+    if existente is not None:
+        return existente
+
+    sesion = TerminalSession(terminal_id=terminal_id, is_active=True)
+    db.add(sesion)
+    await db.commit()
+    await db.refresh(sesion)
+    return sesion
+
 
 @router.get("/session-active", response_model=SesionActiva | None)
 async def session_active(

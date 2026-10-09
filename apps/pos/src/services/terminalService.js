@@ -61,6 +61,27 @@ export async function lockTerminal(terminalId, userId) {
 }
 
 /**
+ * Abre (o reutiliza) la sesión de terminal — paridad con el viejo POS.
+ *
+ * El viejo POS crea la `TerminalSession` al seleccionar la terminal. Sin ella,
+ * cualquier ticket falla con RN-24 ("La sesión de la terminal no está activa").
+ * El endpoint es IDEMPOTENTE: si la terminal ya tiene sesión activa, la
+ * devuelve; si no, la crea. Es seguro llamarlo en cada selección.
+ *
+ * @param {string} terminalId - ID de la terminal (ej: "TERM-04")
+ * @returns {Promise<Object>} { id, terminal_id, is_active }
+ */
+export async function abrirSesionTerminal(terminalId) {
+  const res = await fetch(`${API_BASE_URL}/pos/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ terminal_id: terminalId }),
+  });
+  if (!res.ok) throw new Error(`Abrir sesión: ${res.status}`);
+  return res.json();
+}
+
+/**
  * Libera el lock de una terminal.
  * @param {string} terminalId - ID de la terminal
  * @param {number} userId - ID del usuario

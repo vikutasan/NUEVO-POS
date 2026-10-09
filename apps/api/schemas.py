@@ -90,6 +90,16 @@ class SesionActiva(BaseModel):
     is_active: bool
 
 
+class SesionTerminalEntrada(BaseModel):
+    """Entrada de `POST /pos/sessions` — abrir (o reutilizar) la sesión.
+
+    Paridad con el viejo POS: al seleccionar una terminal se abre su sesión.
+    El endpoint es idempotente, así que basta con el `terminal_id`.
+    """
+
+    terminal_id: str = Field(min_length=1, description="Id de la terminal (ej. TERM-04)")
+
+
 # ---------------------------------------------------------------------------
 # Tickets — Contrato 3: POST /pos/tickets
 # ---------------------------------------------------------------------------

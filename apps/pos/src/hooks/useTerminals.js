@@ -20,6 +20,7 @@ import {
   unlockTerminal,
   fetchTerminalConfig,
   saveTerminalConfig,
+  abrirSesionTerminal,
 } from '../services/terminalService.js';
 import { resolveCardState, resolveNetStatus } from '../utils/terminalCardState.js';
 
@@ -154,13 +155,26 @@ export function useTerminals(currentUser) {
     [statuses]
   );
 
-  // Seleccionar terminal (tomar lock)
+  // Seleccionar terminal (tomar lock + abrir la sesión de terminal)
+  //
+  // BUG-01 (paridad con el viejo POS): el viejo POS abre la `TerminalSession`
+  // al seleccionar la terminal. El nuevo POS solo tomaba el candado, así que
+  // cualquier terminal sin sesión previa fallaba con RN-24 al primer ticket
+  // ("La sesión de la terminal no está activa"). Aquí, tras el lock, se abre
+  // (o reutiliza) la sesión con un endpoint idempotente.
   const selectTerminal = useCallback(async (terminalId) => {
     if (!currentUser?.id) return { success: false, message: 'Sin usuario' };
     setLocking(true);
     try {
       const result = await lockTerminal(terminalId, currentUser.id);
       if (result.success) {
+        // Abrir la sesión de terminal (idempotente). Si falla, NO se bloquea la
+        // selección: el candado ya está tomado y el error se reporta aparte.
+        try {
+          await abrirSesionTerminal(terminalId);
+        } catch (errSesion) {
+          return { success: false, message: errSesion.message };
+        }
         // Refresh statuses after lock
         const statusMap = await fetchTerminalStatuses().catch(() => statuses);
         setStatuses(statusMap);
