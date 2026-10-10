@@ -155,6 +155,31 @@ async def _sesion_caja_activa_o_400(db: AsyncSession, terminal_id: str) -> CashS
     return sesiones[0]
 
 
+async def _sesion_caja_por_id_o_400(db: AsyncSession, cash_session_id: UUID) -> CashSession:
+    """Valida un turno de caja DECLARADO por el cliente (E-13) y lo devuelve.
+
+    BUG-08 — La terminal que COBRA declara su turno; el backend NO lo confía.
+    Tres validaciones (E-13: el backend es la autoridad):
+      1. El turno existe.
+      2. Está OPEN (RN-55: una sesión cerrada es inmutable).
+      3. La terminal del turno tiene una sesión de terminal activa (RN-24).
+
+    El `terminal_id` del ticket NUNCA se toca: el turno solo decide en qué caja
+    se cuenta el dinero (RN-53); el origen del ticket es trazabilidad inmutable
+    (RN-12).
+    """
+    sesion = (
+        await db.execute(select(CashSession).where(CashSession.id == cash_session_id))
+    ).scalars().first()
+    if sesion is None:
+        raise ReglaViolada("RN-49", "El turno de caja indicado no existe", 400)
+    if sesion.status != "OPEN":
+        raise ReglaViolada("RN-55", "El turno de caja indicado está cerrado", 400)
+    # RN-24: la terminal del turno debe tener una sesión de terminal activa.
+    await _sesion_activa_o_404(db, sesion.terminal_id)
+    return sesion
+
+
 async def _siguiente_folio(db: AsyncSession) -> str:
     """Calcula el siguiente folio V#### a partir del máximo consecutivo (RN-10).
 
@@ -522,10 +547,22 @@ async def cobrar_ticket(
     rn23_no_modificar_paid(ticket.status)
     rn25_validar_version(entrada.version, ticket.version)
 
-    # FASE 4.0 / RN-49: el cobro exige un turno de caja abierto en la terminal
-    # del ticket. Si no lo hay, `_sesion_caja_activa_o_400` lanza ReglaViolada
-    # (400) con el motivo "No hay turno de caja abierto para esta terminal".
-    sesion_caja = await _sesion_caja_activa_o_400(db, ticket.terminal_id)
+    # FASE 4.0 / RN-49 + BUG-08: el turno de caja lo determina la terminal que
+    # COBRA, no la de origen del ticket. "Toda terminal es una caja en
+    # potencia": una terminal con turno abierto puede cobrar cuentas de OTRAS
+    # terminales, y el dinero se cuenta en la caja que lo recibió (RN-53).
+    #
+    # Si el cliente DECLARA su turno (`cash_session_id`), se VALIDA (E-13: el
+    # backend es la autoridad) con `_sesion_caja_por_id_o_400` (existe + OPEN +
+    # su terminal tiene sesión activa). Si no lo declara, se cae al
+    # comportamiento retrocompatible: el turno de la terminal del ticket.
+    #
+    # El `terminal_id` del ticket NUNCA se sobreescribe (RN-12): el origen es
+    # trazabilidad inmutable; el turno solo decide dónde se cuenta el dinero.
+    if entrada.cash_session_id is not None:
+        sesion_caja = await _sesion_caja_por_id_o_400(db, entrada.cash_session_id)
+    else:
+        sesion_caja = await _sesion_caja_activa_o_400(db, ticket.terminal_id)
 
     # FASE 9.1 — Pagos mixtos: se normaliza `payment_details` a la forma canónica
     # `pagos[]` (retrocompatibilidad con el cobro viejo de un solo método) y se

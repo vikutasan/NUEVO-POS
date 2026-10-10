@@ -318,6 +318,74 @@ describe('useTicketActions — cobrar con ticketId explícito (FIX 2ª vuelta)',
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// BUG-08 — El turno de caja lo determina la terminal que COBRA
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// "Toda terminal es una caja en potencia": una terminal con turno abierto puede
+// cobrar cuentas de OTRAS terminales, y el dinero se cuenta en la caja que lo
+// recibió (RN-53). El frontend declara el turno de la terminal que cobra
+// (`cashSessionId`); el backend lo VALIDA (E-13) y NUNCA sobreescribe el
+// `terminal_id` del ticket (RN-12). Si no se declara, el backend cae al
+// comportamiento retrocompatible (turno de la terminal del ticket).
+
+describe('useTicketActions — cobrar declara el turno de la terminal que cobra (BUG-08)', () => {
+  it('reenvía cash_session_id cuando el llamador lo declara', async () => {
+    const api = {
+      cobrarTicket: vi.fn(async () => ({ id: 'T-AJENA', version: 6, total: 80 })),
+    };
+    const { result } = renderHook(() => useTicketActions({ api }));
+
+    let salida;
+    await act(async () => {
+      salida = await result.current.cobrar(
+        { pagos: [{ metodo: 'efectivo', monto: 80 }] },
+        { ticketId: 'T-AJENA', version: 5, cashSessionId: 'CAJA-9' },
+      );
+    });
+
+    expect(salida.outcome).toBe('ok');
+    expect(api.cobrarTicket).toHaveBeenCalledWith('T-AJENA', {
+      payment_details: { pagos: [{ metodo: 'efectivo', monto: 80 }] },
+      version: 5,
+      cash_session_id: 'CAJA-9',
+    });
+  });
+
+  it('NO incluye cash_session_id si el llamador no lo declara (retrocompatibilidad)', async () => {
+    const api = {
+      cobrarTicket: vi.fn(async () => ({ id: 'T1', version: 2, total: 10 })),
+    };
+    const { result } = renderHook(() => useTicketActions({ api }));
+
+    await act(async () => {
+      await result.current.cobrar({ pagos: [] }, { ticketId: 'T1', version: 1 });
+    });
+
+    // El cuerpo NO debe llevar la clave: el backend cae al turno del ticket.
+    const [, cuerpo] = api.cobrarTicket.mock.calls[0];
+    expect(cuerpo).toEqual({ payment_details: { pagos: [] }, version: 1 });
+    expect('cash_session_id' in cuerpo).toBe(false);
+  });
+
+  it('NO incluye cash_session_id si viene null (sin turno vigente)', async () => {
+    const api = {
+      cobrarTicket: vi.fn(async () => ({ id: 'T1', version: 2, total: 10 })),
+    };
+    const { result } = renderHook(() => useTicketActions({ api }));
+
+    await act(async () => {
+      await result.current.cobrar(
+        { pagos: [] },
+        { ticketId: 'T1', version: 1, cashSessionId: null },
+      );
+    });
+
+    const [, cuerpo] = api.cobrarTicket.mock.calls[0];
+    expect('cash_session_id' in cuerpo).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Criterio 5 — useEffect deps son primitivos (H1)
 // ═══════════════════════════════════════════════════════════════════════════════
 

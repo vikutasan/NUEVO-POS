@@ -965,9 +965,46 @@ CONTRATOS: tuple[Contrato, ...] = (
         ),
         estado_hoy="Deuda",
     ),
+    # ── §15 Cobro de ticket (proveedor: POS — FASE 3.3 / BUG-08) ────────────
+    Contrato(
+        numero=33,
+        nombre="pos.cobrar_ticket",
+        consumidor="POS (frontend)",
+        proveedor="POS",
+        operacion="POST /pos/tickets/{ticket_id}/pay",
+        entrada={
+            "ticket_id": "UUID (path)",
+            "payment_details": "Dict (pagos mixtos: efectivo/tarjeta/transferencia)",
+            "version": "Int (concurrencia optimista, RN-25)",
+            "cobrador_nombre": "String | None",
+            "cash_session_id": "UUID | None (opcional, BUG-08)",
+        },
+        salida={
+            "id": "UUID",
+            "account_num": "String",
+            "status": "String (PAID)",
+            "total": "Decimal",
+            "version": "Int",
+        },
+        garantias=(
+            "El turno de caja lo determina la terminal que COBRA, no la de origen del ticket.",
+            "`cash_session_id` es OPCIONAL (retrocompatibilidad): si falta, el backend usa el turno de la terminal del ticket.",
+            "El backend VALIDA el turno declarado (E-13): existe + OPEN (RN-55) + su terminal tiene sesión activa (RN-24).",
+            "El `terminal_id` del ticket NUNCA se sobreescribe (RN-12): el origen es trazabilidad inmutable.",
+            "El dinero se cuenta en la caja que lo recibió (RN-53).",
+        ),
+        errores=(
+            "404 si el ticket no existe.",
+            "409 si el `version` no coincide (RN-25).",
+            "400 si el ticket ya está PAID (RN-23).",
+            "400 si no hay turno de caja abierto para la terminal que cobra (RN-49).",
+            "400 si el `cash_session_id` declarado no existe o está cerrado (RN-55).",
+        ),
+        estado_hoy="FASE 3.3 / BUG-08",
+    ),
 )
 
 
 def listar_contratos() -> tuple[Contrato, ...]:
-    """Devuelve los 32 contratos del registro."""
+    """Devuelve los 33 contratos del registro."""
     return CONTRATOS

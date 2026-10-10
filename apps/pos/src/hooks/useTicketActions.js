@@ -237,7 +237,7 @@ export function useTicketActions(opciones = {}) {
    * hidratado (o `undefined`, que el backend trata como "sin control de versión").
    *
    * @param {object} paymentDetails
-   * @param {{ticketId?: string, version?: number}} [opciones]
+   * @param {{ticketId?: string, version?: number, cashSessionId?: string}} [opciones]
    * @returns {Promise<import('../utils/outcome.js').Outcome>}
    */
   const cobrar = useCallback(async (paymentDetails, opciones = {}) => {
@@ -268,13 +268,23 @@ export function useTicketActions(opciones = {}) {
       // F12.12 / REGLA 18: se captura el error crudo para distinguir un 409
       // (conflicto de versión) de un fallo de red. Un 409 NO se reintenta.
       let errorCrudo = null;
+      // BUG-08 — El turno de caja lo determina la terminal que COBRA, no la de
+      // origen del ticket. "Toda terminal es una caja en potencia": una terminal
+      // con turno abierto puede cobrar cuentas de OTRAS terminales, y el dinero
+      // se cuenta en la caja que lo recibió (RN-53). Se declara el turno de la
+      // terminal que cobra; el backend lo VALIDA (E-13) y NUNCA sobreescribe el
+      // `terminal_id` del ticket (RN-12). Si no se declara, el backend cae al
+      // comportamiento retrocompatible (turno de la terminal del ticket).
+      const cuerpo = {
+        payment_details: paymentDetails,
+        version,
+      };
+      if (opciones.cashSessionId) {
+        cuerpo.cash_session_id = opciones.cashSessionId;
+      }
       const resultado = await aOutcome(() =>
         withRetries(
-          () =>
-            cliente.cobrarTicket(idTicket, {
-              payment_details: paymentDetails,
-              version,
-            }),
+          () => cliente.cobrarTicket(idTicket, cuerpo),
           {
             debeReintentar: (err) => {
               errorCrudo = err;

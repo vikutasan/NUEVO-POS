@@ -250,6 +250,15 @@ class CobrarTicketEntrada(BaseModel):
     # El backend lo persiste desnormalizado en `tickets.cashed_by_name`.
     cobrador_nombre: str | None = None
 
+    # BUG-08 — El turno de caja de la terminal que COBRA (no la de origen del
+    # ticket). Una terminal con turno abierto puede cobrar cuentas de OTRAS
+    # terminales; el dinero debe contarse en la caja que lo recibió (RN-53).
+    # Opcional por retrocompatibilidad: si falta, el backend cae al
+    # comportamiento anterior (turno de la terminal del ticket). El backend
+    # VALIDA el turno recibido (E-13): existe + OPEN (RN-55) + su terminal
+    # tiene sesión activa (RN-24).
+    cash_session_id: UUID | None = None
+
 
 # ---------------------------------------------------------------------------
 # POS atómico — Contratos 18–22 (FASE 3.2)

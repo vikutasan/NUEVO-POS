@@ -154,3 +154,48 @@ deben tocarse**:
 **Una terminal es un puesto; una caja es un turno.** El id de una terminal siempre
 es `TERM-0N`; el modo «ver todas las cuentas» lo gobierna el turno de caja abierto
 (`caja_habilitada`), nunca un id llamado `CAJA`.
+
+---
+
+## 10. El turno de caja pertenece a la terminal que COBRA (BUG-08)
+
+> **Ficha asociada:** [`FICHA_FIX_BUG08_CAJA_COBRA_CUENTAS_AJENAS.md`](../05-plan-de-construccion/FICHA_FIX_BUG08_CAJA_COBRA_CUENTAS_AJENAS.md)
+> **Reglas relacionadas:** RN-12, RN-24, RN-49, RN-53, RN-55.
+
+El principio «toda terminal es una caja en potencia» tiene una consecuencia
+operativa directa: **una terminal con turno abierto puede cobrar cuentas de OTRAS
+terminales**. El dinero se cuenta en la caja que lo **recibió** (RN-53), no en la
+de origen del ticket.
+
+### 10.1 La regla
+
+- El **turno de caja** del cobro lo determina la **terminal que COBRA**, no la
+  terminal de **origen** del ticket.
+- El `terminal_id` del ticket **NUNCA se sobreescribe** (RN-12): el origen es
+  trazabilidad inmutable. La CAJA cobra, pero **no se adueña** del ticket.
+- El frontend **declara** el turno (`cash_session_id`); el backend lo **VALIDA**
+  (E-13): existe (RN-49) + está `OPEN` (RN-55) + su terminal tiene sesión activa
+  (RN-24). Nunca se confía en el cliente.
+- `cash_session_id` es **opcional** (retrocompatibilidad): si falta, el backend
+  cae al turno de la terminal del ticket.
+
+### 10.2 El anti-patrón que se corrigió
+
+Antes, el backend derivaba el turno de la terminal de ORIGEN del ticket
+(`_sesion_caja_activa_o_400(db, ticket.terminal_id)`). Cuando la CAJA cobraba una
+cuenta creada en TERM-01, buscaba el turno de **TERM-01** (inexistente) y
+respondía `400 "No hay turno de caja abierto para esta terminal"` — un error
+**falso**, porque la CAJA sí tenía su turno abierto.
+
+Ahora el turno lo declara la terminal que COBRA y el backend lo valida con
+`_sesion_caja_por_id_o_400` (existe + OPEN + sesión activa).
+
+### 10.3 Cómo se prueba
+
+| Test | Qué fija |
+|---|---|
+| `test_1_cobra_cuenta_ajena_con_turno_propio` (backend) | La CAJA cobra una cuenta de otra terminal con SU turno |
+| `test_2_terminal_id_del_ticket_es_inmutable` (backend) | El `terminal_id` de origen NO se sobreescribe (RN-12) |
+| `test_3_retrocompat_sin_cash_session_id` (backend) | Sin `cash_session_id` cae al turno del ticket |
+| `test_4/5/6_*_da_400` (backend) | Turno inexistente / cerrado / sin sesión → 400 |
+| `hooks.f3_3.test.jsx` (frontend) | `cobrar` reenvía `cash_session_id` solo si se declara |

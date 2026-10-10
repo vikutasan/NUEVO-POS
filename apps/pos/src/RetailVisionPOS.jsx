@@ -776,9 +776,16 @@ export default function RetailVisionPOS({
       // `{outcome:'error', reason:'sin_ticket_o_api'}` → la venta NUNCA cerraba.
       // Se pasa el id y la versión REALES del llamador (la pantalla es la dueña
       // del ticket abierto). El hook cae al ref interno si no vienen (regresión).
+      // BUG-08 — El turno de caja lo determina la terminal que COBRA, no la de
+      // origen del ticket. "Toda terminal es una caja en potencia": una terminal
+      // con turno abierto puede cobrar cuentas de OTRAS terminales, y el dinero
+      // se cuenta en la caja que lo recibió (RN-53). Se declara el turno de la
+      // terminal que cobra (`turnoVigente`, ya validado arriba); el backend lo
+      // VALIDA (E-13) y NUNCA sobreescribe el `terminal_id` del ticket (RN-12).
       const pagado = await acciones.cobrar(paymentDetails, {
         ticketId: ticketIdRef.current,
         version: carrito.version,
+        cashSessionId: turnoVigente.cash_session_id,
       });
 
       // F12.13 — Mutex (REGLA 2): si ya hay un cobro en curso (doble clic en
