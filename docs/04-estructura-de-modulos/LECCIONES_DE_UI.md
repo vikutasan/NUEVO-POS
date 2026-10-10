@@ -368,6 +368,47 @@ línea, que `Cancelar` **no** emita, y que el botón cumpla R-04 (≥44px). Lecc
 compuerta de paridad debe afirmar sobre el **gesto** (tocar la cantidad → teclado), no solo sobre
 el resultado numérico*.
 
+**Décima vuelta (F12.23b, 10 Oct 2026) — la paridad de operación tiene DOS mitades: el gesto y la
+fusión.** Al cerrar F12.23 (el gesto: tocar la cantidad → teclado) el usuario reportó que **faltaba
+la otra mitad**: *«en el viejo pos si yo doy tap varias veces sobre el mismo producto aumenta la
+cantidad pero no me aparece el producto varias veces y en el nuevo pos si doy tap varias veces al
+mismo producto, este aparece varias veces con cantidad 1»*. Es decir: porté **cómo se edita** la
+cantidad, pero no **cómo se acumula** al tocar la ficha repetidamente.
+
+**Causa raíz (una clave de fusión que no coincidía):** el POS viejo fusionaba por **`product.id`**
+(`apps/pos/hooks/useCart.js:105`): `prev.items.find(item => item.id === targetProduct.id)` →
+`quantity + 1`. El POS nuevo fusionaba por **`item_id`**, pero `agregarProducto`
+(`RetailVisionPOS.jsx`) **no pasa** `item_id`; `anadirLinea` generaba un **UUID nuevo en cada tap**
+(`nuevoItemId()`), así que el `find` por `item_id` **nunca** encontraba la línea previa → N líneas
+de 1. La regla RN-17 («un producto aparece una sola vez; agregarlo incrementa») estaba **escrita en
+un comentario** pero **no implementada** en esa ruta.
+
+**Qué se hizo (fusión por producto, identidad estable):**
+- En `anadirLinea` (`useCart.js`), si el llamador **no** trae `item_id` explícito, la línea se
+  identifica por **`product_id`** (fusión RN-17, paridad con el POS viejo). Si **sí** trae
+  `item_id` (p. ej. una línea hidratada del servidor con su identidad ya asignada), se conserva la
+  ruta por `item_id` para no pisar esa identidad.
+- **Identidad estable para el servidor:** antes de escribir, se resuelve la línea **existente** en
+  el espejo `lineasRef.current` (prohibición #3) y se **reutiliza su `item_id`** en la llamada a
+  `anadirItem`. Así el **backend también fusiona** (contrato 18: mismo `item_id` incrementa) en vez
+  de crear una fila duplicada. Sin este segundo paso, el frontend mostraría una línea pero el
+  servidor tendría dos.
+
+**Regla (octavo corolario):** la paridad de operación (§6.8) tiene **dos mitades** y hay que portar
+**ambas**: (1) el **gesto** que edita el valor y (2) la **regla de acumulación** que decide cuándo
+dos acciones son «la misma línea». Portar solo el gesto deja un POS que *parece* igual pero
+**duplica** líneas. Y una regla escrita **solo en un comentario** no es una regla: es una
+**intención**. La compuerta debe afirmar sobre el **comportamiento** (N taps → 1 línea con N), no
+sobre el comentario.
+
+**Compuerta (F12.23b):** `useCart.f12_23b.test.jsx` (6 tests) exige que N taps **sin** `item_id`
+dejen **una sola** línea con `quantity: N`; que el `item_id` de la línea fusionada sea **estable**
+entre taps; que el servidor reciba el **mismo** `item_id` en cada tap (no duplica); que un
+`item_id` **explícito** conserve la ruta por identidad (dos líneas del mismo producto con distinto
+`item_id` **coexisten**); y que productos **distintos** no se fusionen. Lección transversal: *una
+compuerta de fusión debe afirmar sobre el **conteo de líneas** y la **estabilidad de la clave**, no
+solo sobre la cantidad total*.
+
 | Trampa | Síntoma | Solución |
 |---|---|---|
 | Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`aspect-[16/9]`) y poner `overflow-y-auto` en el hijo que desborda |

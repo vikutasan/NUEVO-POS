@@ -203,19 +203,47 @@ export function useCart(opciones = {}) {
    * Añade una línea de forma ATÓMICA e IDEMPOTENTE (contrato 18).
    * Si no hay `api`, opera solo en memoria (modo local).
    *
-   * @param {{product_id: string, quantity?: number, unit_price?: number}} linea
+   * F12.23b — PARIDAD RN-17 CON EL POS VIEJO (§6.8): el POS viejo fusionaba por
+   * `product.id` (`apps/pos/hooks/useCart.js:105`): tocar N veces el mismo
+   * producto dejaba UNA línea con `quantity: N`, no N líneas de 1. Aquí se
+   * replica esa regla: si el llamador NO trae un `item_id` explícito (es decir,
+   * viene de un tap en la ficha del producto o del lector), se fusiona por
+   * `product_id`. Si SÍ trae `item_id` (p. ej. una línea hidratada del servidor
+   * con su identidad ya asignada), se conserva la ruta por `item_id` para no
+   * pisar la identidad que el servidor conoce.
+   *
+   * @param {{product_id: string, quantity?: number, unit_price?: number, item_id?: string}} linea
    * @returns {Promise<import('../utils/outcome.js').Outcome>}
    */
   const anadirLinea = useCallback(async (linea) => {
-    const itemId = linea.item_id || nuevoItemId();
     const cantidad = Number(linea.quantity ?? 1);
+    // ¿El llamador trae identidad propia? Si no, la línea se identifica por su
+    // `product_id` (fusión RN-17); si sí, por su `item_id`.
+    const itemIdExplicito = linea.item_id || null;
+
+    // F12.23b — resolver la línea EXISTENTE antes de escribir. Si el llamador no
+    // dio `item_id`, buscamos por `product_id` en el espejo `lineasRef` (que
+    // SIEMPRE tiene el estado actual, prohibición #3). Si hay fusión, reutilizamos
+    // el `item_id` de la línea existente para que el SERVIDOR también fusione
+    // (contrato 18: `anadirItem` con el mismo `item_id` incrementa, no duplica).
+    const existente =
+      itemIdExplicito !== null
+        ? lineasRef.current.find((l) => l.item_id === itemIdExplicito) || null
+        : lineasRef.current.find((l) => l.product_id === linea.product_id) || null;
+    // Clave efectiva: la de la línea existente si fusionamos; si no, la explícita
+    // o una nueva.
+    const itemId = existente ? existente.item_id : itemIdExplicito || nuevoItemId();
 
     // Actualización optimista local (el servidor confirma después).
     setLineas((prev) => {
-      const existente = prev.find((l) => l.item_id === itemId);
-      if (existente) {
+      // F12.23b — clave de fusión: `item_id` si el llamador lo dio; si no,
+      // `product_id` (paridad con el POS viejo, que fusionaba por producto).
+      const objetivo = itemIdExplicito
+        ? prev.find((l) => l.item_id === itemIdExplicito)
+        : prev.find((l) => l.product_id === linea.product_id);
+      if (objetivo) {
         return prev.map((l) =>
-          l.item_id === itemId ? { ...l, quantity: l.quantity + cantidad } : l
+          l === objetivo ? { ...l, quantity: l.quantity + cantidad } : l
         );
       }
       return [
