@@ -639,6 +639,17 @@ class CuentaAbiertaSalida(BaseModel):
     order_type: str = "VENTA_DIRECTA"
     delivery_type: str | None = None
     created_at: datetime | None = None
+    # ── BUG-04 (10 Oct 2026) — Contexto de pedido COMPLETO ────────────────
+    # Al recuperar un PEDIDO del pizarrón, el cliente reconstruye su bloque
+    # `order_*` desde el post-it (contrato 23). Antes faltaban estos cuatro
+    # campos, así que la fecha compromiso de entrega (`committed_at`), el
+    # empaque, la dirección y las notas se PERDÍAN del estado local al
+    # recuperar la cuenta (solo sobrevivían si nunca se salía de la terminal).
+    # Siguen siendo escalares (Regla 15): la frontera A-02 se respeta.
+    committed_at: datetime | None = None
+    packaging_type: str | None = None
+    delivery_address: str | None = None
+    order_notes: str | None = None
 
 
 class CuentasAbiertasSalida(BaseModel):

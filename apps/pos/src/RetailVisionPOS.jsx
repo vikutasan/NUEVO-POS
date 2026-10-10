@@ -474,6 +474,13 @@ export default function RetailVisionPOS({
       // (b) CONTEXTO DE PEDIDO: se restaura desde el `postit` (contrato 23),
       // que es el ÚNICO objeto que trae `order_type`/`delivery_type`/cliente.
       // El contrato 21 (fresco) NO los trae (Regla 15).
+      //
+      // BUG-04 (10 Oct 2026) — CONTEXTO DE PEDIDO COMPLETO: antes solo se
+      // restauraban 4 campos, así que al recuperar un PEDIDO del pizarrón se
+      // PERDÍA la fecha compromiso de entrega (`committed_at`) del estado local
+      // (y con ella el empaque, la dirección y las notas). El dato SÍ estaba en
+      // la BD; se perdía al reconstruir el bloque. El contrato 23 ahora proyecta
+      // los cuatro campos, y aquí se pasan a `construirBloquePedido`.
       const esPedido = postit && postit.order_type === 'PEDIDO';
       if (esPedido) {
         setTipoPedido('PEDIDO');
@@ -483,6 +490,10 @@ export default function RetailVisionPOS({
             delivery_type: postit.delivery_type,
             customer_name: postit.customer_name,
             customer_phone: postit.customer_phone,
+            committed_at: postit.committed_at,
+            packaging_type: postit.packaging_type,
+            delivery_address: postit.delivery_address,
+            order_notes: postit.order_notes,
           }),
         );
       } else {

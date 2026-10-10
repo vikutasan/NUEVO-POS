@@ -649,13 +649,17 @@ CONTRATOS: tuple[Contrato, ...] = (
             "F12.6 — PARIDAD DE PRESENTACIÓN: la proyección incluye terminal, "
             "capturista (nombre desnormalizado, patrón F10.5), cliente, teléfono, "
             "tipo de pedido, tipo de entrega y hora de creación, como el viejo POS.",
+            "BUG-04 — CONTEXTO DE PEDIDO COMPLETO: la proyección incluye además "
+            "`committed_at` (fecha compromiso de entrega), `packaging_type`, "
+            "`delivery_address` y `order_notes`. Sin ellos, recuperar un PEDIDO del "
+            "pizarrón perdía su fecha compromiso en el estado local del cliente.",
             "Si `terminal_id` viene, devuelve SOLO las cuentas de esa terminal (RN-31).",
             "FICHA_FIX_PIZARRON_422 — si `terminal_id` se OMITE (o viene vacío), "
             "devuelve TODAS las cuentas OPEN de TODAS las terminales (modo CAJA, D1).",
             "NO devuelve las líneas: leer las líneas es del contrato 21.",
         ),
         errores=(),
-        estado_hoy="FASE 5.0 + F12.6 + FICHA_FIX_PIZARRON_422",
+        estado_hoy="FASE 5.0 + F12.6 + FICHA_FIX_PIZARRON_422 + BUG-04",
     ),
     # ── §11 IA — Voz (proveedor: Centro de IA — DT-07 / FASE 7.0) ──────────
     Contrato(

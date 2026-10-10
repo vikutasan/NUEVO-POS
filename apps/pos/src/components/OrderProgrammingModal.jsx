@@ -154,7 +154,11 @@ export default function OrderProgrammingModal({
       ? aIsoLocal(new Date(datosIniciales.committed_at))
       : '',
     delivery_address: datosIniciales?.delivery_address || '',
-    order_notes: datosIniciales?.notes || '',
+    // BUG-04 — el bloque `order_*` (contrato 3) nombra las notas `order_notes`,
+    // no `notes`. Leer `notes` dejaba el campo vacío al reabrir el modal sobre
+    // un pedido recuperado del pizarrón. Se acepta `notes` como respaldo por
+    // compatibilidad con cualquier consumidor que use el nombre corto.
+    order_notes: datosIniciales?.order_notes || datosIniciales?.notes || '',
   });
   const [guardando, setGuardando] = useState(false);
   const [confirmado, setConfirmado] = useState(false);

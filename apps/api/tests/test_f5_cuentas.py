@@ -19,7 +19,16 @@ Esta puerta verifica CUATRO cosas (Plan de Abordaje Fase 5 §4.0.3):
       Cada cuenta expone una PROYECCIÓN de campos escalares explícitos (nunca
       las líneas ni un `SELECT *`). FASE 5.0: 5 campos. FASE 12.6 amplió la
       proyección a 12 campos para la paridad de presentación con el viejo POS
-      (terminal, capturista, cliente, teléfono, tipo de pedido, hora).
+      (terminal, capturista, cliente, teléfono, tipo de pedido, hora). BUG-04
+      la amplió a 16 con el contexto de pedido COMPLETO (fecha compromiso de
+      entrega, empaque, dirección y notas).
+
+  ✓ test_contexto_de_pedido_completo  (BUG-04)
+      Al recuperar un PEDIDO del pizarrón, el cliente reconstruye su bloque
+      `order_*` desde el post-it (contrato 23). Antes faltaban `committed_at`,
+      `packaging_type`, `delivery_address` y `order_notes`, así que la fecha
+      compromiso de entrega se PERDÍA del estado local al recuperar la cuenta.
+      El dato SÍ estaba en la BD; se perdía al reconstruir el bloque.
 
   ✓ test_sin_terminal_id_devuelve_todas  (FICHA_FIX_PIZARRON_422)
       Sin `terminal_id` (o vacío) devuelve TODAS las cuentas OPEN de TODAS las
@@ -36,6 +45,7 @@ que las puertas de FASE 3.2 y FASE 4.0.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import httpx
@@ -239,9 +249,11 @@ async def test_no_devuelve_cuentas_cobradas(entorno):
 
 # FASE 5.0: la proyección eran 5 campos. FASE 12.6 la amplió a 12 para la
 # paridad de presentación con el viejo POS (corcho + post-it con terminal,
-# capturista, cliente, teléfono, tipo de pedido y hora). Regla 15 NO exige
-# "5 campos para siempre": exige una PROYECCIÓN de campos escalares explícitos
-# — nunca las líneas, nunca un `SELECT *` (frontera A-02 / O-23).
+# capturista, cliente, teléfono, tipo de pedido y hora). BUG-04 la amplió a 16
+# con el contexto de pedido COMPLETO (fecha compromiso de entrega, empaque,
+# dirección y notas). Regla 15 NO exige "5 campos para siempre": exige una
+# PROYECCIÓN de campos escalares explícitos — nunca las líneas, nunca un
+# `SELECT *` (frontera A-02 / O-23).
 CAMPOS_ESPERADOS = {
     "id",
     "account_num",
@@ -255,6 +267,11 @@ CAMPOS_ESPERADOS = {
     "order_type",
     "delivery_type",
     "created_at",
+    # BUG-04 — contexto de pedido COMPLETO (paridad al recuperar del pizarrón).
+    "committed_at",
+    "packaging_type",
+    "delivery_address",
+    "order_notes",
 }
 
 
@@ -262,9 +279,10 @@ CAMPOS_ESPERADOS = {
 async def test_respuesta_ligera_campos_escalares(entorno):
     """Cada cuenta expone la proyección de campos escalares explícitos (Regla 15).
 
-    FASE 12.6: la proyección es de 12 campos (paridad de presentación con el
-    viejo POS). Lo que la Regla 15 prohíbe sigue prohibido: NO se exponen las
-    líneas del ticket (eso es del contrato 21) ni un volcado de la tabla.
+    FASE 12.6: la proyección era de 12 campos (paridad de presentación con el
+    viejo POS). BUG-04 la amplió a 16 con el contexto de pedido COMPLETO. Lo que
+    la Regla 15 prohíbe sigue prohibido: NO se exponen las líneas del ticket
+    (eso es del contrato 21) ni un volcado de la tabla.
     """
     ent: _Entorno = entorno
     await _limpiar(ent)
@@ -282,12 +300,80 @@ async def test_respuesta_ligera_campos_escalares(entorno):
 
         campos = set(cuentas[0].keys())
         assert campos == CAMPOS_ESPERADOS, (
-            f"La respuesta ligera debe exponer la proyección de F12.6 "
+            f"La respuesta ligera debe exponer la proyección de F12.6 + BUG-04 "
             f"({len(CAMPOS_ESPERADOS)} campos), tiene: {campos}"
         )
         # NO debe exponer las líneas (eso es del contrato 21).
         assert "items" not in campos
         assert "lineas" not in campos
+    finally:
+        await _limpiar(ent)
+
+
+# ---------------------------------------------------------------------------
+# Criterio 3b — BUG-04: contexto de pedido COMPLETO en el post-it
+# ---------------------------------------------------------------------------
+#
+# BUG-04 (10 Oct 2026) — Al COBRAR un PEDIDO invocado desde el pizarrón, la
+# fecha compromiso de entrega (`committed_at`) NO se restauraba. El dato SÍ
+# estaba en la BD (columna del ticket); se perdía en el estado local del cliente
+# al reconstruir el bloque `order_*` desde el post-it (contrato 23), porque la
+# proyección NO exponía `committed_at` (ni `packaging_type`, `delivery_address`
+# ni `order_notes`). Solo sobrevivía si el pedido nunca salía de la terminal.
+#
+# La corrección amplía la proyección del contrato 23 con esos cuatro campos.
+# Esta prueba siembra un ticket con ellos y verifica que viajen en la respuesta.
+
+@pytest.mark.asyncio
+async def test_contexto_de_pedido_completo(entorno):
+    """El post-it (contrato 23) expone el contexto de pedido COMPLETO (BUG-04).
+
+    Siembra un ticket PEDIDO con `committed_at`, `packaging_type`,
+    `delivery_address` y `order_notes`, y verifica que los cuatro viajen en la
+    respuesta. Sin ellos, recuperar el pedido del pizarrón perdía su fecha
+    compromiso de entrega en el estado local del cliente.
+    """
+    ent: _Entorno = entorno
+    await _limpiar(ent)
+    try:
+        await _sembrar(ent)
+        ticket_id = await _crear_ticket(ent, TERMINAL_A)
+
+        # Sembramos el contexto de pedido directamente en la BD.
+        compromiso = datetime(2026, 10, 12, 18, 30, tzinfo=timezone.utc)
+        async with ent.Session() as db:
+            ticket = await db.get(Ticket, ticket_id)
+            ticket.order_type = "PEDIDO"
+            ticket.delivery_type = "DOMICILIO"
+            ticket.packaging_type = "CAJA"
+            ticket.delivery_address = "Av. Reforma 123, Col. Centro"
+            ticket.order_notes = "Sin nueces, por favor"
+            ticket.committed_at = compromiso
+            await db.commit()
+
+        async with _cliente() as cliente:
+            res = await cliente.get(
+                "/pos/open-accounts", params={"terminal_id": TERMINAL_A}
+            )
+        assert res.status_code == 200, res.text
+        cuentas = res.json()["cuentas"]
+        assert len(cuentas) == 1, "Se esperaba exactamente una cuenta"
+
+        cuenta = cuentas[0]
+        assert cuenta["order_type"] == "PEDIDO"
+        assert cuenta["delivery_type"] == "DOMICILIO"
+        assert cuenta["packaging_type"] == "CAJA"
+        assert cuenta["delivery_address"] == "Av. Reforma 123, Col. Centro"
+        assert cuenta["order_notes"] == "Sin nueces, por favor"
+        # `committed_at` viaja como ISO-8601 (UTC). Comparamos el instante.
+        assert cuenta["committed_at"] is not None, (
+            "BUG-04: `committed_at` debe viajar en el post-it para que el "
+            "cliente restaure la fecha compromiso al recuperar el pedido."
+        )
+        instante = datetime.fromisoformat(cuenta["committed_at"])
+        assert instante == compromiso, (
+            f"Se esperaba {compromiso.isoformat()}, llegó {cuenta['committed_at']}"
+        )
     finally:
         await _limpiar(ent)
 
