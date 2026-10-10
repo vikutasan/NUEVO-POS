@@ -302,6 +302,40 @@ BUG-10g **exige además** `max-h-[calc(100vh-2rem)]` en la línea del tablero (c
 de fuente). Lección transversal: *una compuerta que verifica la proporción pero no el tope no
 verifica que el marco quepa*.
 
+**Octava vuelta (BUG-10h, 10 Oct 2026) — la barra existía pero el SO la ocultaba.**
+Con el HMR sano (10e), el `aspect-[16/9]` (10f) y el tope `max-h-[calc(100vh-2rem)]` (10g), el
+usuario **seguía** sin ver la barra. Aquí dejé de adivinar y **medí**: escribí un arnés que lanza
+Chrome headless por el **Chrome DevTools Protocol** (CDP, `--remote-debugging-port` + `WebSocket`
+global de Node 24), inyecta el markup exacto del tablero y lee el layout **computado** real. El
+veredicto fue tajante: el wrapper **sí desplaza** (`clientHeight=400` vs `scrollHeight=654`,
+`canScroll: true`) y la barra **sí se renderiza** con **10px** de ancho clásico (no overlay). Es
+decir: **el CSS era correcto**. El problema no estaba en el layout sino en la **política del SO**:
+en Windows 11 con *«Ocultar automáticamente las barras de desplazamiento»* activado, `overflow-y:
+auto` usa barras **overlay** que **solo aparecen al hacer scroll**; el usuario, que no ve barra
+alguna, concluye que no hay. El POS viejo «parecía» tenerla porque su barra vive al borde de un
+único grid.
+
+**Mitigación final:** forzar la barra a estar **SIEMPRE presente y visible**, sin depender del modo
+overlay del SO:
+- `overflow-y-scroll` (en el wrapper) **reserva el carril** aunque no haga falta.
+- `scrollbar-gutter: stable` evita el salto de layout al aparecer.
+- Se declaran las propiedades **estándar** (`scrollbar-width: thin`, `scrollbar-color: …`) además
+  de las `::-webkit-scrollbar`, para que el color sea **explícito** y no lo decida el SO.
+- El **track** lleva fondo visible (`rgba(0,0,0,0.12)`) para que la barra sea inequívoca.
+
+**Regla (sexto corolario):** `overflow-y: auto` **no garantiza** que la barra se vea: en modo
+overlay (Windows 11, macOS) el SO la oculta hasta que se desplaza. Si la barra debe ser **siempre
+visible**, usa `overflow-y-scroll` + `scrollbar-gutter: stable` + `scrollbar-color`/`scrollbar-width`
+explícitos. Y, sobre todo: **mide el layout computado** (CDP) antes de seguir «arreglando» CSS a
+ciegas — el arnés demostró que el CSS ya era correcto y que el culpable era el SO.
+
+**Compuerta (endurecida en BUG-10h):** la compuerta de BUG-10g exigía `overflow-y-auto`, que es
+precisamente lo que el SO oculta en modo overlay. La compuerta de BUG-10h **exige**
+`overflow-y-scroll` (y **rechaza** `overflow-y-auto`) en el wrapper, y **exige** las propiedades
+estándar `scrollbar-gutter: stable`, `scrollbar-width: thin` y `scrollbar-color:` en el bloque
+`<style>`. Lección transversal: *una compuerta que exige `auto` no verifica que la barra se vea;
+`auto` es una promesa del SO, `scroll` es una garantía del CSS*.
+
 | Trampa | Síntoma | Solución |
 |---|---|---|
 | Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`aspect-[16/9]`) y poner `overflow-y-auto` en el hijo que desborda |
@@ -316,3 +350,4 @@ verifica que el marco quepa*.
 | `min-h` fijo + `justify-between` en el post-it | El post-it se ve **demasiado largo** y deja un hueco vacío en medio cuando el contenido es escaso | Usar `aspect-square` (alto = ancho de columna), como el POS viejo; **no** un `min-h` fijo |
 | Exportar funciones puras junto a componentes en Vite | El **Fast Refresh (HMR) colapsa**. El navegador no actualiza el código y los fixes de layout son invisibles. | No exportar utilidades puras desde el mismo módulo que un componente: extraerlas a un archivo de dominio (ej. `constants/`) o, como mínimo, quitarles el `export`. |
 | Compuerta que no puede fallar (tautología) | El test pasa siempre: verde con el código roto y con el sano; da falsa confianza | La compuerta debe poder **fallar**: afirmar sobre el código real (p. ej. leer la fuente y negar el patrón roto), no sobre un mock que se cumple por construcción |
+| `overflow-y: auto` en SO con barras overlay | La barra **existe** (el layout desplaza) pero **no se ve**: Windows 11/macOS la ocultan hasta hacer scroll; el usuario cree que no hay barra | Usar `overflow-y-scroll` (carril siempre reservado) + `scrollbar-gutter: stable` + `scrollbar-color`/`scrollbar-width` explícitos; y **medir el layout computado** (CDP) antes de seguir tocando CSS |
