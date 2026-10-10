@@ -131,9 +131,15 @@ class TerminalConfigItem(BaseModel):
 
 
 class GuardarConfigEntrada(BaseModel):
-    """Cuerpo de `POST /pos/terminals/config`."""
+    """Cuerpo de `POST /pos/terminals/config`.
+
+    `orden` es OPCIONAL (FIX "el orden no se persiste", 10 Oct 2026): si falta,
+    el backend CONSERVA el orden ya guardado. Así un cliente viejo que solo
+    manda la lista no borra la preferencia de despliegue.
+    """
 
     terminals: list[TerminalConfigItem]
+    orden: str | None = None
 
 
 class LockEntrada(BaseModel):
@@ -204,6 +210,53 @@ def _a_uuid(valor: str) -> UUID:
         return _uuid.uuid5(_uuid.NAMESPACE_URL, f"pos-usuario:{valor}")
 
 
+# Orden de despliegue de las terminales (F6.5). Es una preferencia de DESPLIEGUE,
+# no una entidad de negocio: se persiste junto a la lista, en el mismo JSON.
+#
+# FIX "el orden no se persiste" (10 Oct 2026): antes el orden vivía SOLO en el
+# `localStorage` del navegador, así que se perdía al cambiar de navegador o de
+# máquina. Ahora se guarda en el backend (fuente de verdad) y el `localStorage`
+# queda como caché/fallback. Ver `_leer_orden` / `_escribir_config`.
+ORDEN_IZQ_DER = "izq-der"
+ORDEN_DER_IZQ = "der-izq"
+ORDENES_VALIDOS: tuple[str, ...] = (ORDEN_IZQ_DER, ORDEN_DER_IZQ)
+
+
+def _leer_config_cruda() -> dict[str, object]:
+    """Lee el JSON crudo de configuración, tolerando AMBOS formatos.
+
+    Formatos aceptados:
+
+      - **Nuevo** (con orden): `{"orden": "izq-der", "terminals": [...]}`.
+      - **Viejo** (solo lista): `[...]` — escrito ANTES de persistir el orden.
+
+    Devuelve SIEMPRE un dict con las claves `terminals` (lista) y `orden`
+    (string). Si el archivo falta, está corrupto o vacío, cae a los defaults.
+    """
+    leido: object | None = None
+    try:
+        if _RUTA_CONFIG.exists():
+            leido = json.loads(_RUTA_CONFIG.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        leido = None
+
+    # Formato nuevo: objeto con `terminals` (y opcionalmente `orden`).
+    if isinstance(leido, dict):
+        terminals = leido.get("terminals")
+        orden = leido.get("orden")
+        return {
+            "terminals": terminals if isinstance(terminals, list) and terminals else CONFIG_POR_DEFECTO,
+            "orden": orden if orden in ORDENES_VALIDOS else ORDEN_IZQ_DER,
+        }
+
+    # Formato viejo: lista suelta (sin orden). Se asume el orden por defecto.
+    if isinstance(leido, list) and leido:
+        return {"terminals": leido, "orden": ORDEN_IZQ_DER}
+
+    # Sin archivo o corrupto: defaults.
+    return {"terminals": CONFIG_POR_DEFECTO, "orden": ORDEN_IZQ_DER}
+
+
 def _leer_config() -> list[dict[str, str]]:
     """Lee la configuración de terminales; si falta o está corrupta, la default.
 
@@ -212,16 +265,7 @@ def _leer_config() -> list[dict[str, str]]:
     que SIEMPRE traiga las cuatro claves (`id`, `name`, `icon`, `color`), con
     `color = None` cuando falte. Así el frontend recibe una forma estable.
     """
-    datos: list[dict[str, str]] | None = None
-    try:
-        if _RUTA_CONFIG.exists():
-            leido = json.loads(_RUTA_CONFIG.read_text(encoding="utf-8"))
-            if isinstance(leido, list) and leido:
-                datos = leido
-    except (OSError, json.JSONDecodeError):
-        pass
-    if datos is None:
-        datos = CONFIG_POR_DEFECTO
+    datos = _leer_config_cruda()["terminals"]
     return [
         {
             "id": item.get("id", ""),
@@ -233,11 +277,30 @@ def _leer_config() -> list[dict[str, str]]:
     ]
 
 
-def _escribir_config(terminals: list[dict[str, str]]) -> None:
-    """Persiste la configuración de terminales (best effort)."""
+def _leer_orden() -> str:
+    """Lee la preferencia de orden de despliegue; default `izq-der`."""
+    return str(_leer_config_cruda()["orden"])
+
+
+def _escribir_config(
+    terminals: list[dict[str, str]], orden: str | None = None
+) -> None:
+    """Persiste la configuración de terminales + el orden de despliegue.
+
+    Escribe SIEMPRE el formato nuevo (`{"orden", "terminals"}`). Si `orden` es
+    `None`, conserva el que ya estaba guardado (para no perderlo cuando el
+    frontend guarda solo la lista). Best effort: si no se puede escribir, la
+    configuración es de sesión y no rompe la UI.
+    """
+    orden_final = orden if orden in ORDENES_VALIDOS else _leer_orden()
     try:
         _RUTA_CONFIG.write_text(
-            json.dumps(terminals, ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps(
+                {"orden": orden_final, "terminals": terminals},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
         )
     except OSError:
         # Si no se puede escribir, la configuración es de sesión. No rompe la UI.
@@ -343,19 +406,24 @@ async def estado_terminales(db: AsyncSession = Depends(get_db)) -> dict[str, obj
 
 
 @router.get("/config")
-async def leer_config() -> list[dict[str, str | None]]:
-    """Configuración de terminales: lista de `{id, name, icon, color}`.
+async def leer_config() -> dict[str, object]:
+    """Configuración de terminales: `{terminals, orden}`.
 
-    `color` puede ser `None` (terminal sin color asignado). Por eso el tipo de
-    retorno admite `None` — si se anota como `str`, FastAPI rechaza la respuesta
-    con `ResponseValidationError` al encontrar un `None`.
+    `terminals` es la lista de `{id, name, icon, color}` (`color` puede ser
+    `None`). `orden` es la preferencia de despliegue (`izq-der` / `der-izq`),
+    persistida en el backend para que sobreviva entre navegadores y máquinas
+    (FIX "el orden no se persiste", 10 Oct 2026).
+
+    El tipo de retorno es `dict[str, object]` porque `color` admite `None`: si
+    se anotara como `str`, FastAPI rechazaría la respuesta con
+    `ResponseValidationError` al encontrar un `None`.
     """
-    return _leer_config()
+    return {"terminals": _leer_config(), "orden": _leer_orden()}
 
 
 @router.post("/config")
 async def guardar_config(entrada: GuardarConfigEntrada) -> ResultadoSimple:
-    """Guarda la configuración de terminales (lista + iconos + color de post-it).
+    """Guarda la configuración de terminales (lista + iconos + color + orden).
 
     Valida DOS invariantes antes de persistir (decisiones del usuario, 9 Oct 2026):
 
@@ -367,7 +435,20 @@ async def guardar_config(entrada: GuardarConfigEntrada) -> ResultadoSimple:
 
     Un `color = None` (sin asignar) es válido y NO cuenta para la unicidad:
     varias terminales pueden estar "sin color" a la vez.
+
+    `orden` (opcional) persiste la preferencia de despliegue. Si viene con un
+    valor fuera de `ORDENES_VALIDOS`, responde 400. Si falta, se conserva el
+    orden ya guardado (retrocompatibilidad con clientes que solo mandan la lista).
     """
+    if entrada.orden is not None and entrada.orden not in ORDENES_VALIDOS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"El orden '{entrada.orden}' no es válido. "
+                f"Usa uno de: {', '.join(ORDENES_VALIDOS)}."
+            ),
+        )
+
     colores_vistos: dict[str, str] = {}
     for terminal in entrada.terminals:
         color = terminal.color
@@ -391,7 +472,9 @@ async def guardar_config(entrada: GuardarConfigEntrada) -> ResultadoSimple:
             )
         colores_vistos[color] = terminal.id
 
-    _escribir_config([t.model_dump() for t in entrada.terminals])
+    _escribir_config(
+        [t.model_dump() for t in entrada.terminals], orden=entrada.orden
+    )
     return ResultadoSimple(success=True, message="Configuración guardada")
 
 

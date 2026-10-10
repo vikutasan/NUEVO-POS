@@ -81,6 +81,12 @@ export function useTerminals(currentUser) {
   );
 
   // Persistir la preferencia de orden (best effort: nunca rompe la UI).
+  //
+  // DEUDA-BUG08 Obs-1 (persistencia del orden): la preferencia se guarda en DOS
+  // sitios. `localStorage` es la caché local (respuesta instantánea al montar,
+  // antes de que el API conteste) y el backend (`terminal_config.json`) es la
+  // fuente de verdad compartida entre navegadores/terminales. El backend manda:
+  // al montar, si responde con un orden, éste sobreescribe la caché local.
   useEffect(() => {
     try {
       localStorage.setItem(CLAVE_ORDEN_TERMINALES, ordenTerminales);
@@ -89,10 +95,18 @@ export function useTerminals(currentUser) {
     }
   }, [ordenTerminales]);
 
-  // Alternar el orden de despliegue (izq-der <-> der-izq).
+  // Alternar el orden de despliegue (izq-der <-> der-izq) y persistirlo en el
+  // backend para que sobreviva entre navegadores. El cambio local es inmediato
+  // (optimista); si el guardado remoto falla, la UI ya refleja el nuevo orden y
+  // la caché local lo conserva hasta la próxima sincronización.
   const invertirOrden = useCallback(() => {
-    setOrdenTerminales(prev => (prev === ORDEN_IZQ_DER ? ORDEN_DER_IZQ : ORDEN_IZQ_DER));
-  }, []);
+    setOrdenTerminales(prev => {
+      const nuevo = prev === ORDEN_IZQ_DER ? ORDEN_DER_IZQ : ORDEN_IZQ_DER;
+      // Best effort: no se espera la respuesta ni se bloquea la UI.
+      saveTerminalConfig(terminals, nuevo).catch(() => {});
+      return nuevo;
+    });
+  }, [terminals]);
 
   // Cargar configuración y estado al montar
   useEffect(() => {
@@ -101,11 +115,21 @@ export function useTerminals(currentUser) {
     async function init() {
       try {
         const [config, statusMap] = await Promise.all([
-          fetchTerminalConfig().catch(() => DEFAULT_TERMINALS),
+          fetchTerminalConfig().catch(() => ({ terminals: DEFAULT_TERMINALS, orden: null })),
           fetchTerminalStatuses().catch(() => ({})),
         ]);
         if (cancelled) return;
-        setTerminals(config);
+        // El servicio normaliza AMBOS formatos (lista legada o `{terminals, orden}`)
+        // a `{ terminals, orden }`. Se tolera también una lista cruda por si un
+        // mock/consumidor antiguo la entrega directamente.
+        const lista = Array.isArray(config) ? config : (config?.terminals ?? DEFAULT_TERMINALS);
+        const orden = Array.isArray(config) ? null : (config?.orden ?? null);
+        setTerminals(lista);
+        // El backend es la fuente de verdad del orden: si responde con uno válido,
+        // sobreescribe la caché local (que ya sirvió para el primer render).
+        if (orden === ORDEN_DER_IZQ || orden === ORDEN_IZQ_DER) {
+          setOrdenTerminales(orden);
+        }
         setStatuses(statusMap);
       } catch (err) {
         if (!cancelled) setError(err.message);
@@ -240,12 +264,14 @@ export function useTerminals(currentUser) {
 
   const saveConfig = useCallback(async () => {
     try {
-      const result = await saveTerminalConfig(terminals);
+      // Se persiste la lista de terminales JUNTO con la preferencia de orden
+      // vigente, para que el gestor no pierda el orden al guardar cambios.
+      const result = await saveTerminalConfig(terminals, ordenTerminales);
       return result;
     } catch (err) {
       return { success: false, message: err.message };
     }
-  }, [terminals]);
+  }, [terminals, ordenTerminales]);
 
   return {
     // Estado

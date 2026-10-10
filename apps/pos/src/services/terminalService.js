@@ -98,25 +98,46 @@ export async function unlockTerminal(terminalId, userId) {
 }
 
 /**
- * Obtiene la configuración de terminales (lista + iconos).
- * @returns {Promise<Array>} [{ id, name, icon }, ...]
+ * Obtiene la configuración de terminales (lista + iconos + orden de despliegue).
+ *
+ * FIX "el orden no se persiste" (10 Oct 2026): el backend devuelve
+ * `{ terminals, orden }`. El orden (`izq-der` / `der-izq`) vive en el backend
+ * para que sobreviva entre navegadores y máquinas; antes solo estaba en el
+ * `localStorage` del navegador y se perdía.
+ *
+ * Tolerante a un backend viejo que devolvía solo la lista: en ese caso se
+ * normaliza a `{ terminals: [...], orden: 'izq-der' }`.
+ *
+ * @returns {Promise<{terminals: Array, orden: string}>}
  */
 export async function fetchTerminalConfig() {
   const res = await fetch(`${API_BASE_URL}/pos/terminals/config`);
   if (!res.ok) throw new Error(`Terminal config: ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  // Retrocompatibilidad: si el backend devuelve una lista suelta, normalizar.
+  if (Array.isArray(data)) {
+    return { terminals: data, orden: 'izq-der' };
+  }
+  return {
+    terminals: Array.isArray(data?.terminals) ? data.terminals : [],
+    orden: data?.orden === 'der-izq' ? 'der-izq' : 'izq-der',
+  };
 }
 
 /**
- * Guarda la configuración de terminales.
- * @param {Array} terminals - [{ id, name, icon }, ...]
+ * Guarda la configuración de terminales (lista + iconos + orden de despliegue).
+ * @param {Array} terminals - [{ id, name, icon, color }, ...]
+ * @param {string} [orden] - 'izq-der' | 'der-izq' (opcional; si falta, el
+ *   backend conserva el orden ya guardado).
  * @returns {Promise<Object>} { success: bool }
  */
-export async function saveTerminalConfig(terminals) {
+export async function saveTerminalConfig(terminals, orden) {
+  const body = { terminals };
+  if (orden) body.orden = orden;
   const res = await fetch(`${API_BASE_URL}/pos/terminals/config`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ terminals }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Save terminal config: ${res.status}`);
   return res.json();

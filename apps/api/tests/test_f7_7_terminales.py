@@ -198,14 +198,18 @@ async def test_criterio1_status_responde_200(entorno):
 
 @pytest.mark.asyncio
 async def test_criterio1_config_responde_200(entorno):
-    """`GET /pos/terminals/config` responde 200 con la lista de terminales."""
+    """`GET /pos/terminals/config` responde 200 con `{terminals, orden}`."""
     await _limpiar(entorno)
     async with _cliente() as cliente:
         r = await cliente.get("/pos/terminals/config")
     assert r.status_code == 200, r.text
     datos = r.json()
-    assert isinstance(datos, list) and datos
-    assert {"id", "name", "icon"} <= set(datos[0].keys())
+    # FIX "el orden no se persiste" (10 Oct 2026): la respuesta es un OBJETO con
+    # la lista de terminales y la preferencia de despliegue, no una lista suelta.
+    assert isinstance(datos, dict)
+    assert isinstance(datos["terminals"], list) and datos["terminals"]
+    assert datos["orden"] in ("izq-der", "der-izq")
+    assert {"id", "name", "icon"} <= set(datos["terminals"][0].keys())
 
 
 # ---------------------------------------------------------------------------
@@ -479,7 +483,7 @@ async def test_criterio8_guardar_y_releer_config(entorno):
         r = await cliente.post("/pos/terminals/config", json={"terminals": nuevas})
         assert r.status_code == 200, r.text
         leidas = (await cliente.get("/pos/terminals/config")).json()
-    assert [t["id"] for t in leidas] == ["C1", "C2"]
+    assert [t["id"] for t in leidas["terminals"]] == ["C1", "C2"]
     # Restaurar la configuración por defecto (6 terminales, sin color) para no
     # contaminar otros tests. El fixture autouse también la restaura, pero
     # dejarla explícita mantiene el test autocontenido.
@@ -659,7 +663,7 @@ async def test_criterio12_config_incluye_color_none_por_defecto(entorno):
     if _RUTA_CONFIG.exists():
         _RUTA_CONFIG.unlink()
     async with _cliente() as cliente:
-        datos = (await cliente.get("/pos/terminals/config")).json()
+        datos = (await cliente.get("/pos/terminals/config")).json()["terminals"]
     assert all("color" in t for t in datos)
     assert all(t["color"] is None for t in datos)
 
@@ -669,7 +673,7 @@ async def test_criterio12_caja_no_es_terminal(entorno):
     """CAJA NO aparece en la config: toda terminal es una caja en potencia (BUG-05)."""
     await _limpiar(entorno)
     async with _cliente() as cliente:
-        datos = (await cliente.get("/pos/terminals/config")).json()
+        datos = (await cliente.get("/pos/terminals/config")).json()["terminals"]
     ids = {t["id"] for t in datos}
     assert "CAJA" not in ids
     assert ids == {f"TERM-{n:02d}" for n in range(1, 7)}
@@ -684,7 +688,7 @@ async def test_criterio12_guardar_color_valido_persiste(entorno):
     async with _cliente() as cliente:
         r = await cliente.post("/pos/terminals/config", json={"terminals": config})
         assert r.status_code == 200, r.text
-        datos = (await cliente.get("/pos/terminals/config")).json()
+        datos = (await cliente.get("/pos/terminals/config")).json()["terminals"]
     por_id = {t["id"]: t for t in datos}
     assert por_id["TERM-01"]["color"] == "bg-cyan-300"
     assert por_id["TERM-02"]["color"] is None
@@ -736,3 +740,97 @@ async def test_criterio12_colores_distintos_es_valido(entorno):
     async with _cliente() as cliente:
         r = await cliente.post("/pos/terminals/config", json={"terminals": config})
     assert r.status_code == 200, r.text
+
+
+# ---------------------------------------------------------------------------
+# FIX "el orden no se persiste" (10 Oct 2026) — la preferencia izq-der/der-izq
+# vive en el BACKEND (`terminal_config.json`), no solo en el `localStorage` del
+# navegador. Así el orden que el usuario fija en el gestor sobrevive entre
+# navegadores y máquinas, y no hay que reconfigurarlo cada vez que entra.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_orden_por_defecto_es_izq_der(entorno):
+    """Sin config guardada, el orden por defecto es `izq-der`."""
+    from routers.terminals import _RUTA_CONFIG
+
+    await _limpiar(entorno)
+    if _RUTA_CONFIG.exists():
+        _RUTA_CONFIG.unlink()
+    async with _cliente() as cliente:
+        datos = (await cliente.get("/pos/terminals/config")).json()
+    assert datos["orden"] == "izq-der"
+
+
+@pytest.mark.asyncio
+async def test_orden_der_izq_se_persiste_y_se_relee(entorno):
+    """`POST /config` con `orden='der-izq'` persiste y `GET /config` lo devuelve."""
+    await _limpiar(entorno)
+    config = _config_base()
+    async with _cliente() as cliente:
+        r = await cliente.post(
+            "/pos/terminals/config",
+            json={"terminals": config, "orden": "der-izq"},
+        )
+        assert r.status_code == 200, r.text
+        datos = (await cliente.get("/pos/terminals/config")).json()
+    assert datos["orden"] == "der-izq"
+    # La lista de terminales NO se altera por cambiar el orden.
+    assert [t["id"] for t in datos["terminals"]] == ["TERM-01", "TERM-02"]
+
+
+@pytest.mark.asyncio
+async def test_orden_ausente_conserva_el_guardado(entorno):
+    """Un `POST /config` SIN `orden` conserva el orden ya guardado (retrocompat)."""
+    await _limpiar(entorno)
+    config = _config_base()
+    async with _cliente() as cliente:
+        # 1) Fijar der-izq.
+        await cliente.post(
+            "/pos/terminals/config",
+            json={"terminals": config, "orden": "der-izq"},
+        )
+        # 2) Guardar solo la lista (cliente viejo): el orden debe sobrevivir.
+        r = await cliente.post(
+            "/pos/terminals/config", json={"terminals": config}
+        )
+        assert r.status_code == 200, r.text
+        datos = (await cliente.get("/pos/terminals/config")).json()
+    assert datos["orden"] == "der-izq"
+
+
+@pytest.mark.asyncio
+async def test_orden_invalido_responde_400(entorno):
+    """Un `orden` fuera de `ORDENES_VALIDOS` responde 400."""
+    await _limpiar(entorno)
+    config = _config_base()
+    async with _cliente() as cliente:
+        r = await cliente.post(
+            "/pos/terminals/config",
+            json={"terminals": config, "orden": "diagonal"},
+        )
+    assert r.status_code == 400, r.text
+    assert "orden" in r.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_lector_tolera_formato_viejo_lista(entorno):
+    """Un `terminal_config.json` en formato VIEJO (lista suelta) se lee sin romper.
+
+    Antes de este fix el archivo era una lista `[...]`. El lector debe aceptarlo
+    y asumir el orden por defecto, para no romper instalaciones existentes.
+    """
+    import json
+
+    from routers.terminals import _RUTA_CONFIG
+
+    await _limpiar(entorno)
+    _RUTA_CONFIG.write_text(
+        json.dumps([{"id": "TERM-01", "name": "Terminal 1", "icon": "🖥️"}]),
+        encoding="utf-8",
+    )
+    async with _cliente() as cliente:
+        datos = (await cliente.get("/pos/terminals/config")).json()
+    assert datos["orden"] == "izq-der"
+    assert [t["id"] for t in datos["terminals"]] == ["TERM-01"]
