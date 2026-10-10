@@ -6,6 +6,12 @@
 Aquí vivirá la estructura de módulos del nuevo POS: qué módulos existen, qué contrato expone
 cada uno, y quién es dueño de qué tabla.
 
+## Documentos de lecciones
+
+- [`LECCIONES_DE_UI.md`](./LECCIONES_DE_UI.md) — **elementos transversales y ramas de
+  retorno**: por qué un `return` temprano puede dejar fuera un toast/modal/banner, cómo
+  diagnosticar «un aviso no aparece» y cómo propagar el error real del backend. Nace de BUG-05.
+
 ## Módulos ya decididos (fuera del alcance del POS)
 
 | Módulo | Rol transversal | Estado |

@@ -11,6 +11,12 @@ Aquí vivirán las **reglas de negocio** portadas del POS actual, cada una **con
   plan de construcción — discrepancia registrada, se resuelve en F3).
 - `deudas-conocidas.md` — las 5 deudas (DEUDA-01 a DEUDA-05).
 
+## Documentos de arquitectura
+
+- [`ARQUITECTURA_TERMINALES_Y_CAJA.md`](./ARQUITECTURA_TERMINALES_Y_CAJA.md) — **toda terminal
+  es una caja en potencia**: qué es una terminal, qué es un turno de caja, el vocabulario
+  canónico de ids (`TERM-0N`) y por qué **`CAJA` no es una terminal**. Nace de BUG-05.
+
 ## Regla de la fase
 
 La unidad de migración **no es la regla: es regla + test**. No se acepta una regla sin prueba.
