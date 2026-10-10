@@ -128,6 +128,8 @@ describe('F6.5.0 — Orden de terminales (hook)', () => {
     // El nuevo id va al FINAL del canónico (no al principio).
     expect(canonicoDespues.slice(0, canonicoAntes.length)).toEqual(canonicoAntes);
     expect(canonicoDespues.length).toBe(canonicoAntes.length + 1);
+    // BUG-05 — El id nuevo habla el vocabulario canónico `TERM-0N` (no `T1`).
+    expect(canonicoDespues[canonicoDespues.length - 1]).toBe('TERM-04');
     // Y visualmente aparece al principio (porque el orden está invertido).
     expect(result.current.terminalesDesplegadas[0].id).toBe(canonicoDespues[canonicoDespues.length - 1]);
   });

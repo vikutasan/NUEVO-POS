@@ -242,10 +242,17 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
     setConfirmDelete(null);
   }
 
+  // BUG-05 — Antes se descartaba el `detail` del backend y SIEMPRE se mostraba
+  //   "❌ Error al guardar", así que un fallo de validación (color fuera de la
+  //   paleta, color repetido…) parecía que el botón "no reaccionaba". Ahora se
+  //   propaga el mensaje real del backend.
   async function handleSave() {
     const result = await saveConfig();
-    showToast(result.success ? '✅ Configuración guardada' : '❌ Error al guardar',
-              result.success ? 'success' : 'error');
+    if (result.success) {
+      showToast('✅ Configuración guardada', 'success');
+    } else {
+      showToast(`❌ ${result.message || 'Error al guardar'}`, 'error');
+    }
   }
 
   /* ─── Loading ─── */
@@ -485,6 +492,22 @@ export default function TerminalSelector({ currentUser, onTerminalSelected }) {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Toast — BUG-05: el gestor TAMBIÉN debe mostrar el toast. Antes vivía
+            solo en la rama del selector principal, así que al pulsar "Guardar
+            cambios" el aviso de éxito/error nunca aparecía y el botón parecía
+            muerto. Se renderiza aquí para que el feedback sea visible. */}
+        {toast && (
+          <div style={{
+            position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)',
+            padding: '0.75rem 1.5rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: 700,
+            zIndex: 50, color: '#fff',
+            background: toast.type === 'error' ? '#dc2626' : toast.type === 'success' ? '#16a34a' : '#27272a',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+          }}>
+            {toast.msg}
           </div>
         )}
       </div>

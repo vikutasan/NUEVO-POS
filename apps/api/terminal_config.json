@@ -34,11 +34,5 @@
     "name": "Terminal 6",
     "icon": "🖥️",
     "color": null
-  },
-  {
-    "id": "CAJA",
-    "name": "Caja",
-    "icon": "💰",
-    "color": null
   }
 ]

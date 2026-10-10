@@ -201,13 +201,24 @@ export function useTerminals(currentUser) {
 
   // --- Gestión de terminales ---
 
+  // BUG-05 — El id de una terminal nueva debe hablar el MISMO vocabulario que el
+  //   API y la semilla (`TERM-0N`). Antes generaba `T1`, `T2`…, así que al
+  //   guardar el gestor se persistían ids que ninguna sesión/ticket reconocía y
+  //   `terminal_config.json` quedaba corrupto. Se calcula el siguiente número
+  //   libre a partir de los ids `TERM-0N` existentes (ignorando cualquier id
+  //   legado que no siga el patrón).
   const addTerminal = useCallback((position = 'end') => {
     setTerminals(prev => {
       const nums = prev
-        .filter(t => t.id.startsWith('T'))
-        .map(t => parseInt(t.id.replace('T', '')) || 0);
+        .map(t => /^TERM-(\d+)$/.exec(t.id))
+        .filter(Boolean)
+        .map(m => parseInt(m[1], 10));
       const nextNum = (nums.length > 0 ? Math.max(...nums) : 0) + 1;
-      const newT = { id: `T${nextNum}`, name: `Terminal ${nextNum}`, icon: '🖥️' };
+      const newT = {
+        id: `TERM-${String(nextNum).padStart(2, '0')}`,
+        name: `Terminal ${nextNum}`,
+        icon: '🖥️',
+      };
       return position === 'start' ? [newT, ...prev] : [...prev, newT];
     });
   }, []);

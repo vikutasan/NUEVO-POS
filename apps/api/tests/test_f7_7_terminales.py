@@ -79,7 +79,7 @@ def aislar_config_terminales():
     La config de terminales se persiste en un ARCHIVO real junto al API, no en
     la BD. Los tests que la escriben (`POST /config`) contaminaban a los demás:
     un test dejaba 2 terminales en el archivo y los siguientes fallaban con
-    `KeyError` al buscar `TERM-03`, `CAJA`, etc. Este fixture guarda el archivo
+    `KeyError` al buscar `TERM-03`, etc. Este fixture guarda el archivo
     antes de cada test y lo RESTAURA al terminar, sin importar el orden de
     ejecución. Si el archivo no existía, lo elimina al final.
     """
@@ -480,9 +480,10 @@ async def test_criterio8_guardar_y_releer_config(entorno):
         assert r.status_code == 200, r.text
         leidas = (await cliente.get("/pos/terminals/config")).json()
     assert [t["id"] for t in leidas] == ["C1", "C2"]
-    # Restaurar la configuración por defecto (6 terminales + CAJA, sin color)
-    # para no contaminar otros tests. El fixture autouse también la restaura,
-    # pero dejarla explícita mantiene el test autocontenido.
+    # Restaurar la configuración por defecto (6 terminales, sin color) para no
+    # contaminar otros tests. El fixture autouse también la restaura, pero
+    # dejarla explícita mantiene el test autocontenido.
+    # BUG-05 — CAJA NO es una terminal: la config por defecto son 6 `TERM-0N`.
     async with _cliente() as cliente:
         await cliente.post(
             "/pos/terminals/config",
@@ -496,7 +497,6 @@ async def test_criterio8_guardar_y_releer_config(entorno):
                     }
                     for n in range(1, 7)
                 ]
-                + [{"id": "CAJA", "name": "Caja", "icon": "💰", "color": None}]
             },
         )
 
@@ -625,9 +625,12 @@ async def test_criterio11_caja_y_candado_son_independientes(entorno):
 # Decisiones del usuario:
 #   - SIN semilla: las terminales arrancan sin color (el pizarrón las pinta
 #     amarillas, `bg-yellow-100`).
-#   - CAJA es configurable (entra como una terminal más).
 #   - NO se permiten colores repetidos (400 si dos terminales comparten color).
 #   - La paleta son los 21 colores de `PALETA_POST_ITS`.
+#
+# BUG-05 — CAJA NO es una terminal. Toda terminal es una caja EN POTENCIA
+# (basta abrir su turno). El modo "ver TODAS las cuentas" lo gobierna el turno
+# de caja abierto (`caja_habilitada`), no un id de terminal llamado `CAJA`.
 # ---------------------------------------------------------------------------
 
 
@@ -650,13 +653,14 @@ async def test_criterio12_config_incluye_color_none_por_defecto(entorno):
 
 
 @pytest.mark.asyncio
-async def test_criterio12_caja_es_terminal_configurable(entorno):
-    """CAJA aparece en la config por defecto (decisión del usuario)."""
+async def test_criterio12_caja_no_es_terminal(entorno):
+    """CAJA NO aparece en la config: toda terminal es una caja en potencia (BUG-05)."""
     await _limpiar(entorno)
     async with _cliente() as cliente:
         datos = (await cliente.get("/pos/terminals/config")).json()
     ids = {t["id"] for t in datos}
-    assert "CAJA" in ids
+    assert "CAJA" not in ids
+    assert ids == {f"TERM-{n:02d}" for n in range(1, 7)}
 
 
 @pytest.mark.asyncio

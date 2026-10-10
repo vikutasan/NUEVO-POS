@@ -8,7 +8,7 @@
  * tomado de la paleta compartida (`PALETA_POST_ITS`). Decisiones del usuario
  * (9 Oct 2026):
  *   1. NO hay semilla: las terminales nacen sin color (amarillo por defecto).
- *   2. CAJA es una terminal configurable más.
+ *   2. BUG-05 — CAJA NO es una terminal: toda terminal es una caja en potencia.
  *   3. NO se permiten colores repetidos: un color ya asignado a OTRA terminal
  *      se BLOQUEA (no se puede elegir).
  *   4. Se ofrecen los 21 colores de la paleta.

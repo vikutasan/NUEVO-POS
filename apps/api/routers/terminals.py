@@ -80,14 +80,16 @@ _RUTA_CONFIG = Path(__file__).resolve().parent.parent / "terminal_config.json"
 #   NO es un renombrado de terminales existentes: RN-12 prohíbe mutar el id de
 #   una terminal que ya tiene datos, y aquí no se muta nada — se elige la
 #   convención de nombres ANTES de que existan datos. Ver FICHA_F7_7d.
+#
+# BUG-05 — CAJA NO es una terminal.
+#   Toda terminal es una caja EN POTENCIA: basta con abrir su turno de caja
+#   (`caja_habilitada`). El modo "ver TODAS las cuentas" del pizarrón se activa
+#   por el TURNO DE CAJA ABIERTO, no por un id de terminal llamado `CAJA`. Tener
+#   una séptima entrada `CAJA` en la lista era un vestigio que confundía el
+#   vocabulario de ids (una terminal física = un `TERM-0N`). Se elimina.
 CONFIG_POR_DEFECTO: list[dict[str, str]] = [
     {"id": f"TERM-{n:02d}", "name": f"Terminal {n}", "icon": "🖥️"}
     for n in range(1, 7)
-] + [
-    # CAJA es una terminal configurable más (decisión del usuario, 9 Oct 2026).
-    # Las cuentas creadas en CAJA llevan `terminal_id = "CAJA"`, así que su
-    # post-it se pinta con el color que aquí se configure.
-    {"id": "CAJA", "name": "Caja", "icon": "💰"},
 ]
 
 # Catálogo de colores válidos para el post-it de cada terminal.

@@ -98,8 +98,10 @@ export default function POSHeader({
   empaqueEnCarrito = false,
 }) {
   const etiquetaEstado = ETIQUETAS_ESTADO[estado] || ETIQUETAS_ESTADO.NUEVA_VENTA;
-  const nombreTerminal =
-    terminalId === 'CAJA' ? 'Caja Central' : `Terminal ${terminalId || '—'}`;
+  // BUG-05 — CAJA NO es una terminal. Toda terminal es una caja en potencia, así
+  //   que el encabezado siempre rotula `Terminal <id>`; el modo "ver todas las
+  //   cuentas" lo gobierna el turno de caja abierto, no un id llamado `CAJA`.
+  const nombreTerminal = `Terminal ${terminalId || '—'}`;
 
   // F12.19 — PARIDAD DE PRESENTACIÓN con el viejo POS (§6.8):
   //   - Si hay folio (`numeroCuenta`), el centro muestra `CTA {folio}` en vez
