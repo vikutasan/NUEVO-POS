@@ -125,6 +125,32 @@ export async function fetchTerminalConfig() {
 }
 
 /**
+ * Construye el mapa `{ [terminal_id]: token }` que el pizarrón usa para pintar
+ * cada post-it (FASE 13.3).
+ *
+ * FIX "los post-its salen amarillos" (10 Oct 2026): `fetchTerminalConfig`
+ * devuelve `{ terminals, orden }`, NO una lista suelta. El consumidor iteraba
+ * el objeto con `for...of`, lo que lanzaba `TypeError` y el `catch` lo
+ * silenciaba: el mapa quedaba vacío y TODOS los post-its caían al amarillo por
+ * defecto. Esta función centraliza la lectura y es tolerante a un backend viejo
+ * que devolviera una lista suelta.
+ *
+ * Las terminales SIN color se OMITEN del mapa: el pizarrón cae al amarillo por
+ * defecto (`COLOR_SIN_ASIGNAR`).
+ *
+ * @param {{terminals?: Array}|Array} config — salida de `fetchTerminalConfig`.
+ * @returns {Record<string, string>} mapa id → token de color.
+ */
+export function construirColoresPorTerminal(config) {
+  const lista = Array.isArray(config) ? config : (config?.terminals ?? []);
+  const mapa = {};
+  for (const t of lista) {
+    if (t && t.id && t.color) mapa[t.id] = t.color;
+  }
+  return mapa;
+}
+
+/**
  * Guarda la configuración de terminales (lista + iconos + orden de despliegue).
  * @param {Array} terminals - [{ id, name, icon, color }, ...]
  * @param {string} [orden] - 'izq-der' | 'der-izq' (opcional; si falta, el

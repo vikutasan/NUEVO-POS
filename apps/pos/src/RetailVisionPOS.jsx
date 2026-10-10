@@ -97,7 +97,7 @@ import { listarCuentasAbiertas } from './services/openAccountsService.js';
 // `coloresPorTerminal` que el pizarrón usa para pintar cada post-it. Antes el
 // mapa vivía como constante local en el pizarrón; ahora es CONFIGURABLE desde
 // el gestor de terminales (decisión del usuario, 9 Oct 2026).
-import { fetchTerminalConfig } from './services/terminalService.js';
+import { fetchTerminalConfig, construirColoresPorTerminal } from './services/terminalService.js';
 // F12.20 — Persistir la programación de un ticket YA creado (contrato 31).
 // Cierra el hueco del flujo REAL "productos primero, pedido después": el ticket
 // nace VENTA_DIRECTA (contrato 29) y LUEGO se programa como PEDIDO. Sin esto,
@@ -358,11 +358,13 @@ export default function RetailVisionPOS({
       try {
         const config = await fetchTerminalConfig();
         if (!activo) return;
-        const mapa = {};
-        for (const t of config || []) {
-          if (t && t.id && t.color) mapa[t.id] = t.color;
-        }
-        setColoresPorTerminal(mapa);
+        // FIX "los post-its salen amarillos" (10 Oct 2026): `fetchTerminalConfig`
+        // devuelve `{ terminals, orden }` (no una lista suelta). Antes se iteraba
+        // el objeto con `for...of`, lo que lanzaba `TypeError` y el `catch` lo
+        // silenciaba: el mapa quedaba vacío y TODOS los post-its caían al
+        // amarillo por defecto. La lectura se centraliza en
+        // `construirColoresPorTerminal`, que tolera ambos formatos.
+        setColoresPorTerminal(construirColoresPorTerminal(config));
       } catch {
         // Sin color configurado: el pizarrón usa el amarillo por defecto.
       }
