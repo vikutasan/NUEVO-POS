@@ -617,6 +617,7 @@ CONTRATOS: tuple[Contrato, ...] = (
         entrada={
             "ticket_id": "UUID",
             "item_ids": "List[String]",
+            "cantidades": "List[Int] = [] (opcional, BUG-07)",
         },
         salida={
             "existe": "Boolean",
@@ -629,6 +630,10 @@ CONTRATOS: tuple[Contrato, ...] = (
             "`existe` es True solo si el ticket está persistido.",
             "`faltantes` lista los `item_ids` que el cliente cree haber enviado pero "
             "que NO están en la BD: si no está vacío, el frontend NO debe limpiar.",
+            "BUG-07: la cobertura es por UNIDADES (suma de `cantidades`), no por "
+            "número de líneas, porque RN-17 fusiona los productos repetidos en una "
+            "sola fila de `ticket_items`. Si `cantidades` se omite, se degrada al "
+            "conteo de líneas (comportamiento previo, BUG-06).",
             "Es de SOLO LECTURA: no modifica el ticket ni sus líneas.",
         ),
         errores=("404 si el ticket no existe.",),

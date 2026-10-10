@@ -417,6 +417,12 @@ export function useCart(opciones = {}) {
     const cliente = apiRef.current;
     const idTicket = ticketRef.current;
     const ids = lineasRef.current.map((l) => l.item_id);
+    // BUG-07 — Se envían también las CANTIDADES: RN-17 fusiona los productos
+    // repetidos en UNA fila del servidor, así que comparar el número de LÍNEAS
+    // del carrito contra el número de FILAS daba un falso déficit (mismo
+    // producto 2× = 2 líneas vs 1 fila). La verificación correcta es por
+    // UNIDADES (contrato 22).
+    const cantidades = lineasRef.current.map((l) => Number(l.quantity ?? 1));
 
     // Sin API o sin ticket: limpieza local (no hay nada que verificar).
     if (!cliente || !idTicket) {
@@ -431,8 +437,12 @@ export function useCart(opciones = {}) {
     setEnviando(true);
     try {
       // 1) Verificación post-envío (contrato 22): ¿están TODOS persistidos?
+      // BUG-07 — Se envían `item_ids` Y `cantidades` para que el backend
+      // verifique por UNIDADES (no por número de filas, que RN-17 fusiona).
       const verificacion = await aOutcome(() =>
-        withRetries(() => cliente.verificarEnvio(idTicket, { item_ids: ids }))
+        withRetries(() =>
+          cliente.verificarEnvio(idTicket, { item_ids: ids, cantidades })
+        )
       );
 
       if (!esOk(verificacion)) {

@@ -791,37 +791,53 @@ async def verificar_envio(
     servidor. Verifique la conexión WiFi." bloqueaba el envío de la cuenta.
 
     La pregunta correcta NO es "¿coincide cada `item_id`?" sino "¿se perdió
-    alguna línea?". Por eso la verificación es por COBERTURA (conteo): el envío
-    es válido si el servidor tiene AL MENOS tantas líneas como el carrito
-    afirma. La identidad de cada línea es irrelevante para esa pregunta.
+    alguna línea?". Por eso la verificación es por COBERTURA. La identidad de
+    cada línea es irrelevante para esa pregunta.
+
+    BUG-07 (CAJA) — La cobertura por NÚMERO DE LÍNEAS seguía siendo frágil por
+    RN-17: el servidor FUSIONA los productos repetidos en UNA sola fila de
+    `ticket_items` (incrementando su `quantity`). Un carrito con el mismo
+    producto agregado 2× tiene 2 líneas (2 `item_id`) pero el servidor tiene 1
+    fila → `n_lineas_servidor (1) < n_afirmadas (2)` → falso déficit → el modal
+    "hay productos sin guardar en el servidor" bloqueaba el envío aunque NADA se
+    hubiera perdido. La pregunta correcta es por UNIDADES, no por filas: el
+    servidor debe tener al menos tantas UNIDADES como el carrito afirma.
 
     Se conserva la forma del contrato (`item_ids_persistidos` / `faltantes`)
     para no romper al cliente: cuando hay cobertura, `faltantes` va vacío y
     todos los `item_id` se reportan como persistidos. Cuando el servidor tiene
-    MENOS líneas de las que el carrito afirma, se reporta el déficit como
+    MENOS unidades de las que el carrito afirma, se reporta el déficit como
     `faltantes` (la cicatriz v6.1 $453 sigue protegida: nunca un "siempre OK").
     """
     ticket = await _ticket_con_items_o_404(db, ticket_id)
 
-    n_lineas_servidor = len(ticket.items)
-    n_afirmadas = len(entrada.item_ids)
+    # Unidades REALES en el servidor (RN-17 fusiona duplicados en una fila).
+    n_unidades_servidor = sum(int(item.quantity) for item in ticket.items)
 
-    # Cobertura: el servidor tiene al menos tantas líneas como el carrito
+    # Unidades que el carrito AFIRMA. Si el cliente envía `cantidades` (BUG-07),
+    # se suman; si no (cliente viejo), se degrada al conteo de líneas (BUG-06).
+    if entrada.cantidades:
+        n_unidades_afirmadas = sum(int(c) for c in entrada.cantidades)
+    else:
+        n_unidades_afirmadas = len(entrada.item_ids)
+
+    # Cobertura: el servidor tiene al menos tantas UNIDADES como el carrito
     # afirma → no se perdió nada. La identidad de cada `item_id` es irrelevante.
-    if n_lineas_servidor >= n_afirmadas:
+    if n_unidades_servidor >= n_unidades_afirmadas:
         return VerificarEnvioSalida(
             existe=True,
             item_ids_persistidos=list(entrada.item_ids),
             faltantes=[],
         )
 
-    # Déficit real: el carrito afirma más líneas de las que el servidor tiene.
-    # Se reportan como faltantes las últimas `deficit` afirmadas (no se puede
-    # saber cuáles por identidad, pero el conteo prueba que algo se perdió).
-    deficit = n_afirmadas - n_lineas_servidor
-    item_ids_persistidos = list(entrada.item_ids[:n_lineas_servidor])
-    faltantes = list(entrada.item_ids[n_lineas_servidor:])
-    assert len(faltantes) == deficit
+    # Déficit real: el carrito afirma más UNIDADES de las que el servidor tiene.
+    # Se reportan como faltantes las últimas líneas afirmadas (no se puede saber
+    # cuáles por identidad, pero el conteo prueba que algo se perdió).
+    deficit = n_unidades_afirmadas - n_unidades_servidor
+    n_lineas_afirmadas = len(entrada.item_ids)
+    n_lineas_persistidas = max(0, n_lineas_afirmadas - deficit)
+    item_ids_persistidos = list(entrada.item_ids[:n_lineas_persistidas])
+    faltantes = list(entrada.item_ids[n_lineas_persistidas:])
 
     return VerificarEnvioSalida(
         existe=True,

@@ -211,8 +211,13 @@ export function actualizarPedidoTicket(ticketId, cuerpo) {
 /**
  * POST /pos/tickets/{id}/verify — verificación post-envío (contrato 22).
  * Confirma en BD que el ticket y sus ítems existen antes de limpiar el carrito.
+ *
+ * BUG-07 — `cantidades` (opcional): las unidades de cada línea del carrito, en
+ * el MISMO orden que `item_ids`. Necesarias porque RN-17 fusiona los productos
+ * repetidos en una sola fila del servidor; la verificación correcta es por
+ * UNIDADES, no por número de filas.
  * @param {string} ticketId
- * @param {{item_ids: string[]}} cuerpo
+ * @param {{item_ids: string[], cantidades?: number[]}} cuerpo
  */
 export function verificarEnvio(ticketId, cuerpo) {
   return peticion(`/pos/tickets/${ticketId}/verify`, {

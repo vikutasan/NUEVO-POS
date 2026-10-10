@@ -441,6 +441,105 @@ async def test_verificacion_item_ids_obsoletos_no_bloquea(entorno):
 
 
 @pytest.mark.asyncio
+async def test_verificacion_por_unidades_no_bloquea_duplicados(entorno):
+    """BUG-07 (CAJA) — Un producto repetido NO debe bloquear el envío.
+
+    Escenario real: el operador agrega el MISMO producto dos veces. El carrito
+    tiene DOS líneas (dos `item_id`, cada una con `quantity=1`), pero el
+    servidor FUSIONA ambas en UNA sola fila de `ticket_items` con
+    `quantity=2` (RN-17). La verificación por NÚMERO DE LÍNEAS (BUG-06) veía
+    `n_lineas_servidor (1) < n_afirmadas (2)` → falso déficit → el modal "hay
+    productos sin guardar en el servidor. Verifique la conexión WiFi."
+    bloqueaba el envío aunque NADA se hubiera perdido.
+
+    La verificación correcta es por UNIDADES: el servidor tiene 2 unidades y el
+    carrito afirma 2 unidades → cobertura OK, `faltantes` vacío.
+
+    Este test FALLA con la verificación por número de líneas y PASA con la
+    verificación por unidades (BUG-07).
+    """
+    await _limpiar(entorno)
+    p1, _ = await _sembrar(entorno)
+    try:
+        async with _cliente() as cliente:
+            # El MISMO producto 2× → el servidor lo fusiona en 1 fila (RN-17).
+            res_ticket = await cliente.post(
+                "/pos/tickets",
+                json={
+                    "terminal_id": TERMINAL_ID,
+                    "channel": "PANADERIA",
+                    "items": [{"product_id": str(p1), "quantity": 2}],
+                },
+            )
+            assert res_ticket.status_code == 201, res_ticket.text
+            ticket_id = res_ticket.json()["id"]
+
+            # El carrito afirma DOS líneas (2 item_id) de 1 unidad cada una.
+            res = await cliente.post(
+                f"/pos/tickets/{ticket_id}/verify",
+                json={
+                    "item_ids": ["linea-1", "linea-2"],
+                    "cantidades": [1, 1],
+                },
+            )
+            assert res.status_code == 200, res.text
+            cuerpo = res.json()
+
+            assert cuerpo["existe"] is True
+            assert cuerpo["faltantes"] == [], (
+                "El servidor tiene 2 UNIDADES (1 fila fusionada por RN-17) y el "
+                "carrito afirma 2 unidades: NO se perdió nada. La verificación "
+                "por número de líneas marcaba faltantes falsamente (BUG-07). "
+                f"Respuesta: {cuerpo}"
+            )
+    finally:
+        await _limpiar(entorno)
+
+
+@pytest.mark.asyncio
+async def test_verificacion_por_unidades_detecta_perdida_real(entorno):
+    """BUG-07 — La verificación por UNIDADES SÍ detecta una pérdida real.
+
+    Si el carrito afirma MÁS unidades de las que el servidor tiene, algo se
+    perdió y la verificación DEBE reportar faltantes. Protege la cicatriz
+    v6.1 $453: la verificación no puede volverse un "siempre OK".
+    """
+    await _limpiar(entorno)
+    p1, _ = await _sembrar(entorno)
+    try:
+        async with _cliente() as cliente:
+            res_ticket = await cliente.post(
+                "/pos/tickets",
+                json={
+                    "terminal_id": TERMINAL_ID,
+                    "channel": "PANADERIA",
+                    "items": [{"product_id": str(p1), "quantity": 1}],
+                },
+            )
+            assert res_ticket.status_code == 201, res_ticket.text
+            ticket_id = res_ticket.json()["id"]
+
+            # El carrito afirma 3 unidades, el servidor solo tiene 1 → pérdida.
+            res = await cliente.post(
+                f"/pos/tickets/{ticket_id}/verify",
+                json={
+                    "item_ids": ["a", "b", "c"],
+                    "cantidades": [1, 1, 1],
+                },
+            )
+            assert res.status_code == 200, res.text
+            cuerpo = res.json()
+
+            assert cuerpo["existe"] is True
+            assert len(cuerpo["faltantes"]) >= 1, (
+                "El carrito afirma 3 unidades y el servidor tiene 1: la "
+                f"verificación DEBE reportar faltantes. Respuesta: {cuerpo}"
+            )
+    finally:
+        await _limpiar(entorno)
+
+
+@pytest.mark.asyncio
 async def test_verificacion_detecta_perdida_real(entorno):
     """BUG-06 — La verificación por cobertura SÍ detecta una pérdida real.
 

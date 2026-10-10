@@ -392,9 +392,20 @@ class VerificarEnvioEntrada(BaseModel):
 
     `item_ids` es lo que el cliente CREE haber enviado. El servidor responde
     qué de eso está realmente persistido.
+
+    BUG-07 — `cantidades` (opcional): la cantidad de UNIDADES de cada línea del
+    carrito, en el MISMO orden que `item_ids`. Es necesaria porque RN-17 fusiona
+    los productos repetidos en UNA sola fila de `ticket_items` (incrementando su
+    `quantity`). Comparar el NÚMERO DE LÍNEAS del carrito contra el NÚMERO DE
+    FILAS del servidor daba un falso déficit: un carrito con el mismo producto
+    agregado 2× (2 líneas) contra 1 fila fusionada parecía "perder" una línea.
+    La pregunta correcta es por UNIDADES: el servidor debe tener al menos tantas
+    unidades como el carrito afirma. Si `cantidades` se omite (cliente viejo),
+    se degrada al conteo de líneas (comportamiento previo, BUG-06).
     """
 
     item_ids: list[str] = Field(default_factory=list)
+    cantidades: list[int] = Field(default_factory=list)
 
 
 class VerificarEnvioSalida(BaseModel):

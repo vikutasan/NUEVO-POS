@@ -130,7 +130,11 @@ describe('useCart — el callback async lee useRef (Ticket #906)', () => {
     });
 
     // La verificación recibió el item_id real, no un estado cerrado vacío.
-    expect(api.verificarEnvio).toHaveBeenCalledWith('T1', { item_ids: ['item-9'] });
+    // BUG-07 — también viajan las CANTIDADES (contrato 22 verifica por unidades).
+    expect(api.verificarEnvio).toHaveBeenCalledWith('T1', {
+      item_ids: ['item-9'],
+      cantidades: [1],
+    });
   });
 });
 
