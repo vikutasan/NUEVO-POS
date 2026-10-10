@@ -270,7 +270,7 @@ describe('F5.3 — criterio 8: táctil (R-04)', () => {
 // ---------------------------------------------------------------------------
 
 describe('BUG-10 — scroll lateral del pizarrón', () => {
-  it('el tablero acota su altura y el grid de post-its es el contenedor con scroll', async () => {
+  it('el tablero acota su altura y el wrapper del grid es el contenedor con scroll', async () => {
     // Muchas cuentas: el grid debe poder desbordar y desplazarse.
     const cuentas = Array.from({ length: 12 }, (_, i) =>
       cuentaEjemplo({ id: `id-${i}`, account_num: `T-000${i}` }),
@@ -290,11 +290,18 @@ describe('BUG-10 — scroll lateral del pizarrón', () => {
     expect(tablero.className).toContain('overflow-hidden');
     expect(tablero.className).toContain('flex-col');
 
-    // El grid de post-its es el contenedor con scroll y la barra estilizada.
+    // El WRAPPER del grid es el contenedor con scroll y la barra estilizada.
+    // (No el `<ul>`: si el grid llevara `flex-1`, sus filas se comprimirían y
+    // los post-its `aspect-square` se encimarían — el bug que este fix cierra.)
+    const wrapper = container.querySelector('ul').parentElement;
+    expect(wrapper.className).toContain('overflow-y-auto');
+    expect(wrapper.className).toContain('custom-scrollbar');
+    expect(wrapper.className).toContain('flex-1');
+
+    // El grid NO debe estirarse (`flex-1`) ni desplazarse: alto automático.
     const grid = container.querySelector('ul');
-    expect(grid.className).toContain('overflow-y-auto');
-    expect(grid.className).toContain('custom-scrollbar');
-    expect(grid.className).toContain('flex-1');
     expect(grid.className).toContain('content-start');
+    expect(grid.className).not.toContain('flex-1');
+    expect(grid.className).not.toContain('overflow-y-auto');
   });
 });

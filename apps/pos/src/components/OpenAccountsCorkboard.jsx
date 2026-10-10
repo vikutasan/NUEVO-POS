@@ -305,11 +305,19 @@ export default function OpenAccountsCorkboard({
         )}
 
         {/* ── Los post-its ──────────────────────────────────────────────
-            FIX_PIZARRON_SCROLL — el grid es el contenedor con scroll
-            (`flex-1 overflow-y-auto custom-scrollbar`), igual que el POS
-            viejo. `content-start` evita que las filas se estiren. */}
+            FIX_PIZARRON_SCROLL (10 Oct 2026) — PARIDAD con el POS viejo.
+
+            POR QUÉ un wrapper y no `flex-1` en el grid: si el grid lleva
+            `flex-1`, el navegador lo estira a la altura del tablero y las
+            FILAS se comprimen; como cada post-it conserva `aspect-square`
+            (alto = ancho de columna), se desbordan de su fila y se ENCIMAN
+            unos sobre otros. El scroll debe vivir en un wrapper de altura
+            acotada (`flex-1 overflow-y-auto`) y el grid dentro debe tener
+            alto automático (`content-start`) con separación amplia para que
+            la rotación (±3°) no toque al vecino. */}
         {!cargando && cuentas.length > 0 && (
-          <ul className="custom-scrollbar grid flex-1 content-start grid-cols-1 gap-6 overflow-y-auto pr-2 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8 xl:grid-cols-4">
+          <div className="custom-scrollbar flex-1 overflow-y-auto pr-2">
+            <ul className="grid content-start grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-12 xl:grid-cols-4">
             {cuentas.map((cuenta, indice) => (
               <li
                 key={cuenta.id}
@@ -407,7 +415,8 @@ export default function OpenAccountsCorkboard({
                 <div className="absolute bottom-0 right-0 w-6 h-6 lg:w-8 lg:h-8 bg-gradient-to-br from-black/0 to-black/5 rounded-br-sm" />
               </li>
             ))}
-          </ul>
+            </ul>
+          </div>
         )}
       </div>
 
