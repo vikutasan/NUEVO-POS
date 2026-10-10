@@ -248,14 +248,40 @@ scroll a nacer dentro del tablero.
 Se reemplazó por una **compuerta de fuente**: el test lee el código de `RetailVisionPOS.jsx`
 y de `OpenAccountsCorkboard.jsx` y afirma que el bloque del modal **no** contiene
 `overflow-y-auto` (y sí `items-center`/`justify-center`/`role="dialog"`), y que el tablero usa
-`h-[85vh]` (no `max-h-[85vh]`) con `min-h-0` en el wrapper de scroll. Se **verificó que falla**
-con el código viejo y **pasa** con el arreglo. Lección transversal: *una compuerta que no puede
-fallar no es una compuerta*.
+`aspect-[16/9]` (no `max-h-[85vh]` ni `h-[85vh]`) con `min-h-0` en el wrapper de scroll. Se
+**verificó que falla** con el código viejo y **pasa** con el arreglo. Lección transversal:
+*una compuerta que no puede fallar no es una compuerta*.
+
+**Sexta vuelta (BUG-10f, 10 Oct 2026) — la aritmética que faltaba.**
+Con el HMR ya sano (BUG-10e), el síntoma **persistía**: sin barra y con post-its «mordidos».
+El fix de BUG-10d (`h-[85vh]`) era **correcto en su diagnóstico** (un `flex-1` necesita altura
+definida) pero **incompleto en su aritmética**: no contó los **paddings anidados**. El tablero
+vivía dentro de DOS paddings — el `p-4` del wrapper exterior (`max-w-[1100px] mx-auto p-4`) y
+el `p-4 sm:p-6 lg:p-8` del propio marco —, así que su altura total era
+`85vh + 2rem + 2rem > 100vh` en pantallas normales. Como el modal es `items-center` **sin**
+`overflow-y-auto`, el navegador recortaba el tablero arriba y abajo (los post-its «mordidos»)
+**sin barra en ningún lado**.
+
+**Mitigación final (paridad con el POS viejo):** el tablero usa **`aspect-[16/9]`** — la altura
+se **DERIVA del ancho** (acotado por `max-w-[1100px]`), así que el tablero **siempre cabe** en
+la pantalla, sin importar los paddings. Se eliminó el `p-4` del wrapper exterior para no sumar
+altura. El wrapper de scroll conserva `min-h-0 flex-1 overflow-y-auto custom-scrollbar`.
+
+**Regla (cuarto corolario):** para un marco que debe **caber siempre**, deriva la altura del
+ancho (`aspect-*`), **no** la fijes en `vh`. Una altura en `vh` ignora los paddings/márgenes
+ancestrales y desborda el viewport en cuanto se anidan contenedores.
+
+**Compuerta (endurecida en BUG-10f):** la compuerta de BUG-10d afirmaba `h-[85vh]` y por eso
+**no podía detectar** el desborde real (el test no mide layout, solo lee clases). La compuerta
+de BUG-10f **rechaza** `h-[85vh]` además de `max-h-[85vh]`, y **exige** `aspect-[16/9]`. Lección
+transversal: *una compuerta que solo verifica la clase que tú escribiste no verifica el efecto
+que el usuario ve*.
 
 | Trampa | Síntoma | Solución |
 |---|---|---|
-| Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`h-[85vh]`) y poner `overflow-y-auto` en el hijo que desborda |
-| `max-h` en el marco con `flex-1` dentro | La barra **nunca** aparece: `flex-1` resuelve a `auto` y el hijo crece | Usar **altura definida** (`h-[85vh]`), no `max-h`; `max-h` es un máximo, no una altura |
+| Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`aspect-[16/9]`) y poner `overflow-y-auto` en el hijo que desborda |
+| `max-h` en el marco con `flex-1` dentro | La barra **nunca** aparece: `flex-1` resuelve a `auto` y el hijo crece | Usar **altura definida** (`aspect-[16/9]`), no `max-h`; `max-h` es un máximo, no una altura |
+| Altura en `vh` dentro de paddings anidados | El marco mide `85vh + paddings > 100vh`: el navegador lo recorta arriba y abajo (post-its «mordidos») **sin barra** | Derivar la altura del **ancho** (`aspect-[16/9]`, acotado por `max-w-*`), no fijarla en `vh`; y no sumar paddings al wrapper exterior |
 | `overflow-hidden` en el marco + hijo que crece | Los post-its de abajo salen **«mordidos»** (recortados) | El hijo que desborda debe poder desplazarse (`overflow-y-auto` + `min-h-0`), no recortarse |
 | Hijo flex con `overflow-y-auto` sin `min-h-0` | El hijo no se encoge por debajo de su contenido y no desplaza | Añadir `min-h-0` al hijo con scroll (su `min-height` por defecto es `auto`) |
 | Scroll delegado al overlay del modal | La barra aparece pegada al borde de la pantalla, no al tablero | El contenedor con scroll debe ser el propio tablero/grid, no el overlay |
