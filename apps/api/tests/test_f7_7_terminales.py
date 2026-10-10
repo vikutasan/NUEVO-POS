@@ -644,8 +644,20 @@ def _config_base() -> list[dict]:
 
 @pytest.mark.asyncio
 async def test_criterio12_config_incluye_color_none_por_defecto(entorno):
-    """Sin config guardada, cada terminal trae `color = None` (sin semilla)."""
+    """Sin config guardada, cada terminal trae `color = None` (sin semilla).
+
+    Este test verifica el comportamiento de una INSTALACIÓN LIMPIA: cuando no
+    existe `terminal_config.json`, el router cae a `CONFIG_POR_DEFECTO` y todas
+    las terminales arrancan sin color. Por eso se elimina el archivo real
+    (respaldado por el fixture autouse `aislar_config_terminales`) antes de
+    consultar. Sin esto, el test dependía del contenido del archivo de
+    ejecución del usuario y fallaba en cuanto este asignaba colores.
+    """
+    from routers.terminals import _RUTA_CONFIG
+
     await _limpiar(entorno)
+    if _RUTA_CONFIG.exists():
+        _RUTA_CONFIG.unlink()
     async with _cliente() as cliente:
         datos = (await cliente.get("/pos/terminals/config")).json()
     assert all("color" in t for t in datos)

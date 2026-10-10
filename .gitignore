@@ -27,3 +27,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Estado de ejecución (NO versionado): la configuración de terminales la
+# escribe el Gestor de Terminales en tiempo de ejecución. Versionarla hacía
+# que un `git checkout` borrara los colores elegidos por el usuario.
+apps/api/terminal_config.json
