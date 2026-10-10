@@ -244,7 +244,7 @@ export default function OpenAccountsCorkboard({
           en el hijo que desborda. Se elimina el `p-4` del wrapper exterior
           para no sumar altura. */}
       <div
-        className="flex aspect-[16/9] flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
+        className="flex aspect-[16/9] min-h-0 flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
         style={{
           backgroundImage:
             'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0), radial-gradient(circle at 10px 10px, rgba(255,255,255,0.05) 1px, transparent 0)',
