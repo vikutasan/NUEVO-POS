@@ -219,7 +219,7 @@ export default function OpenAccountsCorkboard({
     : `${cuentas.length} cuentas — Terminal ${terminalId || '—'}`;
 
   return (
-    <div className="w-full max-w-[1100px] mx-auto">
+    <div className="w-full max-w-6xl mx-auto">
       {/* ── El corcho ─────────────────────────────────────────────────────
           FIX_PIZARRON_SCROLL (10 Oct 2026) — PARIDAD con el POS viejo.
 
@@ -249,37 +249,47 @@ export default function OpenAccountsCorkboard({
           ambos, el tablero SIEMPRE cabe y el scroll vive en el wrapper
           interno (`flex-1 min-h-0 overflow-y-auto`). */}
       <div
-        className="flex aspect-[16/9] max-h-[calc(100vh-2rem)] min-h-0 flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0), radial-gradient(circle at 10px 10px, rgba(255,255,255,0.05) 1px, transparent 0)',
-          backgroundSize: '15px 15px, 40px 40px',
-        }}
+        className="flex aspect-[16/9] max-h-[calc(100vh-2rem)] min-h-0 flex-col overflow-hidden rounded-[40px] border-[20px] border-[#3d2b1f] bg-black shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] relative"
       >
+        {/* Textura de Corcho Original */}
+        <div
+          className="absolute inset-0 opacity-80 pointer-events-none"
+          style={{
+            backgroundColor: '#bc8a5f',
+            backgroundImage:
+              'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0), radial-gradient(circle at 10px 10px, rgba(255,255,255,0.05) 1px, transparent 0)',
+            backgroundSize: '15px 15px, 40px 40px',
+          }}
+        />
+
         {/* ── Encabezado ──────────────────────────────────────────────── */}
-        <div className="mb-6 flex flex-col sm:flex-row items-start justify-between gap-4">
+        <div className="relative z-10 p-6 lg:p-8 border-b border-black/10 bg-black/5 flex flex-col sm:flex-row items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tighter italic text-crema">
+            <h2 className="text-4xl font-black uppercase tracking-tighter italic text-[#2d1e13]">
               Cuentas en <span className="opacity-40">Espera</span>
             </h2>
-            <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.3em] text-crema/70">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#4a3221]">
               Pizarrón de Control R de Rico
             </p>
             {/* D1 — Alcance: TOTALES (caja) o terminal */}
-            <p className="text-xs md:text-sm font-bold text-crema/50 mt-1">
+            <p className="text-[11px] font-bold text-[#4a3221]/70 mt-1 uppercase tracking-wider">
               {leyendaAlcance}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-4">
             {/* D4 — Botón refrescar manual */}
             <button
               type="button"
               onClick={refrescar}
               aria-label="Refrescar"
               title="Refrescar cuentas"
-              className="min-h-tactil min-w-tactil rounded-[35px] bg-crema/10 px-4 font-bold text-crema hover:bg-crema/20 transition-all"
+              className="w-12 h-12 rounded-full bg-[#2d1e13] text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl"
             >
-              🔄
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
             </button>
             {typeof onCerrar === 'function' && (
               <button
@@ -287,7 +297,7 @@ export default function OpenAccountsCorkboard({
                 onClick={onCerrar}
                 aria-label="Cerrar"
                 title="Cerrar"
-                className="min-h-tactil min-w-tactil rounded-[35px] bg-peligro/80 px-4 font-bold text-crema hover:bg-peligro transition-all"
+                className="w-12 h-12 rounded-full bg-[#2d1e13] text-white flex items-center justify-center font-black hover:scale-110 active:scale-95 transition-all shadow-xl"
               >
                 ✕
               </button>
@@ -312,9 +322,9 @@ export default function OpenAccountsCorkboard({
 
         {/* ── Vacío ───────────────────────────────────────────────────── */}
         {!cargando && !error && cuentas.length === 0 && (
-          <div className="py-16 flex flex-col items-center justify-center space-y-4">
-            <span className="text-6xl md:text-9xl italic font-black text-crema/20">VACÍO</span>
-            <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.5em] text-crema/20">
+          <div className="relative z-10 py-20 flex flex-col items-center justify-center space-y-4 opacity-50">
+            <span className="text-9xl italic font-black text-[#2d1e13]">VACÍO</span>
+            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#4a3221]">
               No hay cuentas pendientes en el pizarrón
             </p>
           </div>
@@ -340,7 +350,7 @@ export default function OpenAccountsCorkboard({
             ajusta solo al ancho de la columna y el contenido se reparte con
             `justify-between` sin huecos artificiales. */}
         {!cargando && cuentas.length > 0 && (
-          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-scroll pr-2">
+          <div className="custom-scrollbar relative z-10 min-h-0 flex-1 overflow-y-scroll p-8 lg:p-12">
             <ul className="grid content-start grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-12 xl:grid-cols-4">
             {cuentas.map((cuenta, indice) => (
               <li
@@ -369,7 +379,7 @@ export default function OpenAccountsCorkboard({
 
                 {/* Folio + terminal */}
                 <div className="text-[#3d2b1f]">
-                  <div className="flex items-start justify-between mb-2 lg:mb-4">
+                  <div className="flex items-start justify-between mb-1 lg:mb-2">
                     <span
                       data-testid={`folio-${cuenta.id}`}
                       className="text-3xl lg:text-5xl font-black font-mono text-gray-900"
@@ -377,7 +387,7 @@ export default function OpenAccountsCorkboard({
                       #{(cuenta.account_num || '').slice(-3)}
                     </span>
                     {cuenta.terminal_id && (
-                      <span className="text-[10px] md:text-sm font-black bg-black/5 px-2 py-1 rounded-md uppercase tracking-widest opacity-60">
+                      <span className="text-[10px] md:text-sm font-black bg-black/5 px-2 py-1 rounded-md uppercase tracking-widest opacity-90">
                         {cuenta.terminal_id}
                       </span>
                     )}
@@ -388,9 +398,9 @@ export default function OpenAccountsCorkboard({
                       línea de entrega con emoji y SIN teléfono (el viejo no lo
                       mostraba). */}
                   {cuenta.order_type === 'PEDIDO' ? (
-                    <div className="mb-2 lg:mb-4">
-                      <span className="inline-block bg-orange-600 text-white text-[10px] md:text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded shadow-sm mb-1">
-                        📦 PEDIDO TENTATIVO
+                    <div className="mb-1 lg:mb-2">
+                      <span className="inline-block bg-orange-600 text-white text-[9px] lg:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded shadow-sm mb-0.5 whitespace-nowrap">
+                        PEDIDO TENTATIVO
                       </span>
                       {cuenta.customer_name && (
                         <h4 className="text-sm md:text-xl font-black uppercase tracking-tighter leading-none mb-1 text-black truncate">
@@ -404,35 +414,30 @@ export default function OpenAccountsCorkboard({
                       )}
                     </div>
                   ) : (
-                    <h4 className="text-sm md:text-lg font-black uppercase tracking-tight leading-tight mb-2 lg:mb-4 opacity-35">
+                    <h4 className="text-sm md:text-lg font-black uppercase tracking-tight leading-tight mb-1 lg:mb-2 opacity-70">
                       CLIENTE LOCAL
                     </h4>
                   )}
-
-                  {/* Capturista + hora */}
-                  <div className="space-y-0.5 opacity-50 mt-auto">
-                    {cuenta.captured_by_name && (
-                      <p className="text-[10px] md:text-xs font-black uppercase truncate flex items-center gap-1">
-                        📝 {cuenta.captured_by_name}
-                      </p>
-                    )}
-                    <p className="text-[10px] md:text-xs font-bold italic uppercase flex items-center gap-1">
-                      🕒 {formatearHora(cuenta.created_at)}
-                    </p>
-                  </div>
                 </div>
 
-                {/* Total + label */}
-                <div className="mt-2 lg:mt-4 pt-2 lg:pt-4 border-t border-[#3d2b1f]/10 flex justify-between items-end">
-                  <span
-                    data-testid={`total-${cuenta.id}`}
-                    className="text-lg lg:text-xl font-black font-mono tracking-tighter text-[#3d2b1f] opacity-45"
-                  >
-                    {formatearTotal(cuenta.total)}
-                  </span>
-                  <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest opacity-30">
-                    Ver Cuenta →
-                  </span>
+                {/* Capturista, hora y Total consolidado */}
+                <div className="mt-auto pt-2 lg:pt-3 border-t border-[#3d2b1f]/10 flex flex-col text-[#3d2b1f]">
+                  {cuenta.captured_by_name && (
+                    <p className="text-[10px] md:text-xs font-black uppercase truncate flex items-center gap-1 opacity-90">
+                      📝 {cuenta.captured_by_name}
+                    </p>
+                  )}
+                  <div className="flex justify-between items-end mt-1">
+                    <p className="text-[10px] md:text-xs font-bold italic uppercase flex items-center gap-1 opacity-90">
+                      🕒 {formatearHora(cuenta.created_at)}
+                    </p>
+                    <span
+                      data-testid={`total-${cuenta.id}`}
+                      className="text-xl lg:text-2xl font-black font-mono tracking-tighter opacity-100 leading-none"
+                    >
+                      {formatearTotal(cuenta.total)}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Esquina doblada (efecto papel) */}
