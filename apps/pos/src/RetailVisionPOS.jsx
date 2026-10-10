@@ -611,6 +611,22 @@ export default function RetailVisionPOS({
     [carrito]
   );
 
+  // F12.23 — PARIDAD DE UX DE CANTIDAD (§6.8): el viejo POS editaba la cantidad
+  // con un TECLADO NUMÉRICO en pantalla, no con botones −/+. `SalesReceipt` emite
+  // la cantidad EXACTA tecleada; aquí se aplica al carrito. Con 0 se quita la
+  // línea (misma regla que el viejo POS, `SalesReceipt.jsx:24-33`).
+  const cambiarCantidad = useCallback(
+    (linea, nuevaCantidad) => {
+      const n = Number(nuevaCantidad);
+      if (!Number.isFinite(n) || n <= 0) {
+        carrito.quitarLinea(linea.item_id);
+        return;
+      }
+      carrito.cambiarCantidad(linea.item_id, n);
+    },
+    [carrito]
+  );
+
   // ── Lector de código de barras: busca el producto y lo agrega ──────────────
   const productosRef = useRef(productos);
   productosRef.current = productos;
@@ -1139,6 +1155,8 @@ export default function RetailVisionPOS({
             onIncrementar={incrementar}
             onDecrementar={decrementar}
             onQuitar={quitar}
+            // F12.23 — Edición de cantidad por teclado numérico (§6.8).
+            onCambiarCantidad={cambiarCantidad}
             onCobrar={abrirCheckoutConGuardia}
             // F12.9 — ENVIAR CUENTA al pizarrón: NO gateado por caja (§6.8).
             // Es el camino válido cuando la terminal no tiene turno de caja.
@@ -1180,6 +1198,8 @@ export default function RetailVisionPOS({
               onIncrementar={incrementar}
               onDecrementar={decrementar}
               onQuitar={quitar}
+              // F12.23 — Edición de cantidad por teclado numérico (§6.8).
+              onCambiarCantidad={cambiarCantidad}
               onCobrar={() => {
                 setTicketAbierto(false);
                 abrirCheckoutConGuardia();

@@ -5,7 +5,8 @@
  * cumplen su contrato visible:
  *
  *   1. `POSHeader`      — estado de cuenta, tipo de venta, indicador de red.
- *   2. `SalesReceipt`   — edición de cantidad (− / +), banner de estado, total.
+ *   2. `SalesReceipt`   — edición de cantidad (teclado numérico, F12.23), banner
+ *                         de estado, total.
  *   3. `CheckoutScreen` — efectivo/tarjeta, cambio, validación, error.
  *   4. `POSOverlays`    — OverlayExito / OverlayError / OverlayConfirmar.
  *   5. `RetailVisionPOS`— orquestador de hooks (no monolito).
@@ -21,7 +22,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 
 import POSHeader from './POSHeader.jsx';
 import SalesReceipt, { calcularTotal } from './SalesReceipt.jsx';
@@ -131,29 +132,40 @@ describe('SalesReceipt — ticket (cantidad, banner, total)', () => {
     expect(screen.getAllByText('$37.00').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('F3.4: ofrece edición de cantidad con botones − / +', () => {
-    const onIncrementar = vi.fn();
-    const onDecrementar = vi.fn();
+  // F12.23 — PARIDAD DE UX DE CANTIDAD (§6.8): el viejo POS editaba la cantidad
+  // con un TECLADO NUMÉRICO en pantalla, no con botones −/+. La cantidad ahora
+  // es un BOTÓN que abre ese teclado. Se actualizó esta compuerta de F3.4 para
+  // reflejar la operación heredada (antes exigía los botones −/+ laterales).
+  it('F12.23: la cantidad es un botón que abre el teclado numérico', () => {
+    const onCambiarCantidad = vi.fn();
     render(
       <SalesReceipt
         lineas={[lineaEjemplo()]}
-        onIncrementar={onIncrementar}
-        onDecrementar={onDecrementar}
+        onCambiarCantidad={onCambiarCantidad}
       />,
     );
 
-    fireEvent.click(screen.getByLabelText('Añadir una unidad de Concha de Vainilla'));
-    expect(onIncrementar).toHaveBeenCalledTimes(1);
+    // Pulsar la cantidad abre el modal (role="dialog").
+    fireEvent.click(screen.getByLabelText('Modificar cantidad de Concha de Vainilla'));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('Modificar Cantidad')).toBeTruthy();
 
-    fireEvent.click(screen.getByLabelText('Quitar una unidad de Concha de Vainilla'));
-    expect(onDecrementar).toHaveBeenCalledTimes(1);
+    // Teclear "5" y confirmar con OK → onCambiarCantidad(linea, 5).
+    // Se acota al teclado (role="group") porque el visor también muestra "5".
+    // La línea de ejemplo tiene quantity: 2, así que primero se limpia con "C".
+    const teclado = screen.getByRole('group', { name: /Teclado numérico/ });
+    fireEvent.click(within(teclado).getByRole('button', { name: 'Borrar' }));
+    fireEvent.click(within(teclado).getByRole('button', { name: '5' }));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(onCambiarCantidad).toHaveBeenCalledTimes(1);
+    expect(onCambiarCantidad.mock.calls[0][1]).toBe(5);
   });
 
-  it('F3.4: los botones de cantidad respetan el target táctil (R-04)', () => {
-    render(<SalesReceipt lineas={[lineaEjemplo()]} onIncrementar={() => {}} onDecrementar={() => {}} />);
-    const botonMas = screen.getByLabelText('Añadir una unidad de Concha de Vainilla');
-    expect(botonMas.className).toContain('min-h-tactil');
-    expect(botonMas.className).toContain('min-w-tactil');
+  it('F12.23: el botón de cantidad respeta el target táctil (R-04)', () => {
+    render(<SalesReceipt lineas={[lineaEjemplo()]} onCambiarCantidad={() => {}} />);
+    const botonCantidad = screen.getByLabelText('Modificar cantidad de Concha de Vainilla');
+    expect(botonCantidad.className).toContain('min-h-tactil');
+    expect(botonCantidad.className).toContain('min-w-tactil');
   });
 
   it('F3.4: muestra el banner de estado persistente (role="alert")', () => {

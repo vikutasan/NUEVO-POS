@@ -201,7 +201,11 @@ describe('CIERRE F3 — el ticket nace al primer ítem (D-12)', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('CIERRE F3 — edición atómica por ítem (contratos 19 y 20)', () => {
-  it('incrementar llama a cambiarCantidad con el item_id correcto', async () => {
+  // F12.23 — PARIDAD DE UX DE CANTIDAD (§6.8): el viejo POS editaba la cantidad
+  // con un TECLADO NUMÉRICO en pantalla (tap sobre la cantidad), no con botones
+  // −/+. Estos escenarios se reescriben para usar ese flujo, conservando la
+  // MISMA verificación de los contratos 19 y 20 (item_id correcto).
+  it('cambiar la cantidad por teclado llama a cambiarCantidad con el item_id correcto', async () => {
     render(<RetailVisionPOS />);
     await esperarCatalogo();
 
@@ -209,8 +213,13 @@ describe('CIERRE F3 — edición atómica por ítem (contratos 19 y 20)', () => 
     await waitFor(() => expect(apiSimulada.anadirItem).toHaveBeenCalledTimes(1));
     const itemId = apiSimulada.anadirItem.mock.calls[0][1].item_id;
 
-    // El botón "+" del ticket incrementa la cantidad.
-    fireEvent.click(screen.getByLabelText('Añadir una unidad de Concha de Vainilla'));
+    // Tap sobre la cantidad del ticket → abre el teclado numérico.
+    fireEvent.click(screen.getByLabelText('Modificar cantidad de Concha de Vainilla'));
+
+    // El teclado precarga "1"; se teclea "2" y se confirma con OK.
+    fireEvent.click(screen.getByRole('button', { name: 'Borrar' }));
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
 
     await waitFor(() => {
       expect(apiSimulada.cambiarCantidad).toHaveBeenCalledTimes(1);
@@ -221,7 +230,7 @@ describe('CIERRE F3 — edición atómica por ítem (contratos 19 y 20)', () => 
     expect(cuerpo.quantity).toBe(2);
   });
 
-  it('quitar llama a quitarItem con el item_id correcto', async () => {
+  it('teclear 0 y confirmar llama a quitarItem con el item_id correcto', async () => {
     render(<RetailVisionPOS />);
     await esperarCatalogo();
 
@@ -229,7 +238,10 @@ describe('CIERRE F3 — edición atómica por ítem (contratos 19 y 20)', () => 
     await waitFor(() => expect(apiSimulada.anadirItem).toHaveBeenCalledTimes(1));
     const itemId = apiSimulada.anadirItem.mock.calls[0][1].item_id;
 
-    fireEvent.click(screen.getByLabelText('Quitar una unidad de Concha de Vainilla'));
+    fireEvent.click(screen.getByLabelText('Modificar cantidad de Concha de Vainilla'));
+    fireEvent.click(screen.getByRole('button', { name: 'Borrar' }));
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
 
     await waitFor(() => {
       expect(apiSimulada.quitarItem).toHaveBeenCalledTimes(1);
@@ -325,9 +337,10 @@ describe('CIERRE F3 — prohibición #2 en la pantalla real', () => {
     });
 
     // El carrito NO se limpió: la línea del ticket sigue presente.
-    // (El botón de incremento solo existe en el ticket, no en la rejilla.)
+    // F12.23 — la cantidad del ticket es un botón clicable (abre el teclado
+    // numérico); su presencia prueba que la línea NO se borró.
     expect(
-      screen.getByLabelText('Añadir una unidad de Concha de Vainilla')
+      screen.getByLabelText('Modificar cantidad de Concha de Vainilla')
     ).toBeTruthy();
   });
 });

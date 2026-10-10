@@ -336,6 +336,38 @@ estándar `scrollbar-gutter: stable`, `scrollbar-width: thin` y `scrollbar-color
 `<style>`. Lección transversal: *una compuerta que exige `auto` no verifica que la barra se vea;
 `auto` es una promesa del SO, `scroll` es una garantía del CSS*.
 
+**Novena vuelta (F12.23, 10 Oct 2026) — la cantidad se teclea, no se «picotea».**
+El usuario pidió **paridad de operación** con el POS viejo: allí la cantidad de una línea del
+ticket **no** se ajusta con botones laterales `−`/`+`, sino que **se toca la cantidad** y se abre
+un **teclado numérico** en pantalla para teclear el número exacto (útil para cantidades grandes,
+p. ej. 24 conchas, sin dar 24 taps). El nuevo POS tenía botones `−`/`+` laterales: cómodos para
+`1→2`, **hostiles** para `1→24`.
+
+**Qué se hizo (portar la lógica, no reinventarla):**
+- La cantidad de cada línea (`SalesReceipt.jsx`) pasó de un par de botones a **un botón clicable**
+  (`aria-label="Modificar cantidad de <producto>"`) que muestra `{quantity}x`.
+- Al tocarlo se abre un **modal** (`role="dialog"`, `aria-modal="true"`) con el **mismo**
+  `TecladoNumerico.jsx` que ya usaba el cobro en efectivo (F9.0.2) — **reutilizar**, no duplicar.
+- El modal **precarga** la cantidad actual; `OK` confirma, `Cancelar` cierra sin cambios.
+- Regla heredada del POS viejo (`SalesReceipt.jsx:24-33`): teclear **`0` + OK quita la línea**
+  (no deja una línea en cero).
+- La nueva prop `onCambiarCantidad(linea, nuevaCantidad)` emite la cantidad **exacta**; el
+  contenedor (`RetailVisionPOS.jsx`) la aplica al carrito (`cambiarCantidad`) o quita la línea
+  (`quitarLinea`) si es `0`. Se conservan `onIncrementar`/`onDecrementar` **solo** por
+  retrocompatibilidad de compuertas previas; la UI ya no los usa.
+
+**Regla (séptimo corolario):** cuando el POS viejo resuelve una interacción con un **patrón
+distinto** (teclado numérico en vez de `±`), la paridad (§6.8) exige **portar el patrón**, no
+«mejorarlo» con el que ya teníamos. Un `±` que funciona para `1→2` puede ser **peor** que un
+teclado para `1→24`: la comodidad no es universal, depende del **rango** de valores.
+
+**Compuerta (F12.23):** `SalesReceipt.f12_23.test.jsx` (8 tests) exige que la cantidad sea un
+**botón** (no `±`), que al tocarlo se abra el diálogo con el teclado, que **precargue** la cantidad
+actual, que teclear dígitos + `OK` emita `onCambiarCantidad(linea, n)`, que `0` + `OK` **quite** la
+línea, que `Cancelar` **no** emita, y que el botón cumpla R-04 (≥44px). Lección transversal: *una
+compuerta de paridad debe afirmar sobre el **gesto** (tocar la cantidad → teclado), no solo sobre
+el resultado numérico*.
+
 | Trampa | Síntoma | Solución |
 |---|---|---|
 | Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`aspect-[16/9]`) y poner `overflow-y-auto` en el hijo que desborda |

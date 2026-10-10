@@ -10,14 +10,29 @@
  *   - Footer con total + botón COBRAR verde.
  *
  * FASE 3.4 añade:
- *   - EDICIÓN DE CANTIDAD: botones − / + por línea (target táctil ≥44px).
  *   - BANNER DE ESTADO: aviso persistente (fijo, no auto-ocultable) cuando hay
  *     un error de persistencia o ítems no verificados (Regla 19 / prohibición #2).
+ *
+ * F12.23 — PARIDAD DE UX DE CANTIDAD (rescate del viejo POS):
+ *   El viejo POS (`apps/pos/components/SalesReceipt.jsx:9-38, 203-241`) NO usaba
+ *   botones −/+. La cantidad era un NÚMERO CLICABLE: al pulsarlo se abría un
+ *   TECLADO NUMÉRICO en pantalla para teclear la cantidad exacta (útil para
+ *   cantidades grandes sin dar muchos taps). El nuevo POS había sustituido eso
+ *   por botones −/+ laterales, que son lentos para cantidades grandes.
+ *
+ *   Aquí se restaura la operación heredada: la cantidad es un botón que abre el
+ *   modal `TecladoNumerico` (ya existente, F9.0.2). Al confirmar se emite
+ *   `onCambiarCantidad(linea, nuevaCantidad)`; con 0 se quita la línea.
+ *   Es la 24ª instancia de §10.6 (de adentro hacia afuera): el teclado existía
+ *   pero estaba cableado SOLO al cobro; su operación de edición de cantidad se
+ *   perdió en la traducción.
  *
  * R-01: `w-full max-w-[420px]` es fluido. R-04: botones ≥ 44px.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
+
+import TecladoNumerico from './TecladoNumerico.jsx';
 
 /** Formatea un precio numérico como moneda mexicana. */
 function formatearPrecio(valor) {
@@ -49,6 +64,12 @@ export default function SalesReceipt({
   onIncrementar,
   onDecrementar,
   onQuitar,
+  // F12.23 — PARIDAD DE UX DE CANTIDAD (§6.8): el viejo POS editaba la cantidad
+  // con un TECLADO NUMÉRICO en pantalla, no con botones −/+. `onCambiarCantidad`
+  // recibe la línea y la cantidad EXACTA tecleada; con 0 se quita la línea.
+  // Se conservan `onIncrementar`/`onDecrementar` por retrocompatibilidad de las
+  // compuertas existentes, pero la UI ya NO los usa.
+  onCambiarCantidad,
   onCobrar,
   // F12.9 — Paridad de operación con el viejo POS (§6.8): el viejo POS tenía
   // DOS botones distintos, no uno:
@@ -85,6 +106,47 @@ export default function SalesReceipt({
   // líneas y que no haya un envío en curso. Es el camino válido sin caja.
   // F12.14 — REGLA 13: además se bloquea si NO hay red (no se puede persistir).
   const envioBloqueado = vacio || enviandoCuenta || sinRed;
+
+  // F12.23 — Estado del modal de edición de cantidad (teclado numérico).
+  // `lineaEditando` es la línea cuyo número se está tecleando; `cantidadTexto`
+  // es la captura en curso (string, como en el viejo POS). El modal es local al
+  // componente: no toca el carrito hasta que se confirma con OK.
+  const [lineaEditando, setLineaEditando] = useState(null);
+  const [cantidadTexto, setCantidadTexto] = useState('');
+
+  /** Abre el teclado numérico con la cantidad actual de la línea precargada. */
+  function abrirTecladoCantidad(linea) {
+    setLineaEditando(linea);
+    setCantidadTexto(String(linea.quantity ?? 1));
+  }
+
+  /** Cierra el teclado sin aplicar cambios. */
+  function cancelarTecladoCantidad() {
+    setLineaEditando(null);
+    setCantidadTexto('');
+  }
+
+  /**
+   * Confirma la cantidad tecleada. Reglas heredadas del viejo POS
+   * (`SalesReceipt.jsx:24-33`):
+   *   - Cantidad > 0 → `onCambiarCantidad(linea, n)`.
+   *   - Cantidad === 0 → se quita la línea (`onQuitar`).
+   *   - Captura vacía o inválida → se cancela (no se aplica nada).
+   */
+  function confirmarTecladoCantidad() {
+    if (!lineaEditando) return;
+    const nueva = parseInt(cantidadTexto, 10);
+    if (Number.isNaN(nueva)) {
+      cancelarTecladoCantidad();
+      return;
+    }
+    if (nueva === 0) {
+      onQuitar(lineaEditando);
+    } else if (onCambiarCantidad) {
+      onCambiarCantidad(lineaEditando, nueva);
+    }
+    cancelarTecladoCantidad();
+  }
 
   return (
     <aside className="w-full max-w-[420px] flex flex-col bg-crema-ticket text-fondo-profundo shadow-2xl relative border-l border-fondo-profundo/10 overflow-visible transition-all duration-500 font-mono z-50">
@@ -144,28 +206,18 @@ export default function SalesReceipt({
             {lineas.map((linea) => (
               <li key={linea.item_id || linea.product_id} className="flex justify-between items-start group">
                 <div className="flex gap-3 w-3/4">
-                  {/* EDICIÓN DE CANTIDAD: − cantidad + (target táctil ≥44px) */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      aria-label={`Quitar una unidad de ${linea.name}`}
-                      onClick={() => onDecrementar(linea)}
-                      className="min-h-tactil min-w-tactil flex items-center justify-center rounded-full bg-fondo-profundo/10 text-fondo-profundo font-black text-xl leading-none hover:bg-fondo-profundo/20 active:scale-95 transition-all"
-                    >
-                      −
-                    </button>
-                    <div className="font-black min-w-[40px] text-center text-3xl leading-none">
-                      {linea.quantity}x
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Añadir una unidad de ${linea.name}`}
-                      onClick={() => onIncrementar(linea)}
-                      className="min-h-tactil min-w-tactil flex items-center justify-center rounded-full bg-fondo-profundo/10 text-fondo-profundo font-black text-xl leading-none hover:bg-fondo-profundo/20 active:scale-95 transition-all"
-                    >
-                      +
-                    </button>
-                  </div>
+                  {/* F12.23 — EDICIÓN DE CANTIDAD: la cantidad es un BOTÓN que
+                      abre el teclado numérico (paridad con el viejo POS). Se
+                      eliminaron los botones −/+ laterales. Target táctil ≥44px. */}
+                  <button
+                    type="button"
+                    aria-label={`Modificar cantidad de ${linea.name}`}
+                    title="Modificar cantidad"
+                    onClick={() => abrirTecladoCantidad(linea)}
+                    className="min-h-tactil min-w-tactil flex items-center justify-center rounded-full bg-fondo-profundo/10 text-fondo-profundo font-black text-3xl leading-none hover:bg-fondo-profundo/20 hover:text-acento active:scale-95 transition-all px-2"
+                  >
+                    {linea.quantity}x
+                  </button>
                   <div>
                     <p className="font-black text-lg uppercase leading-tight text-fondo-profundo/90">{linea.name}</p>
                     <p className="text-base text-fondo-profundo/50 uppercase">{formatearPrecio(linea.unit_price)} c/u</p>
@@ -240,6 +292,57 @@ export default function SalesReceipt({
           {enviandoCuenta ? '⏳ Enviando…' : '📌 ENVIAR CUENTA'}
         </button>
       </footer>
+
+      {/* F12.23 — MODAL DE EDICIÓN DE CANTIDAD (teclado numérico en pantalla).
+          Paridad con el viejo POS (`SalesReceipt.jsx:203-241`): al pulsar la
+          cantidad de una línea se abre este teclado para teclear la cantidad
+          exacta. Reutiliza `TecladoNumerico` (F9.0.2) — el mismo componente que
+          el cobro usa para el efectivo. Confirmar aplica; Cancelar descarta. */}
+      {lineaEditando ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-fondo-profundo/80 backdrop-blur-md p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Modificar cantidad de ${lineaEditando.name}`}
+        >
+          <div className="bg-fondo-panel p-6 rounded-canon35 shadow-2xl border border-white/10 flex flex-col items-center w-full max-w-[360px]">
+            <h3 className="text-crema-ticket text-lg font-black uppercase tracking-widest mb-1 text-center">
+              Modificar Cantidad
+            </h3>
+            <p className="text-acento font-bold text-xl uppercase mb-4 text-center">
+              {lineaEditando.name}
+            </p>
+
+            {/* Visor de la captura en curso */}
+            <div className="w-full bg-crema-ticket text-fondo-profundo p-4 rounded-canon35 text-5xl font-black text-right shadow-inner min-h-[80px] flex items-center justify-end mb-4">
+              {cantidadTexto || '0'}
+            </div>
+
+            {/* Teclado numérico reutilizado (F9.0.2) */}
+            <div className="w-full mb-4">
+              <TecladoNumerico valor={cantidadTexto} onCambiar={setCantidadTexto} />
+            </div>
+
+            {/* Acciones: Cancelar / OK */}
+            <div className="grid grid-cols-2 gap-3 w-full">
+              <button
+                type="button"
+                onClick={cancelarTecladoCantidad}
+                className="min-h-tactil rounded-canon35 bg-fondo-profundo/40 text-crema-ticket font-black uppercase tracking-widest text-sm hover:bg-fondo-profundo/60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarTecladoCantidad}
+                className="min-h-tactil rounded-canon35 bg-acento text-fondo-profundo font-black uppercase tracking-widest text-sm hover:brightness-95 transition-all shadow-lg"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </aside>
   );
 }
