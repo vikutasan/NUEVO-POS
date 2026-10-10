@@ -286,20 +286,30 @@ describe('BUG-10 — scroll lateral del pizarrón', () => {
       expect(screen.getByTestId('folio-id-0')).toBeTruthy();
     });
 
-    // El tablero (hijo directo de la raíz) acota su altura y recorta el
+    // El tablero (hijo directo de la raíz) tiene ALTURA DEFINIDA y recorta el
     // desborde; el scroll vive DENTRO, no en el modal exterior.
+    //
+    // BUG-10d: DEBE ser `h-[85vh]` (altura definida), NO `max-h-[85vh]`. Con
+    // `max-h` (un máximo, no una altura) el `flex-1` del wrapper resuelve a
+    // `auto`, el wrapper crece con el contenido y la barra NUNCA aparece;
+    // además el `overflow-hidden` recortaba las filas de abajo (post-its
+    // "mordidos"). Esa era la causa raíz real de los 3 intentos previos.
     const tablero = container.firstChild.firstChild;
-    expect(tablero.className).toContain('max-h-[85vh]');
+    expect(tablero.className).toContain('h-[85vh]');
+    expect(tablero.className).not.toContain('max-h-[85vh]');
     expect(tablero.className).toContain('overflow-hidden');
     expect(tablero.className).toContain('flex-col');
 
     // El WRAPPER del grid es el contenedor con scroll y la barra estilizada.
     // (No el `<ul>`: si el grid llevara `flex-1`, sus filas se comprimirían y
     // los post-its `aspect-square` se encimarían — el bug que este fix cierra.)
+    // BUG-10d: además necesita `min-h-0`; sin él, un hijo flex no puede
+    // encogerse por debajo de su contenido y el `overflow-y-auto` no desplaza.
     const wrapper = container.querySelector('ul').parentElement;
     expect(wrapper.className).toContain('overflow-y-auto');
     expect(wrapper.className).toContain('custom-scrollbar');
     expect(wrapper.className).toContain('flex-1');
+    expect(wrapper.className).toContain('min-h-0');
 
     // El grid NO debe estirarse (`flex-1`) ni desplazarse: alto automático.
     const grid = container.querySelector('ul');

@@ -227,13 +227,22 @@ export default function OpenAccountsCorkboard({
   return (
     <div className="w-full max-w-[1100px] mx-auto p-4">
       {/* ── El corcho ─────────────────────────────────────────────────────
-          FIX_PIZARRON_SCROLL (10 Oct 2026) — PARIDAD con el POS viejo: el
-          tablero tiene ALTURA ACOTADA (`max-h-[85vh]`) y el grid de post-its
-          es el contenedor con scroll (`flex-1 overflow-y-auto`). Antes el
-          tablero crecía con el contenido y el scroll quedaba en el modal
-          exterior, sin barra lateral visible. */}
+          FIX_PIZARRON_SCROLL (10 Oct 2026) — PARIDAD con el POS viejo.
+
+          LA CLAVE (por qué los 3 intentos previos fallaron): `flex-1` +
+          `overflow-y-auto` SOLO producen scroll si el padre flex tiene una
+          ALTURA DEFINIDA. El POS viejo lo logra con `aspect-[16/9]` (altura
+          definida). Aquí se usaba `max-h-[85vh]`, que es un MÁXIMO, no una
+          altura definida: `flex-1` resolvía a `auto`, el wrapper crecía con
+          el contenido y NUNCA aparecía la barra. Peor: como el tablero tiene
+          `overflow-hidden`, al desbordar `85vh` RECORTABA las filas de abajo
+          (los post-its "mordidos").
+
+          La corrección es darle al tablero una altura DEFINIDA (`h-[85vh]`,
+          no `max-h`) y al wrapper de scroll `min-h-0` para que pueda
+          encogerse por debajo de su contenido y así desplazarse. */}
       <div
-        className="flex max-h-[85vh] flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
+        className="flex h-[85vh] flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
         style={{
           backgroundImage:
             'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0), radial-gradient(circle at 10px 10px, rgba(255,255,255,0.05) 1px, transparent 0)',
@@ -324,7 +333,7 @@ export default function OpenAccountsCorkboard({
             ajusta solo al ancho de la columna y el contenido se reparte con
             `justify-between` sin huecos artificiales. */}
         {!cargando && cuentas.length > 0 && (
-          <div className="custom-scrollbar flex-1 overflow-y-auto pr-2">
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pr-2">
             <ul className="grid content-start grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-12 xl:grid-cols-4">
             {cuentas.map((cuenta, indice) => (
               <li
