@@ -228,6 +228,30 @@ encogerse** por debajo de su contenido, así que el `overflow-y-auto` no desplaz
 overflow-hidden` (altura **definida**); el wrapper de scroll es `min-h-0 flex-1
 overflow-y-auto custom-scrollbar`; el `<ul>` interno es `grid content-start`.
 
+**Quinta vuelta (BUG-10e, 10 Oct 2026) — la verdadera barrera.**
+A pesar de que las correcciones estructurales de BUG-10d (altura estricta, `min-h-0`)
+eran conceptualmente correctas, el síntoma persistía. La barrera no era el layout,
+sino **el HMR roto**. Como `OpenAccountsCorkboard.jsx` exportaba mezclados el componente
+de React y una función pura (`colorDe`), Vite anulaba el Fast Refresh. El código nunca
+llegaba al navegador del usuario; seguían viendo BUG-10 (el `max-h-[85vh]` que guillotinaba
+los post-its) atrapados en caché. Además, el modal padre (`RetailVisionPOS.jsx`) aún tenía
+`overflow-y-auto`, lo que podía capturar el scroll en pantallas pequeñas.
+
+**Mitigación final:** Se quitó el `export` de `colorDe` (la función permanece en el módulo,
+ya no se exporta) para reactivar el Fast Refresh, y se limpió el modal padre para que sea de
+centrado puro (`items-center`, **sin** `overflow-y-auto`, idéntico al POS viejo), obligando al
+scroll a nacer dentro del tablero.
+
+**Compuerta (corrección de auditoría):** la primera versión del test de BUG-10e era una
+**tautología** — simulaba `clientHeight=800`/`scrollHeight=1200` en jsdom y afirmaba
+`1200 > 800`, verdadero por construcción: pasaba igual con el código roto y con el sano.
+Se reemplazó por una **compuerta de fuente**: el test lee el código de `RetailVisionPOS.jsx`
+y de `OpenAccountsCorkboard.jsx` y afirma que el bloque del modal **no** contiene
+`overflow-y-auto` (y sí `items-center`/`justify-center`/`role="dialog"`), y que el tablero usa
+`h-[85vh]` (no `max-h-[85vh]`) con `min-h-0` en el wrapper de scroll. Se **verificó que falla**
+con el código viejo y **pasa** con el arreglo. Lección transversal: *una compuerta que no puede
+fallar no es una compuerta*.
+
 | Trampa | Síntoma | Solución |
 |---|---|---|
 | Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`h-[85vh]`) y poner `overflow-y-auto` en el hijo que desborda |
@@ -238,3 +262,5 @@ overflow-y-auto custom-scrollbar`; el `<ul>` interno es `grid content-start`.
 | `flex-1` en el grid de tarjetas `aspect-square` | Las filas se comprimen y los post-its se **enciman** | El scroll va en un **wrapper**; el grid queda con alto automático (`content-start`, sin `flex-1`) |
 | `gap` estrecho con tarjetas rotadas | Las esquinas rotadas (±3°) tocan al vecino | Separación amplia (`gap-10`/`lg:gap-12`), paridad con el POS viejo |
 | `min-h` fijo + `justify-between` en el post-it | El post-it se ve **demasiado largo** y deja un hueco vacío en medio cuando el contenido es escaso | Usar `aspect-square` (alto = ancho de columna), como el POS viejo; **no** un `min-h` fijo |
+| Exportar funciones puras junto a componentes en Vite | El **Fast Refresh (HMR) colapsa**. El navegador no actualiza el código y los fixes de layout son invisibles. | No exportar utilidades puras desde el mismo módulo que un componente: extraerlas a un archivo de dominio (ej. `constants/`) o, como mínimo, quitarles el `export`. |
+| Compuerta que no puede fallar (tautología) | El test pasa siempre: verde con el código roto y con el sano; da falsa confianza | La compuerta debe poder **fallar**: afirmar sobre el código real (p. ej. leer la fuente y negar el patrón roto), no sobre un mock que se cumple por construcción |

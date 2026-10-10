@@ -352,3 +352,88 @@ describe('BUG-10c — el post-it es cuadrado, no una caja de alto fijo', () => {
     expect(postIt.className).not.toContain('min-h-[13rem]');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 11. El modal padre NO captura el scroll (BUG-10e)
+// ---------------------------------------------------------------------------
+//
+// POR QUÉ ESTA COMPUERTA ES DISTINTA (y por qué la anterior no servía)
+// ---------------------------------------------------------------------------
+// La compuerta previa de BUG-10e mockeaba `clientHeight`/`scrollHeight` con
+// valores HARDCODEADOS (800/1200) y luego afirmaba `1200 > 800`. Esa aserción
+// es verdadera por construcción: pasa aunque el CSS esté roto. Se comprobó
+// revirtiendo el fix del modal y viendo que el test seguía verde.
+//
+// Esta compuerta ataca la CAUSA RAÍZ real: el modal que monta el pizarrón en
+// `RetailVisionPOS.jsx` tenía `overflow-y-auto` + `items-start`, lo que hacía
+// que el SCROLL viviera en el overlay (el ancestro) en vez de en el wrapper
+// interno del tablero. Con eso, la barra lateral del pizarrón nunca aparecía
+// y el contenido se recortaba ("mordido"). El POS viejo usa un modal de
+// centrado puro (`items-center`, SIN `overflow-y-auto`).
+//
+// La compuerta lee el FUENTE de `RetailVisionPOS.jsx` (no el DOM: jsdom no
+// calcula layout) y exige que el contenedor del diálogo NO tenga
+// `overflow-y-auto`. Si alguien reintroduce esa clase, el test FALLA.
+//
+// Este archivo lo ejecuta Vitest (jsdom) vía `npm run test` en apps/pos.
+
+describe('BUG-10e — el modal padre NO captura el scroll del pizarrón', () => {
+  it('el contenedor del diálogo no usa `overflow-y-auto` (el scroll vive en el tablero)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+
+    const aqui = dirname(fileURLToPath(import.meta.url));
+    const ruta = resolve(aqui, '..', 'RetailVisionPOS.jsx');
+    const fuente = readFileSync(ruta, 'utf8');
+
+    // Aísla el bloque del modal del pizarrón: desde `pizarronAbierto ? (` hasta
+    // el cierre del `<div>` del diálogo (el `>` que precede a `<OpenAccountsCorkboard`).
+    const inicio = fuente.indexOf('pizarronAbierto ? (');
+    expect(inicio).toBeGreaterThan(-1);
+
+    const fin = fuente.indexOf('<OpenAccountsCorkboard', inicio);
+    expect(fin).toBeGreaterThan(inicio);
+
+    const bloqueModal = fuente.slice(inicio, fin);
+
+    // El contenedor del diálogo NO debe capturar el scroll.
+    expect(bloqueModal).not.toContain('overflow-y-auto');
+
+    // Debe ser de centrado puro, como el POS viejo.
+    expect(bloqueModal).toContain('items-center');
+    expect(bloqueModal).toContain('justify-center');
+    expect(bloqueModal).toContain('role="dialog"');
+  });
+
+  it('el tablero SÍ es el dueño del scroll (altura definida + wrapper con overflow)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+
+    const aqui = dirname(fileURLToPath(import.meta.url));
+    const ruta = resolve(aqui, 'OpenAccountsCorkboard.jsx');
+    const fuente = readFileSync(ruta, 'utf8');
+
+    // Aísla la línea del `className` del TABLERO (no los comentarios: el
+    // comentario del fix menciona `max-h-[85vh]` a propósito, para explicar
+    // por qué se descartó; eso no debe hacer fallar la compuerta).
+    const lineaTablero = fuente
+      .split('\n')
+      .find((l) => l.includes('className=') && l.includes('border-madera-veta'));
+    expect(lineaTablero).toBeTruthy();
+
+    // Altura DEFINIDA en el tablero (no `max-h`, que no acota a los hijos flex).
+    expect(lineaTablero).toContain('h-[85vh]');
+    expect(lineaTablero).not.toContain('max-h-[85vh]');
+
+    // El wrapper de scroll con `min-h-0` (sin él, un hijo flex no se encoge).
+    const lineaWrapper = fuente
+      .split('\n')
+      .find((l) => l.includes('className=') && l.includes('custom-scrollbar'));
+    expect(lineaWrapper).toBeTruthy();
+    expect(lineaWrapper).toContain('min-h-0');
+    expect(lineaWrapper).toContain('overflow-y-auto');
+    expect(lineaWrapper).toContain('flex-1');
+  });
+});

@@ -41,13 +41,7 @@
 import React from 'react';
 
 import useOpenAccounts from '../hooks/useOpenAccounts.js';
-import {
-  PALETA_POST_ITS,
-  COLOR_SIN_ASIGNAR,
-} from '../constants/paletaPostIts.js';
-
-// Re-export para no romper a los consumidores históricos (tests, RetailVisionPOS).
-export { PALETA_POST_ITS };
+import { COLOR_SIN_ASIGNAR } from '../constants/paletaPostIts.js';
 
 /**
  * Rotaciones deterministas de los post-its.
@@ -100,7 +94,7 @@ function rotacionDe(indice) {
  * @param {string} terminal — el id de la terminal (p. ej. `TERM-01`).
  * @param {Record<string, string>} [coloresPorTerminal] — mapa id → token.
  */
-export function colorDe(terminal, coloresPorTerminal = {}) {
+function colorDe(terminal, coloresPorTerminal = {}) {
   return coloresPorTerminal[terminal] || COLOR_SIN_ASIGNAR;
 }
 
