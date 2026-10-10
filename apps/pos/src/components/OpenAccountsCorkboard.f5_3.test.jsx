@@ -313,9 +313,12 @@ describe('BUG-10 — scroll lateral del pizarrón', () => {
     // (No el `<ul>`: si el grid llevara `flex-1`, sus filas se comprimirían y
     // los post-its `aspect-square` se encimarían — el bug que este fix cierra.)
     // BUG-10d: además necesita `min-h-0`; sin él, un hijo flex no puede
-    // encogerse por debajo de su contenido y el `overflow-y-auto` no desplaza.
+    // encogerse por debajo de su contenido y el scroll no desplaza.
+    // BUG-10h: `overflow-y-scroll` (no `auto`) para que el carril de la barra
+    // esté SIEMPRE reservado y la barra no dependa del modo overlay de Windows.
     const wrapper = container.querySelector('ul').parentElement;
-    expect(wrapper.className).toContain('overflow-y-auto');
+    expect(wrapper.className).toContain('overflow-y-scroll');
+    expect(wrapper.className).not.toContain('overflow-y-auto');
     expect(wrapper.className).toContain('custom-scrollbar');
     expect(wrapper.className).toContain('flex-1');
     expect(wrapper.className).toContain('min-h-0');
@@ -447,12 +450,21 @@ describe('BUG-10e — el modal padre NO captura el scroll del pizarrón', () => 
     expect(lineaTablero).not.toContain('h-[85vh]');
 
     // El wrapper de scroll con `min-h-0` (sin él, un hijo flex no se encoge).
+    // BUG-10h: `overflow-y-scroll` fuerza el carril SIEMPRE visible.
     const lineaWrapper = fuente
       .split('\n')
       .find((l) => l.includes('className=') && l.includes('custom-scrollbar'));
     expect(lineaWrapper).toBeTruthy();
     expect(lineaWrapper).toContain('min-h-0');
-    expect(lineaWrapper).toContain('overflow-y-auto');
+    expect(lineaWrapper).toContain('overflow-y-scroll');
+    expect(lineaWrapper).not.toContain('overflow-y-auto');
     expect(lineaWrapper).toContain('flex-1');
+
+    // BUG-10h — la barra debe verse SIEMPRE, no solo al hacer scroll. Se exige
+    // el carril estable y las propiedades estándar de color (no solo las
+    // `::-webkit-scrollbar`, que en modo overlay quedan invisibles).
+    expect(fuente).toContain('scrollbar-gutter: stable');
+    expect(fuente).toContain('scrollbar-width: thin');
+    expect(fuente).toContain('scrollbar-color:');
   });
 });

@@ -340,7 +340,7 @@ export default function OpenAccountsCorkboard({
             ajusta solo al ancho de la columna y el contenido se reparte con
             `justify-between` sin huecos artificiales. */}
         {!cargando && cuentas.length > 0 && (
-          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pr-2">
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-scroll pr-2">
             <ul className="grid content-start grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-12 xl:grid-cols-4">
             {cuentas.map((cuenta, indice) => (
               <li
@@ -445,12 +445,32 @@ export default function OpenAccountsCorkboard({
       </div>
 
       {/* FIX_PIZARRON_SCROLL — barra de scroll estilizada, PARIDAD con el
-          POS viejo (`apps/pos/OpenAccountsCorkboard.jsx`). */}
+          POS viejo (`apps/pos/OpenAccountsCorkboard.jsx`).
+
+          BUG-10h — la barra existía pero NO se veía. En Windows 11 con
+          "Ocultar automáticamente las barras de desplazamiento" activado,
+          `overflow-y: auto` usa barras OVERLAY: solo aparecen al hacer scroll,
+          así que el usuario cree que no hay barra. El POS viejo "parecía"
+          tenerla porque su barra vive al borde de un único grid.
+
+          La corrección: forzar la barra a estar SIEMPRE presente y visible.
+          - `overflow-y-scroll` (en el wrapper) reserva el carril aunque no
+            haga falta, así la barra no depende del modo overlay.
+          - `scrollbar-gutter: stable` evita el salto de layout al aparecer.
+          - Se declaran las propiedades ESTÁNDAR (`scrollbar-width`,
+            `scrollbar-color`) además de las `::-webkit-scrollbar`, para que
+            el color sea explícito y no lo decida el sistema operativo.
+          - El track lleva fondo visible para que la barra sea inequívoca. */}
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
+        .custom-scrollbar {
+          scrollbar-gutter: stable;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(61,43,31,0.55) rgba(0,0,0,0.12);
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.12); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(61,43,31,0.55); border-radius: 10px; border: 2px solid rgba(0,0,0,0.12); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(61,43,31,0.8); }
       `}</style>
     </div>
   );
