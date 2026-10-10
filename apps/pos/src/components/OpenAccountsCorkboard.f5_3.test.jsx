@@ -249,7 +249,7 @@ describe('F5.3 — criterio 7: contenedor raíz fluido (R-01)', () => {
 // ---------------------------------------------------------------------------
 
 describe('F5.3 — criterio 8: táctil (R-04)', () => {
-  it('cada tarjeta de cuenta usa min-h-tactil', async () => {
+  it('cada tarjeta de cuenta es un cuadrado grande (área táctil ≥ 44px)', async () => {
     const cuentas = [cuentaEjemplo({ id: 'id-1' })];
     const { container } = render(
       <OpenAccountsCorkboard terminalId="TERM-01" servicioCuentas={servicioCon(cuentas)} />
@@ -261,7 +261,10 @@ describe('F5.3 — criterio 8: táctil (R-04)', () => {
 
     const tarjetas = container.querySelectorAll('li');
     expect(tarjetas.length).toBe(1);
-    expect(tarjetas[0].className).toContain('min-h-tactil');
+    // BUG-10c: el post-it es `aspect-square` (alto = ancho de columna), muy
+    // por encima del mínimo táctil de 44px. Antes se usaba `min-h-tactil`,
+    // que estiraba el post-it y dejaba un hueco vacío enorme.
+    expect(tarjetas[0].className).toContain('aspect-square');
   });
 });
 
@@ -303,5 +306,39 @@ describe('BUG-10 — scroll lateral del pizarrón', () => {
     expect(grid.className).toContain('content-start');
     expect(grid.className).not.toContain('flex-1');
     expect(grid.className).not.toContain('overflow-y-auto');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Post-it cuadrado, sin alto fijo (BUG-10c, paridad con el POS viejo)
+// ---------------------------------------------------------------------------
+
+describe('BUG-10c — el post-it es cuadrado, no una caja de alto fijo', () => {
+  it('cada post-it usa `aspect-square` y NO un `min-h` fijo', async () => {
+    const cuentas = [
+      // Un PEDIDO con poco texto: antes quedaba estirado por `min-h` y el
+      // total se iba al fondo, dejando un hueco vacío enorme en medio.
+      cuentaEjemplo({
+        id: 'pedido-1',
+        account_num: 'T-0001',
+        order_type: 'PEDIDO',
+        customer_name: 'Ana',
+        delivery_type: 'PICKUP',
+      }),
+    ];
+    const { container } = render(
+      <OpenAccountsCorkboard terminalId="TERM-01" servicioCuentas={servicioCon(cuentas)} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('folio-pedido-1')).toBeTruthy();
+    });
+
+    const postIt = container.querySelector('ul > li');
+    // Cuadrado: alto = ancho de columna (como el POS viejo).
+    expect(postIt.className).toContain('aspect-square');
+    // Sin alto mínimo fijo: eso era lo que estiraba el post-it.
+    expect(postIt.className).not.toContain('min-h-[11rem]');
+    expect(postIt.className).not.toContain('min-h-[13rem]');
   });
 });

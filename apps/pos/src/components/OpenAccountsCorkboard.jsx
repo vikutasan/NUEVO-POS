@@ -314,14 +314,22 @@ export default function OpenAccountsCorkboard({
             unos sobre otros. El scroll debe vivir en un wrapper de altura
             acotada (`flex-1 overflow-y-auto`) y el grid dentro debe tener
             alto automático (`content-start`) con separación amplia para que
-            la rotación (±3°) no toque al vecino. */}
+            la rotación (±3°) no toque al vecino.
+
+            FIX_PIZARRON_ALTO (10 Oct 2026) — PARIDAD con el POS viejo: el
+            post-it es CUADRADO (`aspect-square`, alto = ancho de columna),
+            NO una caja de `min-h` fijo. Con `min-h-[11rem]` + `justify-between`
+            un pedido con poco texto quedaba estirado y el total se iba al
+            fondo, dejando un hueco vacío enorme en medio. El cuadrado se
+            ajusta solo al ancho de la columna y el contenido se reparte con
+            `justify-between` sin huecos artificiales. */}
         {!cargando && cuentas.length > 0 && (
           <div className="custom-scrollbar flex-1 overflow-y-auto pr-2">
             <ul className="grid content-start grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-12 xl:grid-cols-4">
             {cuentas.map((cuenta, indice) => (
               <li
                 key={cuenta.id}
-                className={`group relative aspect-square min-h-tactil rounded-sm p-4 lg:p-6 shadow-[5px_15px_30px_-5px_rgba(0,0,0,0.3)] hover:shadow-[10px_25px_50px_-10px_rgba(0,0,0,0.4)] hover:-translate-y-2 hover:rotate-0 transition-all cursor-pointer flex flex-col justify-between ${colorDe(
+                className={`group relative flex aspect-square flex-col justify-between rounded-sm p-4 shadow-[5px_15px_30px_-5px_rgba(0,0,0,0.3)] hover:shadow-[10px_25px_50px_-10px_rgba(0,0,0,0.4)] hover:-translate-y-2 hover:rotate-0 transition-all cursor-pointer lg:p-6 ${colorDe(
                   cuenta.terminal_id,
                   coloresPorTerminal,
                 )} ${rotacionDe(indice)}`}
