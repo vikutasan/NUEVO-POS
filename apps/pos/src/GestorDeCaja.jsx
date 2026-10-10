@@ -440,6 +440,33 @@ export default function GestorDeCaja({
   const capturado = Number(conteoEfectivo) || 0;
   const descuadreEnVivo = capturado - esperado;
 
+  // FASE 10.5 — paridad de datos: el desglose que el viejo POS mostraba al
+  // cajero (fondo, entradas, salidas, ventas por método, total y número de
+  // transacciones). El contrato 12 lo expone; aquí solo se formatea.
+  //
+  // NOTA (TDZ): este `useMemo` se declara ANTES de `alImprimirCorte` porque
+  // ese `useCallback` lo consume en su cuerpo y en su arreglo de dependencias.
+  // Declararlo después dispara un ReferenceError de zona muerta temporal.
+  const desglose = useMemo(
+    () => ({
+      fondo_inicial: Number(resumen?.fondo_inicial ?? 0),
+      total_entradas: Number(resumen?.total_entradas ?? 0),
+      total_salidas: Number(resumen?.total_salidas ?? 0),
+      total_credito: Number(resumen?.total_credito ?? 0),
+      total_debito: Number(resumen?.total_debito ?? 0),
+      total_ventas: Number(resumen?.total_ventas ?? 0),
+      num_transacciones: Number(resumen?.num_transacciones ?? 0),
+      // DEUDA-BUG08 (Obs. 4) — ¿quién cuadra la caja? El corte separa lo que
+      // esta caja vendió por sí misma (`ventas_propias`) de lo que cobró por
+      // cuentas de OTRAS terminales (`ventas_ajenas`). El total no cambia; el
+      // desglose le dice al cajero cuánto de su caja no nació en su terminal.
+      ventas_propias: Number(resumen?.ventas_propias ?? 0),
+      ventas_ajenas: Number(resumen?.ventas_ajenas ?? 0),
+      num_transacciones_ajenas: Number(resumen?.num_transacciones_ajenas ?? 0),
+    }),
+    [resumen],
+  );
+
   /**
    * FASE 10.6.4 — PARIDAD DE OPERACIÓN. Imprime el corte de caja.
    *
@@ -453,9 +480,9 @@ export default function GestorDeCaja({
    * partir de los mismos datos que alimentan el `CorteTicketTemplate` oculto.
    * La impresión es NO crítica: si falla, el corte ya quedó cerrado.
    *
-   * NOTA: este `useCallback` se declara DESPUÉS de `esperado`/`capturado`
-   * porque su arreglo de dependencias los evalúa durante el render; declararlo
-   * antes dispara un ReferenceError de zona muerta temporal (TDZ).
+   * NOTA: este `useCallback` se declara DESPUÉS de `esperado`/`capturado` y de
+   * `desglose` porque su arreglo de dependencias los evalúa durante el render;
+   * declararlo antes dispara un ReferenceError de zona muerta temporal (TDZ).
    */
   const alImprimirCorte = useCallback(() => {
     const datos = {
@@ -468,6 +495,10 @@ export default function GestorDeCaja({
       credito: Number(conteoCredito) || 0,
       debito: Number(conteoDebito) || 0,
       movimientos,
+      // DEUDA-BUG08 (Obs. 4): el corte impreso también declara cuánto de la
+      // caja nació en OTRAS terminales (cobro ajeno, BUG-08).
+      ventasAjenas: desglose.ventas_ajenas,
+      numTransaccionesAjenas: desglose.num_transacciones_ajenas,
     };
     imprimirCorte(generarCorteHTML(datos));
   }, [
@@ -479,23 +510,8 @@ export default function GestorDeCaja({
     conteoCredito,
     conteoDebito,
     movimientos,
+    desglose,
   ]);
-
-  // FASE 10.5 — paridad de datos: el desglose que el viejo POS mostraba al
-  // cajero (fondo, entradas, salidas, ventas por método, total y número de
-  // transacciones). El contrato 12 lo expone; aquí solo se formatea.
-  const desglose = useMemo(
-    () => ({
-      fondo_inicial: Number(resumen?.fondo_inicial ?? 0),
-      total_entradas: Number(resumen?.total_entradas ?? 0),
-      total_salidas: Number(resumen?.total_salidas ?? 0),
-      total_credito: Number(resumen?.total_credito ?? 0),
-      total_debito: Number(resumen?.total_debito ?? 0),
-      total_ventas: Number(resumen?.total_ventas ?? 0),
-      num_transacciones: Number(resumen?.num_transacciones ?? 0),
-    }),
-    [resumen],
-  );
 
   return (
     <div className="w-full max-w-[1100px] mx-auto p-4 flex flex-col gap-4">
@@ -666,6 +682,19 @@ export default function GestorDeCaja({
                   <dt className="text-crema-ticket/60">Transacciones</dt>
                   <dd data-testid="desglose-transacciones">{desglose.num_transacciones}</dd>
                 </div>
+                {/* DEUDA-BUG08 (Obs. 4) — Solo aparece si esta caja cobró
+                    cuentas de OTRAS terminales. Deja claro que ese dinero no
+                    nació en esta terminal (RN-53: se cuenta donde se recibió). */}
+                {desglose.ventas_ajenas > 0 && (
+                  <div className="flex justify-between">
+                    <dt className="text-crema-ticket/60">
+                      De otras terminales ({desglose.num_transacciones_ajenas})
+                    </dt>
+                    <dd data-testid="desglose-ventas-ajenas">
+                      {formatearPrecio(desglose.ventas_ajenas)}
+                    </dd>
+                  </div>
+                )}
               </dl>
             </div>
 

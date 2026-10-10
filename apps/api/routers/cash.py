@@ -88,7 +88,7 @@ async def _sesion_o_404(db: AsyncSession, cash_session_id: UUID) -> CashSession:
 
 
 async def _clasificar_ventas_del_turno(
-    db: AsyncSession, cash_session_id: UUID
+    db: AsyncSession, cash_session_id: UUID, terminal_del_turno: str | None = None
 ) -> dict:
     """Clasifica las ventas del turno por método (RN-53, RN-57, RN-58).
 
@@ -111,6 +111,14 @@ async def _clasificar_ventas_del_turno(
     clasificación (RN-58) más el conteo de tickets, para que el resumen del
     turno (contrato 12) pueda reconstruir ese desglose sin leer columnas
     crudas. El llamador que solo necesita el efectivo usa `["EFECTIVO"]`.
+
+    DEUDA-BUG08 (Observación 4) — DESGLOSE POR ORIGEN. Con BUG-08 una caja
+    puede cobrar cuentas de OTRA terminal. Si se pasa `terminal_del_turno`, se
+    añaden al resultado `ventas_propias` / `ventas_ajenas` /
+    `num_transacciones_ajenas`: el total de cada ticket se reparte según la
+    terminal de ORIGEN (`ticket.terminal_id`) coincida o no con la del turno.
+    Es una PROYECCIÓN (no se leen columnas crudas): se usa el `total` del
+    ticket, que es el mismo importe que alimenta `total_ventas`.
     """
     tickets = (
         await db.execute(select(Ticket).where(Ticket.cash_session_id == cash_session_id))
@@ -138,6 +146,22 @@ async def _clasificar_ventas_del_turno(
     # RN-58 devuelve {EFECTIVO, CREDITO, DEBITO, TRANSFERENCIA}. Se añade el
     # conteo de tickets para el desglose de paridad (F10.5).
     clasificado["num_transacciones"] = len(tickets)
+
+    # DEUDA-BUG08 (Obs. 4): desglose por terminal de ORIGEN del ticket.
+    if terminal_del_turno is not None:
+        propias = Decimal("0.00")
+        ajenas = Decimal("0.00")
+        ajenas_n = 0
+        for t in tickets:
+            monto = Decimal(str(t.total))
+            if t.terminal_id == terminal_del_turno:
+                propias += monto
+            else:
+                ajenas += monto
+                ajenas_n += 1
+        clasificado["ventas_propias"] = propias
+        clasificado["ventas_ajenas"] = ajenas
+        clasificado["num_transacciones_ajenas"] = ajenas_n
     return clasificado
 
 
@@ -344,12 +368,21 @@ async def resumen_del_turno(
     totales de entradas/salidas, ventas por método (efectivo/crédito/débito),
     total de ventas y número de transacciones. Todo se calcula con las reglas
     (RN-53, RN-58); no se leen columnas crudas de la tabla.
+
+    DEUDA-BUG08 (Observación 4) — ¿QUIÉN CUADRA LA CAJA? Con BUG-08 una caja
+    puede cobrar cuentas de OTRA terminal. El corte añade `ventas_propias` y
+    `ventas_ajenas` (más `num_transacciones_ajenas`): el mismo `total_ventas`
+    repartido según la terminal de ORIGEN del ticket. `ventas_propias +
+    ventas_ajenas == total_ventas` siempre. Es una PROYECCIÓN del router de
+    caja (frontera A-02): no se lee la tabla `tickets` desde el POS.
     """
     sesion = await _sesion_o_404(db, cash_session_id)
 
     movimientos = await _movimientos_del_turno(db, cash_session_id)
     entradas, salidas = _sumar_movimientos(movimientos)
-    clasificado = await _clasificar_ventas_del_turno(db, cash_session_id)
+    clasificado = await _clasificar_ventas_del_turno(
+        db, cash_session_id, terminal_del_turno=sesion.terminal_id
+    )
 
     ventas_efectivo = clasificado.get("EFECTIVO", Decimal("0.00"))
     total_credito = clasificado.get("CREDITO", Decimal("0.00"))
@@ -381,6 +414,9 @@ async def resumen_del_turno(
         total_debito=total_debito,
         total_ventas=total_ventas,
         num_transacciones=clasificado.get("num_transacciones", 0),
+        ventas_propias=clasificado.get("ventas_propias", Decimal("0.00")),
+        ventas_ajenas=clasificado.get("ventas_ajenas", Decimal("0.00")),
+        num_transacciones_ajenas=clasificado.get("num_transacciones_ajenas", 0),
     )
 
 

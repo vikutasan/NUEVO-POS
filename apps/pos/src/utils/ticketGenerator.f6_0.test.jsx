@@ -164,3 +164,23 @@ describe('F6.0 — generarCorteHTML', () => {
     expect(html).toContain('@page { size: 80mm');
   });
 });
+
+describe('F6.0 — generarCorteHTML · DEUDA-BUG08 (Obs. 4) desglose por origen', () => {
+  it('declara "De otras terminales (N)" cuando la caja cobró cuentas ajenas', () => {
+    const html = generarCorteHTML(
+      corteEjemplo({ ventasAjenas: 250, numTransaccionesAjenas: 3 })
+    );
+    expect(html).toContain('De otras terminales (3)');
+    expect(html).toContain('$250.00');
+  });
+
+  it('NO declara la fila cuando no hay cuentas ajenas', () => {
+    const html = generarCorteHTML(corteEjemplo({ ventasAjenas: 0 }));
+    expect(html).not.toContain('De otras terminales');
+  });
+
+  it('tolera la ausencia de los campos (retrocompatibilidad)', () => {
+    const html = generarCorteHTML(corteEjemplo());
+    expect(html).not.toContain('De otras terminales');
+  });
+});

@@ -35,7 +35,8 @@ Reglas aplicadas, en orden:
 
 from __future__ import annotations
 
-from datetime import datetime
+import os
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
@@ -100,6 +101,30 @@ from schemas import (
 )
 
 router = APIRouter(prefix="/pos", tags=["pos"])
+
+
+# ---------------------------------------------------------------------------
+# DEUDA-BUG08 (Observación 2) — El fallback silencioso deja de ser silencioso.
+# ---------------------------------------------------------------------------
+# Cuando el cliente NO declara `cash_session_id`, el backend cae al turno de la
+# terminal del ticket (retrocompatibilidad). Ese fallback es legítimo, pero
+# SILENCIOSO: si el frontend olvida enviar el turno, el cobro "funciona" y el
+# dinero se cuenta en la caja equivocada sin que nadie se entere. Para que el
+# fallback sea OBSERVABLE:
+#   1. SIEMPRE se escribe un asiento en `pos_audit_log` (RN-75) marcando que se
+#      usó el fallback, con el turno elegido y la terminal de origen.
+#   2. Si `POS_ESTRICTO_TURNO_CAJA` está activo, el fallback deja de ser
+#      tolerado: se rechaza con 400 para que un frontend que olvida el turno
+#      falle ruidosamente en vez de cobrar en la caja equivocada.
+# El flag es OPT-IN (default off) para no romper la retrocompatibilidad.
+def _estricto_turno_caja() -> bool:
+    """True si `POS_ESTRICTO_TURNO_CAJA` exige que el cliente declare el turno."""
+    return os.environ.get("POS_ESTRICTO_TURNO_CAJA", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -561,8 +586,21 @@ async def cobrar_ticket(
     # trazabilidad inmutable; el turno solo decide dónde se cuenta el dinero.
     if entrada.cash_session_id is not None:
         sesion_caja = await _sesion_caja_por_id_o_400(db, entrada.cash_session_id)
+        uso_fallback = False
     else:
+        # DEUDA-BUG08 (Obs. 2): el fallback es legítimo pero OBSERVABLE. Si el
+        # modo estricto está activo, un cliente que olvida declarar el turno
+        # falla ruidosamente (400) en vez de cobrar en la caja equivocada.
+        if _estricto_turno_caja():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "POS_ESTRICTO_TURNO_CAJA activo: el cobro exige declarar "
+                    "`cash_session_id` (el turno de la caja que cobra)."
+                ),
+            )
         sesion_caja = await _sesion_caja_activa_o_400(db, ticket.terminal_id)
+        uso_fallback = True
 
     # FASE 9.1 — Pagos mixtos: se normaliza `payment_details` a la forma canónica
     # `pagos[]` (retrocompatibilidad con el cobro viejo de un solo método) y se
@@ -598,6 +636,31 @@ async def cobrar_ticket(
     # Si el pedido ya existía (política SIN_PAGO/ANTICIPO), se ACTUALIZA a
     # PAGADO en vez de duplicarse (idempotencia por `ticket_id`, RN-68).
     await proyectar_pedido(db, ticket, forzar=True)
+
+    # DEUDA-BUG08 (Obs. 2) — El fallback deja de ser silencioso: si el cliente
+    # NO declaró el turno, se escribe un asiento de auditoría (RN-75) que lo
+    # deja constancia. El asiento vive en la MISMA transacción que el cobro: si
+    # el commit falla, el asiento se va con él (no se audita lo que no ocurrió).
+    if uso_fallback:
+        db.add(
+            PosAuditLog(
+                endpoint="POST /pos/tickets/{id}/pay",
+                payload={
+                    "ticket_id": str(ticket.id),
+                    "terminal_origen": ticket.terminal_id,
+                    "cash_session_id": str(sesion_caja.id),
+                    "terminal_caja": sesion_caja.terminal_id,
+                },
+                codigo=200,
+                terminal_id=sesion_caja.terminal_id,
+                usuario_id=None,
+                extras={
+                    "motivo": "fallback_turno_de_la_terminal_del_ticket",
+                    "observacion": "DEUDA-BUG08-OBS2",
+                },
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
 
     # FASE 7.5.0 / D-5b — El commit se hace AQUÍ, al final del endpoint, DESPUÉS
     # de proyectar el pedido. Así el cobro y el paso del pedido a PAGADO son

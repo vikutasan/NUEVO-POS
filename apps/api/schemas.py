@@ -572,6 +572,14 @@ class ResumenTurnoSalida(BaseModel):
     turno se había perdido. Estos 7 campos restauran ese desglose. Siguen
     siendo una PROYECCIÓN (no la tabla): se calculan con las reglas RN-53 y
     RN-58, no se leen columnas crudas.
+
+    DEUDA-BUG08 (Observación 4) — ¿QUIÉN CUADRA LA CAJA? Con BUG-08 una caja
+    puede cobrar cuentas de OTRA terminal. Contablemente es correcto (RN-53:
+    el dinero se cuenta donde entró), pero el corte mostraba un `total_ventas`
+    que mezclaba ventas propias y ajenas sin explicarlo: la cajera no podía
+    conciliar. `ventas_propias` y `ventas_ajenas` separan ese total por la
+    terminal de ORIGEN del ticket (`terminal_id`), sin cambiar el total. La
+    suma `ventas_propias + ventas_ajenas == total_ventas` siempre.
     """
 
     esperado: Decimal
@@ -584,6 +592,10 @@ class ResumenTurnoSalida(BaseModel):
     total_debito: Decimal = Decimal("0.00")
     total_ventas: Decimal = Decimal("0.00")
     num_transacciones: int = 0
+    # --- Desglose por origen del ticket (DEUDA-BUG08, Obs. 4) ---
+    ventas_propias: Decimal = Decimal("0.00")
+    ventas_ajenas: Decimal = Decimal("0.00")
+    num_transacciones_ajenas: int = 0
 
 
 class CerrarTurnoEntrada(BaseModel):

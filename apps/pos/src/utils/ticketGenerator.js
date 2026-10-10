@@ -429,6 +429,17 @@ function bloqueMovimientos(movimientos) {
 }
 
 /**
+ * DEUDA-BUG08 (Obs. 4) — ¿quién cuadra la caja? Si esta caja cobró cuentas de
+ * OTRAS terminales, el corte lo declara. Si no, no ensucia el ticket.
+ */
+function bloqueVentasAjenas(corte) {
+  const ajenas = Number(corte.ventasAjenas || 0);
+  if (ajenas <= 0) return '';
+  const n = Number(corte.numTransaccionesAjenas || 0);
+  return filaCorte(`De otras terminales (${n})`, moneda(ajenas));
+}
+
+/**
  * Genera el HTML térmico de un corte de caja.
  * NUEVA en el POS nuevo (no existía como string en el POS viejo). Replica la
  * estructura visual de `CorteTicketTemplate.jsx` (F4.4) pero como string puro.
@@ -464,6 +475,7 @@ export function generarCorteHTML(corte = {}) {
     ${filaCorte('Efectivo', moneda(contado))}
     ${filaCorte('Crédito', moneda(corte.credito))}
     ${filaCorte('Débito', moneda(corte.debito))}
+    ${bloqueVentasAjenas(corte)}
     <div class="line"></div>
     <div class="small upper">Movimientos</div>
     ${bloqueMovimientos(corte.movimientos)}

@@ -199,3 +199,169 @@ Ahora el turno lo declara la terminal que COBRA y el backend lo valida con
 | `test_3_retrocompat_sin_cash_session_id` (backend) | Sin `cash_session_id` cae al turno del ticket |
 | `test_4/5/6_*_da_400` (backend) | Turno inexistente / cerrado / sin sesión → 400 |
 | `hooks.f3_3.test.jsx` (frontend) | `cobrar` reenvía `cash_session_id` solo si se declara |
+
+### 10.4 ¿Quién cuadra la caja? El corte explica el cobro ajeno (DEUDA-BUG08 · Obs. 4)
+
+> **Origen:** Observación 4 del plan [`PLAN_DEUDA_BUG08_CUATRO_OBSERVACIONES.md`](../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/05-plan-de-construccion/PLAN_DEUDA_BUG08_CUATRO_OBSERVACIONES.md).
+> **Reglas relacionadas:** RN-53.
+
+Si una caja puede cobrar cuentas de OTRAS terminales (§10), el cajero necesita saber
+**cuánto de su caja no nació en su terminal**. Sin ese desglose, el corte muestra un
+total que no cuadra con «lo que vendió esta terminal» y el cajero no entiende por qué.
+
+El contrato 12 (`caja.resumen_del_turno`) expone tres campos nuevos:
+
+| Campo | Qué es |
+|---|---|
+| `ventas_propias` | Suma de los tickets cuyo `terminal_id` == la terminal del turno |
+| `ventas_ajenas` | Suma de los tickets cobrados en este turno pero originados en OTRA terminal |
+| `num_transacciones_ajenas` | Cuántos tickets ajenos se cobraron |
+
+**Invariante:** `ventas_propias + ventas_ajenas == total_ventas`. El total NO cambia;
+el desglose solo lo **explica**.
+
+**Nota operativa:** el desglose por origen es **informativo**. El arqueo (esperado vs.
+contado) sigue siendo la única fuente de verdad del descuadre. La fila «De otras
+terminales (N)» solo aparece cuando `ventas_ajenas > 0`; si la caja no cobró cuentas
+ajenas, el corte no la muestra.
+
+Se materializa en:
+
+- **Backend:** `_clasificar_ventas_del_turno()` en `routers/cash.py` (recibe
+  `terminal_del_turno` y separa por origen).
+- **Frontend (pantalla):** `GestorDeCaja.jsx` (memo `desglose` + fila condicional).
+- **Frontend (impresión):** `CorteTicketTemplate.jsx` y `generarCorteHTML()`
+  (`utils/ticketGenerator.js`), que alimenta el corte térmico real.
+
+### 10.5 El fallback del turno es legítimo pero OBSERVABLE (DEUDA-BUG08 · Obs. 2)
+
+> **Origen:** Observación 2 del plan de las cuatro observaciones.
+> **Reglas relacionadas:** RN-75, RN-76, RN-77.
+
+Cuando el cliente **no** declara `cash_session_id`, el backend cae al turno de la
+terminal del ticket (§10.1). Ese fallback es **legítimo** (retrocompatibilidad), pero
+**silencioso**: si un cliente olvida declarar el turno, el cobro se registra en la caja
+equivocada sin dejar rastro. Para que el fallback sea **observable**:
+
+1. **Asiento de auditoría.** Cada vez que se usa el fallback, el backend escribe un
+   `PosAuditLog` con `extras.observacion = "DEUDA-BUG08-OBS2"` y el motivo
+   `fallback_turno_de_la_terminal_del_ticket`. El log es append-only (RN-75/76/77).
+2. **Modo estricto (opt-in).** Si la variable de entorno `POS_ESTRICTO_TURNO_CAJA`
+   está activa (`1`/`true`/`yes`/`on`), un cobro **sin** `cash_session_id` falla
+   ruidosamente con **400** en vez de caer al fallback. Por defecto está **apagada**:
+   el comportamiento retrocompatible se conserva.
+
+| `POS_ESTRICTO_TURNO_CAJA` | Cliente declara turno | Cliente NO declara turno |
+|---|---|---|
+| Apagada (default) | Cobra con el turno declarado | Cobra con el turno del ticket + **asiento de auditoría** |
+| Activa | Cobra con el turno declarado | **400** (no cobra) |
+
+### 10.6 Nota de vocabulario: `cash_session_id` (DEUDA-BUG08 · Obs. 1)
+
+El nombre `cash_session_id` es **heredado** del POS viejo y puede confundir: no es «el
+id de la caja» como entidad, sino **el id del turno de caja** (`CashSession`) de la
+terminal que cobra. Se conserva por retrocompatibilidad de contrato; léase siempre como
+«el turno de caja que cobra». No se renombra (deuda de nomenclatura registrada junto a
+BUG-02/03).
+
+### 10.7 Por qué la validación del turno declarado tiene tres pasos (DEUDA-BUG08 · Obs. 3)
+
+`_sesion_caja_por_id_o_400` valida **tres** cosas, y las tres son necesarias:
+
+1. **Existe** el `cash_session_id` (si no, 400).
+2. **Está `OPEN`** (RN-55: una sesión cerrada es inmutable; cobrar en ella sería
+   escribir en el pasado).
+3. **Su terminal tiene sesión de terminal activa** (RN-24: sin sesión activa no se
+   opera).
+
+Omitir cualquiera de las tres permitiría cobrar en una caja inexistente, cerrada o
+muerta. La validación es la frontera E-13: el backend nunca confía en el cliente.
+
+---
+
+## 11. Las cuatro observaciones de la deuda BUG-08
+
+> **Plan asociado:** [`PLAN_DEUDA_BUG08_CUATRO_OBSERVACIONES.md`](../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/05-plan-de-construccion/PLAN_DEUDA_BUG08_CUATRO_OBSERVACIONES.md)
+> **Origen:** Revisión crítica del usuario tras cerrar BUG-08.
+
+Al cerrar BUG-08 quedaron cuatro observaciones. Se abordaron **las cuatro** en una
+sola tanda. Esta sección deja constancia del **por qué** de cada decisión.
+
+### 11.1 Obs-1 — El nombre `cash_session_id` es heredado y engañoso (Baja)
+
+**Observación:** el campo se llama `cash_session_id`, pero en el cobro ajeno
+**no** representa «la sesión de caja del ticket», sino **el turno de la caja que
+cobra**. El nombre invita a confundir ambos conceptos.
+
+**Decisión: NO renombrar.** El nombre ya está en el contrato 33, en el frontend y
+en los tests. Renombrarlo sería un cambio de contrato con costo alto y beneficio
+bajo. En su lugar se documenta el vocabulario (ver §11.4) y se registra la deuda
+de nomenclatura junto a las de BUG-02/03.
+
+### 11.2 Obs-2 — El fallback silencioso puede ocultar bugs (Media)
+
+**Observación:** si el cliente **no** declara `cash_session_id`, el backend cae
+al turno de la terminal del ticket **sin dejar rastro**. Un frontend que olvide
+declarar el turno cobraría en la caja equivocada y nadie se enteraría.
+
+**Decisión: hacer el fallback OBSERVABLE, sin romper la retrocompatibilidad.**
+
+1. **Asiento de auditoría.** Cada vez que se usa el fallback se escribe un
+   `PosAuditLog` con `extras.observacion = "DEUDA-BUG08-OBS2"` y
+   `extras.motivo = "fallback_turno_de_la_terminal_del_ticket"`. El log es
+   append-only (RN-75/76/77); el asiento deja evidencia de que el turno NO se
+   declaró.
+2. **Modo estricto opcional.** La variable de entorno `POS_ESTRICTO_TURNO_CAJA`
+   (`1`/`true`/`yes`/`on`) convierte el fallback en un **400 ruidoso**: el cobro
+   exige declarar `cash_session_id`. Por defecto está **apagada** (retrocompat).
+
+| `POS_ESTRICTO_TURNO_CAJA` | `cash_session_id` | Resultado |
+|---|---|---|
+| apagada (default) | declarado | Cobra con el turno declarado (validado) |
+| apagada (default) | ausente | Cobra con el turno del ticket **+ asiento de auditoría** |
+| activa | declarado | Cobra con el turno declarado (validado) |
+| activa | ausente | **400** — el cobro exige declarar el turno |
+
+### 11.3 Obs-3 — La validación de RN-24 es sutil (Baja)
+
+**Observación:** el turno declarado se valida en **tres** pasos (existe → `OPEN`
+→ su terminal tiene sesión activa). El tercero (RN-24) es el menos obvio: un
+turno puede existir y estar `OPEN` pero su terminal ya no tener sesión activa.
+
+**Decisión: documentar el por qué.** La validación triple existe porque cada paso
+cubre un fallo distinto: RN-49 (existe), RN-55 (no está cerrado), RN-24 (la
+terminal sigue operando). Se deja el párrafo explicativo en el helper
+`_sesion_caja_por_id_o_400` y en la ficha.
+
+### 11.4 Obs-4 — ¿Quién cuadra la caja? (Alta)
+
+**Observación:** cuando una caja cobra cuentas de otras terminales, el corte
+mostraba un `total_ventas` que **no** distinguía lo propio de lo ajeno. El cajero
+no podía saber cuánto de su caja nació en su terminal.
+
+**Decisión: desglosar por origen en el corte.**
+
+- El contrato 12 (`caja.resumen_del_turno`) expone tres campos nuevos:
+  `ventas_propias`, `ventas_ajenas` y `num_transacciones_ajenas`.
+- El **total no cambia** (invariante: `ventas_propias + ventas_ajenas = total_ventas`).
+- El **Gestor de Caja** muestra una línea «De otras terminales (N)» **solo si**
+  `ventas_ajenas > 0`.
+- El **corte impreso** (`CorteTicketTemplate` + `generarCorteHTML`) declara la
+  misma línea, también condicional.
+
+| Test | Qué fija |
+|---|---|
+| `test_1_corte_separa_propias_de_ajenas` (backend) | El corte separa propias de ajenas |
+| `test_2_sin_ajenas_el_desglose_es_cero` (backend) | Sin ajenas, `ventas_ajenas` = 0 |
+| `test_3_invariante_propias_mas_ajenas_es_total` (backend) | `propias + ajenas = total` |
+| `test_4_contrato_12_declara_los_campos_nuevos` (backend) | El contrato 12 declara los campos |
+| `GestorDeCaja.deuda_bug08_obs4.test.jsx` (frontend) | La línea aparece solo con ajenas |
+| `CorteTicketTemplate.deuda_bug08_obs4.test.jsx` (frontend) | El corte impreso la declara |
+| `ticketGenerator.f6_0.test.jsx` (frontend) | `generarCorteHTML` la declara |
+
+### 11.5 Nota operativa para el cajero
+
+> Si en tu corte aparece **«De otras terminales»**, ese dinero **no nació en tu
+> terminal**: lo cobraste por una cuenta creada en otro puesto. Cuádralo en **tu**
+> caja (RN-53: el dinero se cuenta donde se recibió), pero **no** lo reportes como
+> venta de tu terminal. El origen del ticket es trazabilidad inmutable (RN-12).

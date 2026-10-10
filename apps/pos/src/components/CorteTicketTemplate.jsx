@@ -91,6 +91,13 @@ export default function CorteTicketTemplate({
   credito,
   debito,
   movimientos = [],
+  // DEUDA-BUG08 (Obs. 4) — ¿quién cuadra la caja? El corte impreso separa lo
+  // que esta caja vendió por sí misma (`ventasPropias`) de lo que cobró por
+  // cuentas de OTRAS terminales (`ventasAjenas`). El total no cambia; el
+  // desglose le dice al cajero cuánto de su caja no nació en su terminal.
+  ventasPropias = 0,
+  ventasAjenas = 0,
+  numTransaccionesAjenas = 0,
 }) {
   const descuadre = calcularDescuadre(esperado, contado);
   const cuadra = descuadre === 0;
@@ -179,6 +186,14 @@ export default function CorteTicketTemplate({
         <Fila etiqueta="Efectivo" valor={formatearPrecio(contado)} testid="efectivo" />
         <Fila etiqueta="Crédito" valor={formatearPrecio(credito)} testid="credito" />
         <Fila etiqueta="Débito" valor={formatearPrecio(debito)} testid="debito" />
+        {/* DEUDA-BUG08 (Obs. 4): solo aparece si esta caja cobró cuentas ajenas. */}
+        {Number(ventasAjenas) > 0 && (
+          <Fila
+            etiqueta={`De otras terminales (${numTransaccionesAjenas})`}
+            valor={formatearPrecio(ventasAjenas)}
+            testid="ventas-ajenas"
+          />
+        )}
       </section>
 
       {/* Movimientos del turno */}

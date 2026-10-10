@@ -977,7 +977,10 @@ CONTRATOS: tuple[Contrato, ...] = (
             "payment_details": "Dict (pagos mixtos: efectivo/tarjeta/transferencia)",
             "version": "Int (concurrencia optimista, RN-25)",
             "cobrador_nombre": "String | None",
-            "cash_session_id": "UUID | None (opcional, BUG-08)",
+            # DEUDA-BUG08 (Obs. 1): el nombre es heredado y engañoso. En el cobro
+            # ajeno NO es «la sesión de caja del ticket», sino EL TURNO DE LA CAJA
+            # QUE COBRA. Se conserva por compatibilidad; ver la nota de vocabulario.
+            "cash_session_id": "UUID | None (opcional, BUG-08) — el turno de la caja que COBRA",
         },
         salida={
             "id": "UUID",
@@ -989,9 +992,12 @@ CONTRATOS: tuple[Contrato, ...] = (
         garantias=(
             "El turno de caja lo determina la terminal que COBRA, no la de origen del ticket.",
             "`cash_session_id` es OPCIONAL (retrocompatibilidad): si falta, el backend usa el turno de la terminal del ticket.",
-            "El backend VALIDA el turno declarado (E-13): existe + OPEN (RN-55) + su terminal tiene sesión activa (RN-24).",
+            "El backend VALIDA el turno declarado (E-13): existe (RN-49) + OPEN (RN-55) + su terminal tiene sesión activa (RN-24).",
             "El `terminal_id` del ticket NUNCA se sobreescribe (RN-12): el origen es trazabilidad inmutable.",
             "El dinero se cuenta en la caja que lo recibió (RN-53).",
+            # DEUDA-BUG08 (Obs. 2): el fallback es legítimo pero OBSERVABLE.
+            "Si se usa el fallback (sin `cash_session_id`), se escribe un asiento de auditoría (RN-75/76/77) con `extras.observacion = 'DEUDA-BUG08-OBS2'`.",
+            "Con `POS_ESTRICTO_TURNO_CAJA` activo, el fallback se rechaza con 400: el cobro exige declarar el turno.",
         ),
         errores=(
             "404 si el ticket no existe.",
@@ -999,6 +1005,7 @@ CONTRATOS: tuple[Contrato, ...] = (
             "400 si el ticket ya está PAID (RN-23).",
             "400 si no hay turno de caja abierto para la terminal que cobra (RN-49).",
             "400 si el `cash_session_id` declarado no existe o está cerrado (RN-55).",
+            "400 si `POS_ESTRICTO_TURNO_CAJA` está activo y falta `cash_session_id` (DEUDA-BUG08 Obs. 2).",
         ),
         estado_hoy="FASE 3.3 / BUG-08",
     ),
