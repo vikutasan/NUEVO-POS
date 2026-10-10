@@ -156,7 +156,7 @@ contrato nuevo **y** el viejo.
 
 ---
 
-## 8. Un contenedor que crece sin límite deja el scroll «invisible»
+## 8. Un contenedor que crece sin límite deja el scroll «invisible» (y `flex-1` en el grid encima los post-its)
 
 **Caso real (BUG-10, 10 Oct 2026).** Con muchas cuentas, el pizarrón se
 desbordaba pero **no aparecía barra de desplazamiento lateral**, a diferencia
@@ -171,11 +171,29 @@ viejo), el contenedor con scroll debe ser un elemento **con altura acotada**
 que desborda lleva `flex-1 overflow-y-auto`. Dejar que el contenedor raíz crezca
 delega el scroll al ancestro y la barra desaparece de la vista.
 
-**Mitigación aplicada:** el tablero usa `max-h-[85vh] flex-col overflow-hidden`
-y el `<ul>` de post-its es `flex-1 overflow-y-auto custom-scrollbar`, con la
-misma barra estilizada del POS viejo (`::-webkit-scrollbar`).
+**Segunda vuelta (BUG-10b, 10 Oct 2026).** El primer arreglo puso
+`flex-1 overflow-y-auto` **directamente en el `<ul>` del grid**. Resultado: en
+vez de aparecer la barra, **los post-its se encimaron parcialmente unos sobre
+otros**. Por qué: `flex-1` obliga al grid a **estirarse a la altura del
+tablero**; como cada post-it conserva `aspect-square` (alto = ancho de columna),
+las **filas se comprimen** y cada tarjeta se desborda de su fila y pisa a la de
+abajo. Además el `gap` era demasiado estrecho (`gap-6`) para la rotación (±3°).
+
+**Regla (corolario):** el scroll va en un **wrapper** de altura acotada
+(`flex-1 overflow-y-auto`), y el **grid dentro** debe tener **alto automático**
+(`content-start`, **sin** `flex-1` ni `overflow-y-auto`). Un grid con
+`aspect-square` + `flex-1` es una trampa: comprime filas y encima tarjetas.
+Deja separación amplia (`gap-10`/`lg:gap-12`, como el `gap-12` del POS viejo)
+para que la rotación no toque al vecino.
+
+**Mitigación aplicada:** el tablero usa `max-h-[85vh] flex-col overflow-hidden`;
+un **wrapper** `flex-1 overflow-y-auto custom-scrollbar` es el que se desplaza;
+el `<ul>` interno es `grid content-start` con alto automático. La barra
+estilizada (`::-webkit-scrollbar`) es la misma del POS viejo.
 
 | Trampa | Síntoma | Solución |
 |---|---|---|
 | Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Acotar la altura del marco (`max-h-[85vh]`) y poner `overflow-y-auto` en el hijo que desborda |
 | Scroll delegado al overlay del modal | La barra aparece pegada al borde de la pantalla, no al tablero | El contenedor con scroll debe ser el propio tablero/grid, no el overlay |
+| `flex-1` en el grid de tarjetas `aspect-square` | Las filas se comprimen y los post-its se **enciman** | El scroll va en un **wrapper**; el grid queda con alto automático (`content-start`, sin `flex-1`) |
+| `gap` estrecho con tarjetas rotadas | Las esquinas rotadas (±3°) tocan al vecino | Separación amplia (`gap-10`/`lg:gap-12`), paridad con el POS viejo |
