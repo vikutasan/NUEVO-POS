@@ -207,9 +207,33 @@ desacopla el alto del ancho de la columna y, combinado con `justify-between`,
 produce huecos vacíos cuando el contenido es escaso. `aspect-square` mantiene
 la proporción cuadrada y el contenido se reparte de forma natural.
 
+**Cuarta vuelta (BUG-10d, 10 Oct 2026) — la causa raíz de las tres anteriores.**
+Tras BUG-10/10b/10c, el usuario reportó que **la barra seguía sin aparecer** y
+que los post-its salían **«mordidos»** (recortados por abajo). La causa raíz,
+que los tres intentos previos no tocaron: **`flex-1` + `overflow-y-auto` solo
+producen scroll si el padre flex tiene una ALTURA DEFINIDA.** El tablero usaba
+`max-h-[85vh]`, que es un **máximo**, no una altura definida: `flex-1` resolvía
+a `auto`, el wrapper crecía con el contenido y la barra **nunca** aparecía.
+Peor: como el tablero tiene `overflow-hidden`, al desbordar `85vh` **recortaba
+las filas de abajo** — de ahí los post-its «mordidos». El POS viejo no sufre
+esto porque su tablero es `aspect-[16/9]` (altura **definida**).
+
+**Regla (tercer corolario):** para que un hijo `flex-1 overflow-y-auto` se
+desplace, el padre flex debe tener **altura definida** (`h-[85vh]`, `aspect-*`,
+`h-full` con ancestro acotado), **no** un `max-h`. Y el hijo con scroll necesita
+`min-h-0`: por defecto un hijo flex tiene `min-height: auto` y **no puede
+encogerse** por debajo de su contenido, así que el `overflow-y-auto` no desplaza.
+
+**Mitigación aplicada (definitiva):** el tablero usa `h-[85vh] flex-col
+overflow-hidden` (altura **definida**); el wrapper de scroll es `min-h-0 flex-1
+overflow-y-auto custom-scrollbar`; el `<ul>` interno es `grid content-start`.
+
 | Trampa | Síntoma | Solución |
 |---|---|---|
-| Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Acotar la altura del marco (`max-h-[85vh]`) y poner `overflow-y-auto` en el hijo que desborda |
+| Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`h-[85vh]`) y poner `overflow-y-auto` en el hijo que desborda |
+| `max-h` en el marco con `flex-1` dentro | La barra **nunca** aparece: `flex-1` resuelve a `auto` y el hijo crece | Usar **altura definida** (`h-[85vh]`), no `max-h`; `max-h` es un máximo, no una altura |
+| `overflow-hidden` en el marco + hijo que crece | Los post-its de abajo salen **«mordidos»** (recortados) | El hijo que desborda debe poder desplazarse (`overflow-y-auto` + `min-h-0`), no recortarse |
+| Hijo flex con `overflow-y-auto` sin `min-h-0` | El hijo no se encoge por debajo de su contenido y no desplaza | Añadir `min-h-0` al hijo con scroll (su `min-height` por defecto es `auto`) |
 | Scroll delegado al overlay del modal | La barra aparece pegada al borde de la pantalla, no al tablero | El contenedor con scroll debe ser el propio tablero/grid, no el overlay |
 | `flex-1` en el grid de tarjetas `aspect-square` | Las filas se comprimen y los post-its se **enciman** | El scroll va en un **wrapper**; el grid queda con alto automático (`content-start`, sin `flex-1`) |
 | `gap` estrecho con tarjetas rotadas | Las esquinas rotadas (±3°) tocan al vecino | Separación amplia (`gap-10`/`lg:gap-12`), paridad con el POS viejo |
