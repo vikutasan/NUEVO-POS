@@ -153,3 +153,29 @@ contrato nuevo **y** el viejo.
 | Cambiar lista → objeto en un servicio | El consumidor itera el objeto y lanza `TypeError` | Auditar consumidores; helper tolerante a ambos formatos |
 | `catch {}` vacío alrededor de una lectura | El error se traga y la UI cae a un valor por defecto | Registrar o, mejor, no silenciar errores de tipo |
 | Color de post-it «no se aplica» | Todos amarillos (`COLOR_SIN_ASIGNAR`) | Revisar el MAPA `coloresPorTerminal`, no el backend (el color SÍ se persistía) |
+
+---
+
+## 8. Un contenedor que crece sin límite deja el scroll «invisible»
+
+**Caso real (BUG-10, 10 Oct 2026).** Con muchas cuentas, el pizarrón se
+desbordaba pero **no aparecía barra de desplazamiento lateral**, a diferencia
+del POS viejo. La causa: el tablero **crecía con el contenido** y el scroll
+quedaba en el modal exterior (`overflow-y-auto` en el overlay), no en el
+tablero. El POS viejo, en cambio, acota la altura del tablero y hace que el
+**grid interno** sea el que se desplaza.
+
+**Regla:** si quieres una barra de scroll **visible y contenida** (como el POS
+viejo), el contenedor con scroll debe ser un elemento **con altura acotada**
+(`max-h-[85vh]` + `flex flex-col` + `overflow-hidden` en el marco) y el hijo
+que desborda lleva `flex-1 overflow-y-auto`. Dejar que el contenedor raíz crezca
+delega el scroll al ancestro y la barra desaparece de la vista.
+
+**Mitigación aplicada:** el tablero usa `max-h-[85vh] flex-col overflow-hidden`
+y el `<ul>` de post-its es `flex-1 overflow-y-auto custom-scrollbar`, con la
+misma barra estilizada del POS viejo (`::-webkit-scrollbar`).
+
+| Trampa | Síntoma | Solución |
+|---|---|---|
+| Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Acotar la altura del marco (`max-h-[85vh]`) y poner `overflow-y-auto` en el hijo que desborda |
+| Scroll delegado al overlay del modal | La barra aparece pegada al borde de la pantalla, no al tablero | El contenedor con scroll debe ser el propio tablero/grid, no el overlay |
