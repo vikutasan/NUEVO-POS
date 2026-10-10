@@ -290,13 +290,20 @@ describe('BUG-10 — scroll lateral del pizarrón', () => {
     // desborde; el scroll vive DENTRO, no en el modal exterior.
     //
     // BUG-10e (paridad con el POS viejo): DEBE ser `aspect-[16/9]` — la altura
-    // se DERIVA del ancho (acotado por `max-w-[1100px]`), así que el tablero
-    // SIEMPRE cabe en la pantalla. NO `max-h-[85vh]` (un máximo no acota a los
-    // hijos flex: el wrapper crecía sin límite y la barra nunca aparecía) ni
-    // `h-[85vh]` (que sumado a los paddings anidados del wrapper y del modal
-    // desborda el viewport y el navegador recorta los post-its "mordidos").
+    // se DERIVA del ancho (acotado por `max-w-[1100px]`). NO `max-h-[85vh]`
+    // (un máximo no acota a los hijos flex: el wrapper crecía sin límite y la
+    // barra nunca aparecía) ni `h-[85vh]` (que sumado a los paddings anidados
+    // del wrapper y del modal desborda el viewport y el navegador recorta los
+    // post-its "mordidos").
+    //
+    // BUG-10g: `aspect-[16/9]` SOLO NO BASTA. Fija el alto a partir del ANCHO
+    // (1100px → ~619px); en una ventana BAJA (p. ej. 1366×600) `619px + 2rem`
+    // > `100vh` y el tablero desborda el modal `items-center` (sin scroll),
+    // recortando los post-its. Por eso DEBE llevar además un TOPE DURO de alto
+    // al viewport: `max-h-[calc(100vh-2rem)]` (2rem = el `p-4` del modal).
     const tablero = container.firstChild.firstChild;
     expect(tablero.className).toContain('aspect-[16/9]');
+    expect(tablero.className).toContain('max-h-[calc(100vh-2rem)]');
     expect(tablero.className).not.toContain('max-h-[85vh]');
     expect(tablero.className).not.toContain('h-[85vh]');
     expect(tablero.className).toContain('overflow-hidden');
@@ -427,10 +434,15 @@ describe('BUG-10e — el modal padre NO captura el scroll del pizarrón', () => 
     expect(lineaTablero).toBeTruthy();
 
     // Altura DEFINIDA y ACOTADA por el ancho (`aspect-[16/9]`, como el POS
-    // viejo): así el tablero SIEMPRE cabe en la pantalla. NO `max-h-[85vh]`
-    // (un máximo no acota a los hijos flex) ni `h-[85vh]` (que sumado a los
-    // paddings anidados desborda el viewport y recorta los post-its).
+    // viejo) MÁS un TOPE DURO al viewport (`max-h-[calc(100vh-2rem)]`).
+    // BUG-10g: el `aspect` solo NO basta — fija el alto desde el ancho
+    // (1100px → ~619px) y en una ventana BAJA (1366×600) `619px + 2rem` >
+    // `100vh`, así que el tablero desborda el modal `items-center` (sin
+    // scroll) y recorta los post-its. El `max-h` es el tope que lo evita.
+    // NO `max-h-[85vh]` (un máximo no acota a los hijos flex) ni `h-[85vh]`
+    // (que sumado a los paddings anidados desborda el viewport).
     expect(lineaTablero).toContain('aspect-[16/9]');
+    expect(lineaTablero).toContain('max-h-[calc(100vh-2rem)]');
     expect(lineaTablero).not.toContain('max-h-[85vh]');
     expect(lineaTablero).not.toContain('h-[85vh]');
 

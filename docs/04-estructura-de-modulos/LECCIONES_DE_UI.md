@@ -277,11 +277,37 @@ de BUG-10f **rechaza** `h-[85vh]` además de `max-h-[85vh]`, y **exige** `aspect
 transversal: *una compuerta que solo verifica la clase que tú escribiste no verifica el efecto
 que el usuario ve*.
 
+**Séptima vuelta (BUG-10g, 10 Oct 2026) — el `aspect` sin tope de alto.**
+Con el HMR sano (10e) y el `aspect-[16/9]` aplicado (10f), el usuario **seguía** sin ver la barra
+tras refrescar. La causa: **`aspect-[16/9]` fija el alto a partir del ANCHO**, y el ancho puede
+llegar a `1100px` (`max-w-[1100px]`), lo que da un alto de **~619px**. En una ventana **BAJA**
+(p. ej. 1366×600 tras las barras del navegador), `619px + 2rem` **supera** `100vh`: el tablero
+desborda el modal `items-center` (que **no** tiene `overflow-y-auto`) y el navegador lo **recorta
+arriba y abajo** (post-its «mordidos») **sin barra en ningún lado**. El `aspect` solo garantiza
+que el tablero quepa si la ventana es suficientemente **alta**; no impone un tope duro de alto.
+
+**Mitigación final (definitiva):** el tablero lleva **`aspect-[16/9]` + `max-h-[calc(100vh-2rem)]`**.
+El `max-h` es el **tope duro** de alto (2rem = el `p-4` del modal); el `aspect` da la proporción
+bonita cuando la pantalla es alta. Con ambos, el tablero **siempre cabe** y el scroll vive en el
+wrapper interno (`min-h-0 flex-1 overflow-y-auto custom-scrollbar`).
+
+**Regla (quinto corolario):** un `aspect-*` **no basta** como única restricción de tamaño: deriva
+el alto del ancho, y el ancho puede ser grande. Añade **siempre** un tope duro al viewport
+(`max-h-[calc(100vh-2rem)]`) para que el marco no desborde en ventanas bajas. `aspect` da la
+proporción; `max-h` da la garantía.
+
+**Compuerta (endurecida en BUG-10g):** la compuerta de BUG-10f exigía `aspect-[16/9]` pero **no**
+un tope de alto, así que **no podía detectar** el desborde en ventanas bajas. La compuerta de
+BUG-10g **exige además** `max-h-[calc(100vh-2rem)]` en la línea del tablero (criterio 9 y compuerta
+de fuente). Lección transversal: *una compuerta que verifica la proporción pero no el tope no
+verifica que el marco quepa*.
+
 | Trampa | Síntoma | Solución |
 |---|---|---|
 | Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`aspect-[16/9]`) y poner `overflow-y-auto` en el hijo que desborda |
 | `max-h` en el marco con `flex-1` dentro | La barra **nunca** aparece: `flex-1` resuelve a `auto` y el hijo crece | Usar **altura definida** (`aspect-[16/9]`), no `max-h`; `max-h` es un máximo, no una altura |
 | Altura en `vh` dentro de paddings anidados | El marco mide `85vh + paddings > 100vh`: el navegador lo recorta arriba y abajo (post-its «mordidos») **sin barra** | Derivar la altura del **ancho** (`aspect-[16/9]`, acotado por `max-w-*`), no fijarla en `vh`; y no sumar paddings al wrapper exterior |
+| `aspect-*` **sin** tope de alto | El marco mide `ancho × 9/16` (p. ej. 1100px → ~619px); en una ventana **baja** (1366×600) `619px + paddings > 100vh` y el navegador lo recorta arriba y abajo **sin barra** | Añadir **siempre** un tope duro al viewport: `aspect-[16/9] max-h-[calc(100vh-2rem)]`. El `aspect` da la proporción; el `max-h` da la garantía de que quepa |
 | `overflow-hidden` en el marco + hijo que crece | Los post-its de abajo salen **«mordidos»** (recortados) | El hijo que desborda debe poder desplazarse (`overflow-y-auto` + `min-h-0`), no recortarse |
 | Hijo flex con `overflow-y-auto` sin `min-h-0` | El hijo no se encoge por debajo de su contenido y no desplaza | Añadir `min-h-0` al hijo con scroll (su `min-height` por defecto es `auto`) |
 | Scroll delegado al overlay del modal | La barra aparece pegada al borde de la pantalla, no al tablero | El contenedor con scroll debe ser el propio tablero/grid, no el overlay |

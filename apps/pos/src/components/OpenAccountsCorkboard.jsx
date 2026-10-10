@@ -223,28 +223,33 @@ export default function OpenAccountsCorkboard({
       {/* ── El corcho ─────────────────────────────────────────────────────
           FIX_PIZARRON_SCROLL (10 Oct 2026) — PARIDAD con el POS viejo.
 
-          LA CLAVE (por qué los 4 intentos previos fallaron): `flex-1` +
+          LA CLAVE (por qué los 5 intentos previos fallaron): `flex-1` +
           `overflow-y-auto` SOLO producen scroll si el padre flex tiene una
-          ALTURA DEFINIDA. El POS viejo lo logra con `aspect-[16/9]`: la
-          altura se DERIVA del ancho (que está acotado por `max-w-6xl`), así
-          que el tablero SIEMPRE cabe en la pantalla.
+          ALTURA DEFINIDA **Y ACOTADA AL VIEWPORT**. El POS viejo lo logra con
+          `aspect-[16/9]`: la altura se DERIVA del ancho (acotado por
+          `max-w-6xl`).
 
           Los intentos previos usaron `max-h-[85vh]` (un MÁXIMO, no una
           altura: `flex-1` resolvía a `auto` y el wrapper crecía sin límite)
-          y luego `h-[85vh]`. Pero `h-[85vh]` TAMPOCO funciona aquí: el
-          tablero vive dentro de DOS paddings anidados (el `p-4` del wrapper
-          exterior + el `p-4` del modal), así que su altura total es
-          `85vh + 2rem + 2rem` > `100vh` en pantallas normales. Como el modal
-          es `items-center` sin `overflow-y-auto`, el tablero desborda el
-          viewport y el navegador lo RECORTA arriba y abajo (los post-its
-          "mordidos"), sin barra en ningún lado.
+          y luego `h-[85vh]` (que sumado a los paddings anidados desbordaba).
+          Después se probó `aspect-[16/9]` a secas, PERO TAMPOCO BASTA:
 
-          La corrección es la del POS viejo: `aspect-[16/9]` (altura derivada
-          del ancho, siempre cabe) + `overflow-hidden` en el marco + el scroll
-          en el hijo que desborda. Se elimina el `p-4` del wrapper exterior
-          para no sumar altura. */}
+          BUG-10g — `aspect-[16/9`] fija el alto a partir del ANCHO, y el
+          ancho puede ser 1100px (`max-w-[1100px]`), lo que da un alto de
+          ~619px. En una ventana BAJA (p. ej. 1366×600 tras las barras del
+          navegador), `619px + 2rem` > `100vh`: el tablero desborda el modal
+          y, como el modal es `items-center` SIN `overflow-y-auto`, el
+          navegador lo RECORTA arriba y abajo (post-its "mordidos") sin barra
+          en ningún lado. El `aspect` solo garantiza que quepa si la ventana
+          es suficientemente ALTA.
+
+          LA CORRECCIÓN DEFINITIVA: `aspect-[16/9]` **+ `max-h-[calc(100vh-2rem)]`**.
+          El `max-h` es el TOPE DURO de alto (2rem = el `p-4` del modal); el
+          `aspect` da la proporción bonita cuando la pantalla es alta. Con
+          ambos, el tablero SIEMPRE cabe y el scroll vive en el wrapper
+          interno (`flex-1 min-h-0 overflow-y-auto`). */}
       <div
-        className="flex aspect-[16/9] min-h-0 flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
+        className="flex aspect-[16/9] max-h-[calc(100vh-2rem)] min-h-0 flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
         style={{
           backgroundImage:
             'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0), radial-gradient(circle at 10px 10px, rgba(255,255,255,0.05) 1px, transparent 0)',
