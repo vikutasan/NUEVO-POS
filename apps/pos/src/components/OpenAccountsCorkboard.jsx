@@ -219,24 +219,32 @@ export default function OpenAccountsCorkboard({
     : `${cuentas.length} cuentas — Terminal ${terminalId || '—'}`;
 
   return (
-    <div className="w-full max-w-[1100px] mx-auto p-4">
+    <div className="w-full max-w-[1100px] mx-auto">
       {/* ── El corcho ─────────────────────────────────────────────────────
           FIX_PIZARRON_SCROLL (10 Oct 2026) — PARIDAD con el POS viejo.
 
-          LA CLAVE (por qué los 3 intentos previos fallaron): `flex-1` +
+          LA CLAVE (por qué los 4 intentos previos fallaron): `flex-1` +
           `overflow-y-auto` SOLO producen scroll si el padre flex tiene una
-          ALTURA DEFINIDA. El POS viejo lo logra con `aspect-[16/9]` (altura
-          definida). Aquí se usaba `max-h-[85vh]`, que es un MÁXIMO, no una
-          altura definida: `flex-1` resolvía a `auto`, el wrapper crecía con
-          el contenido y NUNCA aparecía la barra. Peor: como el tablero tiene
-          `overflow-hidden`, al desbordar `85vh` RECORTABA las filas de abajo
-          (los post-its "mordidos").
+          ALTURA DEFINIDA. El POS viejo lo logra con `aspect-[16/9]`: la
+          altura se DERIVA del ancho (que está acotado por `max-w-6xl`), así
+          que el tablero SIEMPRE cabe en la pantalla.
 
-          La corrección es darle al tablero una altura DEFINIDA (`h-[85vh]`,
-          no `max-h`) y al wrapper de scroll `min-h-0` para que pueda
-          encogerse por debajo de su contenido y así desplazarse. */}
+          Los intentos previos usaron `max-h-[85vh]` (un MÁXIMO, no una
+          altura: `flex-1` resolvía a `auto` y el wrapper crecía sin límite)
+          y luego `h-[85vh]`. Pero `h-[85vh]` TAMPOCO funciona aquí: el
+          tablero vive dentro de DOS paddings anidados (el `p-4` del wrapper
+          exterior + el `p-4` del modal), así que su altura total es
+          `85vh + 2rem + 2rem` > `100vh` en pantallas normales. Como el modal
+          es `items-center` sin `overflow-y-auto`, el tablero desborda el
+          viewport y el navegador lo RECORTA arriba y abajo (los post-its
+          "mordidos"), sin barra en ningún lado.
+
+          La corrección es la del POS viejo: `aspect-[16/9]` (altura derivada
+          del ancho, siempre cabe) + `overflow-hidden` en el marco + el scroll
+          en el hijo que desborda. Se elimina el `p-4` del wrapper exterior
+          para no sumar altura. */}
       <div
-        className="flex h-[85vh] flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
+        className="flex aspect-[16/9] flex-col overflow-hidden rounded-[40px] border-[20px] border-madera-veta bg-madera-panel p-4 sm:p-6 lg:p-8 shadow-2xl"
         style={{
           backgroundImage:
             'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0), radial-gradient(circle at 10px 10px, rgba(255,255,255,0.05) 1px, transparent 0)',

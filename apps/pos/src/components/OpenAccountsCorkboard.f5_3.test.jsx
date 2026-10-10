@@ -289,14 +289,16 @@ describe('BUG-10 — scroll lateral del pizarrón', () => {
     // El tablero (hijo directo de la raíz) tiene ALTURA DEFINIDA y recorta el
     // desborde; el scroll vive DENTRO, no en el modal exterior.
     //
-    // BUG-10d: DEBE ser `h-[85vh]` (altura definida), NO `max-h-[85vh]`. Con
-    // `max-h` (un máximo, no una altura) el `flex-1` del wrapper resuelve a
-    // `auto`, el wrapper crece con el contenido y la barra NUNCA aparece;
-    // además el `overflow-hidden` recortaba las filas de abajo (post-its
-    // "mordidos"). Esa era la causa raíz real de los 3 intentos previos.
+    // BUG-10e (paridad con el POS viejo): DEBE ser `aspect-[16/9]` — la altura
+    // se DERIVA del ancho (acotado por `max-w-[1100px]`), así que el tablero
+    // SIEMPRE cabe en la pantalla. NO `max-h-[85vh]` (un máximo no acota a los
+    // hijos flex: el wrapper crecía sin límite y la barra nunca aparecía) ni
+    // `h-[85vh]` (que sumado a los paddings anidados del wrapper y del modal
+    // desborda el viewport y el navegador recorta los post-its "mordidos").
     const tablero = container.firstChild.firstChild;
-    expect(tablero.className).toContain('h-[85vh]');
+    expect(tablero.className).toContain('aspect-[16/9]');
     expect(tablero.className).not.toContain('max-h-[85vh]');
+    expect(tablero.className).not.toContain('h-[85vh]');
     expect(tablero.className).toContain('overflow-hidden');
     expect(tablero.className).toContain('flex-col');
 
@@ -416,16 +418,21 @@ describe('BUG-10e — el modal padre NO captura el scroll del pizarrón', () => 
     const fuente = readFileSync(ruta, 'utf8');
 
     // Aísla la línea del `className` del TABLERO (no los comentarios: el
-    // comentario del fix menciona `max-h-[85vh]` a propósito, para explicar
-    // por qué se descartó; eso no debe hacer fallar la compuerta).
+    // comentario del fix menciona `max-h-[85vh]` y `h-[85vh]` a propósito,
+    // para explicar por qué se descartaron; eso no debe hacer fallar la
+    // compuerta).
     const lineaTablero = fuente
       .split('\n')
       .find((l) => l.includes('className=') && l.includes('border-madera-veta'));
     expect(lineaTablero).toBeTruthy();
 
-    // Altura DEFINIDA en el tablero (no `max-h`, que no acota a los hijos flex).
-    expect(lineaTablero).toContain('h-[85vh]');
+    // Altura DEFINIDA y ACOTADA por el ancho (`aspect-[16/9]`, como el POS
+    // viejo): así el tablero SIEMPRE cabe en la pantalla. NO `max-h-[85vh]`
+    // (un máximo no acota a los hijos flex) ni `h-[85vh]` (que sumado a los
+    // paddings anidados desborda el viewport y recorta los post-its).
+    expect(lineaTablero).toContain('aspect-[16/9]');
     expect(lineaTablero).not.toContain('max-h-[85vh]');
+    expect(lineaTablero).not.toContain('h-[85vh]');
 
     // El wrapper de scroll con `min-h-0` (sin él, un hijo flex no se encoge).
     const lineaWrapper = fuente
