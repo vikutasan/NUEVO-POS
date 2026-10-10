@@ -123,3 +123,33 @@ showToast(`❌ ${result.message || 'Error al guardar'}`, 'error');
 **Un `return` temprano por rama de UI puede dejar fuera elementos transversales.**
 Si un aviso «no aparece», comprobar **en qué rama de retorno vive** antes de
 sospechar del handler o del backend.
+
+---
+
+## 7. Cambiar la FORMA de retorno de un servicio rompe a sus consumidores en silencio
+
+**Caso real (BUG-09, 10 Oct 2026).** Al persistir el orden de terminales en el
+backend, `fetchTerminalConfig()` pasó de devolver una **lista** (`[...]`) a un
+**objeto** (`{ terminals, orden }`). Un consumidor hacía:
+
+    for (const t of config || []) { ... }   // ← itera un OBJETO
+
+Iterar un objeto con `for...of` lanza `TypeError: config is not iterable`. El
+`catch {}` que envolvía la lectura lo **silenciaba**: el mapa de colores quedaba
+vacío y **todos los post-its salían amarillos**. El usuario lo vivió como «puse
+el color y no se aplica» — un síntoma de UI causado por un cambio de contrato de
+datos.
+
+**Regla:** cuando cambias la forma de retorno de una función compartida,
+**audita TODOS sus consumidores** (`findstr /s /i "fetchTerminalConfig"`). Un
+`catch` vacío convierte un error de tipo en un fallo **silencioso** de UI.
+
+**Mitigación aplicada:** la lectura se centralizó en un helper tolerante a AMBOS
+formatos (`construirColoresPorTerminal`), con test de regresión que fija el
+contrato nuevo **y** el viejo.
+
+| Trampa | Síntoma | Solución |
+|---|---|---|
+| Cambiar lista → objeto en un servicio | El consumidor itera el objeto y lanza `TypeError` | Auditar consumidores; helper tolerante a ambos formatos |
+| `catch {}` vacío alrededor de una lectura | El error se traga y la UI cae a un valor por defecto | Registrar o, mejor, no silenciar errores de tipo |
+| Color de post-it «no se aplica» | Todos amarillos (`COLOR_SIN_ASIGNAR`) | Revisar el MAPA `coloresPorTerminal`, no el backend (el color SÍ se persistía) |
