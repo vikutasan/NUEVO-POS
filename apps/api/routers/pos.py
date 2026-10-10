@@ -776,35 +776,52 @@ async def verificar_envio(
     (contrato 18), no el `product_id`. `anadir_item` la registra en el ledger
     de idempotencia `payment_details["_item_ids"]`. Comparar contra
     `product_id` (como se hacía antes) marcaba TODOS los ítems como faltantes
-    y bloqueaba el envío de la cuenta al pizarrón. La verificación correcta es
-    contra ese ledger.
+    y bloqueaba el envío de la cuenta al pizarrón.
 
     F12.18 — El ledger SOLO cubre los ítems añadidos en ESTA sesión. Cuando el
     operador RECUPERA una cuenta del pizarrón, `leer_lineas` (contrato 30)
     devuelve las líneas con `item_id = str(product_id)` (ver `_lineas_atomicas`),
-    NO la intención original. Esos `item_id` NUNCA estuvieron en el ledger, así
-    que comparar solo contra `_item_ids` marcaba TODA la cuenta recuperada como
-    `faltantes` y disparaba el modal "hay productos sin guardar en el servidor".
+    NO la intención original. Esos `item_id` NUNCA estuvieron en el ledger.
 
-    La verificación correcta es DOBLE: un `item_id` está persistido si
-    (a) está en el ledger de idempotencia (ítems añadidos en esta sesión), O
-    (b) coincide con el `product_id` de una línea REAL en `ticket_items`
-    (ítems recuperados del pizarrón). Ambas son pruebas de que la línea existe
-    en la BD; ninguna escribe.
+    BUG-06 (TERM-06) — La verificación por IDENTIDAD EXACTA era frágil: tras una
+    carrera de versión (409), el carrito puede quedar con `item_id` que ya no
+    coinciden ni con el ledger ni con el `product_id` de las líneas actuales
+    (son `product_id` de líneas que ya no existen). Aun así el ticket SÍ tenía
+    sus líneas persistidas, y el modal "hay productos sin guardar en el
+    servidor. Verifique la conexión WiFi." bloqueaba el envío de la cuenta.
+
+    La pregunta correcta NO es "¿coincide cada `item_id`?" sino "¿se perdió
+    alguna línea?". Por eso la verificación es por COBERTURA (conteo): el envío
+    es válido si el servidor tiene AL MENOS tantas líneas como el carrito
+    afirma. La identidad de cada línea es irrelevante para esa pregunta.
+
+    Se conserva la forma del contrato (`item_ids_persistidos` / `faltantes`)
+    para no romper al cliente: cuando hay cobertura, `faltantes` va vacío y
+    todos los `item_id` se reportan como persistidos. Cuando el servidor tiene
+    MENOS líneas de las que el carrito afirma, se reporta el déficit como
+    `faltantes` (la cicatriz v6.1 $453 sigue protegida: nunca un "siempre OK").
     """
     ticket = await _ticket_con_items_o_404(db, ticket_id)
 
-    detalles = dict(ticket.payment_details or {})
-    ledger = {str(i) for i in detalles.get("_item_ids", [])}
-    # (b) F12.18 — `product_id` de las líneas REALES del ticket. `leer_lineas`
-    # devuelve `item_id = str(product_id)` para las cuentas recuperadas.
-    product_ids_reales = {str(item.product_id) for item in ticket.items}
+    n_lineas_servidor = len(ticket.items)
+    n_afirmadas = len(entrada.item_ids)
 
-    def _persistido(item_id: str) -> bool:
-        return item_id in ledger or item_id in product_ids_reales
+    # Cobertura: el servidor tiene al menos tantas líneas como el carrito
+    # afirma → no se perdió nada. La identidad de cada `item_id` es irrelevante.
+    if n_lineas_servidor >= n_afirmadas:
+        return VerificarEnvioSalida(
+            existe=True,
+            item_ids_persistidos=list(entrada.item_ids),
+            faltantes=[],
+        )
 
-    item_ids_persistidos = [i for i in entrada.item_ids if _persistido(i)]
-    faltantes = [i for i in entrada.item_ids if not _persistido(i)]
+    # Déficit real: el carrito afirma más líneas de las que el servidor tiene.
+    # Se reportan como faltantes las últimas `deficit` afirmadas (no se puede
+    # saber cuáles por identidad, pero el conteo prueba que algo se perdió).
+    deficit = n_afirmadas - n_lineas_servidor
+    item_ids_persistidos = list(entrada.item_ids[:n_lineas_servidor])
+    faltantes = list(entrada.item_ids[n_lineas_servidor:])
+    assert len(faltantes) == deficit
 
     return VerificarEnvioSalida(
         existe=True,

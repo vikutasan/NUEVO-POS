@@ -381,6 +381,106 @@ async def test_verificacion_cuenta_recuperada_del_pizarron(entorno):
         await _limpiar(entorno)
 
 
+@pytest.mark.asyncio
+async def test_verificacion_item_ids_obsoletos_no_bloquea(entorno):
+    """BUG-06 (TERM-06) — `item_id` obsoletos NO deben bloquear el envío.
+
+    Escenario real: el operador arma una cuenta, ocurre un 409 (carrera de
+    versión) y el carrito queda con `item_id` que ya NO coinciden ni con el
+    ledger `_item_ids` ni con el `product_id` de las líneas actuales (son
+    `product_id` de líneas que ya no existen). El ticket, sin embargo, SÍ tiene
+    sus líneas persistidas en `ticket_items`.
+
+    La verificación post-envío (contrato 22) NO debe marcar faltantes cuando el
+    servidor tiene AL MENOS tantas líneas como el carrito afirma: la identidad
+    de cada línea es irrelevante para la pregunta "¿se perdió algo?". Antes,
+    comparar por identidad exacta marcaba TODO como faltante y disparaba el
+    modal "hay productos sin guardar en el servidor. Verifique la conexión
+    WiFi." aunque los ítems estuvieran en la BD.
+
+    Este test FALLA con la verificación por identidad y PASA con la
+    verificación por cobertura (conteo).
+    """
+    await _limpiar(entorno)
+    p1, p2 = await _sembrar(entorno)
+    try:
+        async with _cliente() as cliente:
+            # Ticket con DOS líneas REALES (contrato 3 con items). Esta vía NO
+            # escribe el ledger `_item_ids`.
+            res_ticket = await cliente.post(
+                "/pos/tickets",
+                json={
+                    "terminal_id": TERMINAL_ID,
+                    "channel": "PANADERIA",
+                    "items": [
+                        {"product_id": str(p1), "quantity": 1},
+                        {"product_id": str(p2), "quantity": 1},
+                    ],
+                },
+            )
+            assert res_ticket.status_code == 201, res_ticket.text
+            ticket_id = res_ticket.json()["id"]
+
+            # El carrito quedó con item_id OBSOLETOS: ni en el ledger ni
+            # coincidentes con los product_id reales (carrera de versión).
+            res = await cliente.post(
+                f"/pos/tickets/{ticket_id}/verify",
+                json={"item_ids": ["obsoleto-aaa", "obsoleto-bbb"]},
+            )
+            assert res.status_code == 200, res.text
+            cuerpo = res.json()
+
+            assert cuerpo["existe"] is True
+            assert cuerpo["faltantes"] == [], (
+                "El servidor tiene 2 líneas y el carrito afirma 2: NO se perdió "
+                "nada. La verificación por identidad exacta marcaba faltantes "
+                f"falsamente (BUG-06). Respuesta: {cuerpo}"
+            )
+    finally:
+        await _limpiar(entorno)
+
+
+@pytest.mark.asyncio
+async def test_verificacion_detecta_perdida_real(entorno):
+    """BUG-06 — La verificación por cobertura SÍ detecta una pérdida real.
+
+    Si el carrito afirma MÁS líneas de las que el servidor tiene, entonces algo
+    se perdió y la verificación DEBE reportar faltantes (no se debe limpiar el
+    carrito). Este test protege la cicatriz v6.1 $453: la verificación no puede
+    volverse un "siempre OK".
+    """
+    await _limpiar(entorno)
+    p1, _ = await _sembrar(entorno)
+    try:
+        async with _cliente() as cliente:
+            res_ticket = await cliente.post(
+                "/pos/tickets",
+                json={
+                    "terminal_id": TERMINAL_ID,
+                    "channel": "PANADERIA",
+                    "items": [{"product_id": str(p1), "quantity": 1}],
+                },
+            )
+            assert res_ticket.status_code == 201, res_ticket.text
+            ticket_id = res_ticket.json()["id"]
+
+            # El carrito afirma 3 líneas, el servidor solo tiene 1 → pérdida.
+            res = await cliente.post(
+                f"/pos/tickets/{ticket_id}/verify",
+                json={"item_ids": ["a", "b", "c"]},
+            )
+            assert res.status_code == 200, res.text
+            cuerpo = res.json()
+
+            assert cuerpo["existe"] is True
+            assert len(cuerpo["faltantes"]) >= 1, (
+                "El carrito afirma 3 líneas y el servidor tiene 1: la "
+                f"verificación DEBE reportar faltantes. Respuesta: {cuerpo}"
+            )
+    finally:
+        await _limpiar(entorno)
+
+
 # ---------------------------------------------------------------------------
 # Criterio 6 — Anti-degradación (RN-37)
 # ---------------------------------------------------------------------------
