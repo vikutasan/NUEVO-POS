@@ -264,3 +264,37 @@ describe('F5.3 — criterio 8: táctil (R-04)', () => {
     expect(tarjetas[0].className).toContain('min-h-tactil');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. Scroll lateral con muchas cuentas (BUG-10, paridad con el POS viejo)
+// ---------------------------------------------------------------------------
+
+describe('BUG-10 — scroll lateral del pizarrón', () => {
+  it('el tablero acota su altura y el grid de post-its es el contenedor con scroll', async () => {
+    // Muchas cuentas: el grid debe poder desbordar y desplazarse.
+    const cuentas = Array.from({ length: 12 }, (_, i) =>
+      cuentaEjemplo({ id: `id-${i}`, account_num: `T-000${i}` }),
+    );
+    const { container } = render(
+      <OpenAccountsCorkboard terminalId="TERM-01" servicioCuentas={servicioCon(cuentas)} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('folio-id-0')).toBeTruthy();
+    });
+
+    // El tablero (hijo directo de la raíz) acota su altura y recorta el
+    // desborde; el scroll vive DENTRO, no en el modal exterior.
+    const tablero = container.firstChild.firstChild;
+    expect(tablero.className).toContain('max-h-[85vh]');
+    expect(tablero.className).toContain('overflow-hidden');
+    expect(tablero.className).toContain('flex-col');
+
+    // El grid de post-its es el contenedor con scroll y la barra estilizada.
+    const grid = container.querySelector('ul');
+    expect(grid.className).toContain('overflow-y-auto');
+    expect(grid.className).toContain('custom-scrollbar');
+    expect(grid.className).toContain('flex-1');
+    expect(grid.className).toContain('content-start');
+  });
+});
