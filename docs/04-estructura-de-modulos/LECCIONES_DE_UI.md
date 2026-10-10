@@ -191,9 +191,26 @@ un **wrapper** `flex-1 overflow-y-auto custom-scrollbar` es el que se desplaza;
 el `<ul>` interno es `grid content-start` con alto automático. La barra
 estilizada (`::-webkit-scrollbar`) es la misma del POS viejo.
 
+**Tercera vuelta (BUG-10c, 10 Oct 2026).** Con el scroll ya resuelto, el post-it
+se veía **demasiado largo**: un PEDIDO con poco texto quedaba estirado y el
+total se iba al fondo, dejando un **hueco vacío enorme en medio**. La causa: el
+post-it usaba `min-h-[11rem]` / `lg:min-h-[13rem]` + `justify-between`. El
+`min-h` fija una altura **independiente del ancho de la columna**, y
+`justify-between` empuja el total al fondo; con poco contenido, el espacio
+sobrante queda en el centro. El POS viejo, en cambio, usa `aspect-square`
+(alto = ancho de columna): el cuadrado se ajusta solo al ancho y reparte el
+contenido sin huecos artificiales.
+
+**Regla (segundo corolario):** para una tarjeta tipo post-it, usa
+`aspect-square` (alto = ancho de columna), **no** un `min-h` fijo. Un `min-h`
+desacopla el alto del ancho de la columna y, combinado con `justify-between`,
+produce huecos vacíos cuando el contenido es escaso. `aspect-square` mantiene
+la proporción cuadrada y el contenido se reparte de forma natural.
+
 | Trampa | Síntoma | Solución |
 |---|---|---|
 | Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Acotar la altura del marco (`max-h-[85vh]`) y poner `overflow-y-auto` en el hijo que desborda |
 | Scroll delegado al overlay del modal | La barra aparece pegada al borde de la pantalla, no al tablero | El contenedor con scroll debe ser el propio tablero/grid, no el overlay |
 | `flex-1` en el grid de tarjetas `aspect-square` | Las filas se comprimen y los post-its se **enciman** | El scroll va en un **wrapper**; el grid queda con alto automático (`content-start`, sin `flex-1`) |
 | `gap` estrecho con tarjetas rotadas | Las esquinas rotadas (±3°) tocan al vecino | Separación amplia (`gap-10`/`lg:gap-12`), paridad con el POS viejo |
+| `min-h` fijo + `justify-between` en el post-it | El post-it se ve **demasiado largo** y deja un hueco vacío en medio cuando el contenido es escaso | Usar `aspect-square` (alto = ancho de columna), como el POS viejo; **no** un `min-h` fijo |
