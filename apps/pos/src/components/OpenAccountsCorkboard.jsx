@@ -219,7 +219,7 @@ export default function OpenAccountsCorkboard({
     : `${cuentas.length} cuentas — Terminal ${terminalId || '—'}`;
 
   return (
-    <div className="w-full max-w-6xl mx-auto">
+    <div className="w-full max-w-[1100px] mx-auto">
       {/* ── El corcho ─────────────────────────────────────────────────────
           FIX_PIZARRON_SCROLL (10 Oct 2026) — PARIDAD con el POS viejo.
 
@@ -249,7 +249,7 @@ export default function OpenAccountsCorkboard({
           ambos, el tablero SIEMPRE cabe y el scroll vive en el wrapper
           interno (`flex-1 min-h-0 overflow-y-auto`). */}
       <div
-        className="flex aspect-[16/9] max-h-[calc(100vh-2rem)] min-h-0 flex-col overflow-hidden rounded-[40px] border-[20px] border-[#3d2b1f] bg-black shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] relative"
+        className="relative flex aspect-[16/9] max-h-[calc(100vh-2rem)] min-h-0 flex-col overflow-hidden rounded-[40px] border-[20px] border-[#3d2b1f] bg-black shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)]"
       >
         {/* Textura de Corcho Original */}
         <div
@@ -361,6 +361,7 @@ export default function OpenAccountsCorkboard({
                 )} ${rotacionDe(indice)}`}
                 onClick={() => manejarRecuperar(cuenta)}
                 role="button"
+                aria-label="Ver Cuenta"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {

@@ -431,9 +431,14 @@ describe('BUG-10e — el modal padre NO captura el scroll del pizarrón', () => 
     // comentario del fix menciona `max-h-[85vh]` y `h-[85vh]` a propósito,
     // para explicar por qué se descartaron; eso no debe hacer fallar la
     // compuerta).
+    // FIX_UI_PARIDAD (11 Oct 2026) — Gemini restauró la estética del POS viejo:
+    // el tablero pasó de los tokens `border-madera-veta bg-madera-panel` a
+    // `border-[#3d2b1f] bg-black` + una textura de corcho superpuesta. La
+    // compuerta se ancla ahora al token de borde vigente (`border-[#3d2b1f]`),
+    // que es el que identifica la línea del tablero.
     const lineaTablero = fuente
       .split('\n')
-      .find((l) => l.includes('className=') && l.includes('border-madera-veta'));
+      .find((l) => l.includes('className=') && l.includes('border-[#3d2b1f]'));
     expect(lineaTablero).toBeTruthy();
 
     // Altura DEFINIDA y ACOTADA por el ancho (`aspect-[16/9]`, como el POS

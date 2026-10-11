@@ -409,6 +409,34 @@ entre taps; que el servidor reciba el **mismo** `item_id` en cada tap (no duplic
 compuerta de fusión debe afirmar sobre el **conteo de líneas** y la **estabilidad de la clave**, no
 solo sobre la cantidad total*.
 
+**Undécima vuelta (FIX_UI_PARIDAD, 11 Oct 2026) — una restauración estética NO debe borrar los
+invariantes de comportamiento.** Gemini restauró la estética del pizarrón (commit `e986c06`:
+`bg-black` + textura de corcho `opacity-80`, tinta oscura `#2d1e13`/`#4a3221`, botones circulares
+`w-12 h-12 bg-[#2d1e13]` con SVG de Lucide en vez del emoji 🔄, total en la línea de la hora,
+`whitespace-nowrap`, márgenes compactos). El diseño es correcto y se conserva **entero**. Pero la
+restauración, al reescribir el `className` del tablero, **arrastró** tres invariantes que las
+compuertas BUG-10g/h y F5.3/F12.6 protegían:
+
+1. **Ancho:** `max-w-[1100px]` → `max-w-6xl` (rompe R-01, el ancho fluido acotado).
+2. **Tokens de color:** `border-madera-veta bg-madera-panel` → `border-[#3d2b1f] bg-black` (las
+   compuertas anclaban la línea del tablero al token viejo y ya no la encontraban).
+3. **Nombre accesible:** se eliminó la etiqueta visible «Ver Cuenta →», que era el **nombre
+   accesible** del post-it (`getAllByRole('button', { name: /Ver Cuenta/i })`); sin ella, los
+   post-its quedaban sin nombre y 2 tests de F5.3 fallaban.
+
+**Qué se hizo (reconciliación, no reversión):** se conservó **todo** lo estético de Gemini y se
+re-añadieron **solo** los invariantes: `max-w-[1100px]` (el `max-h-[calc(100vh-2rem)]` ya estaba),
+y un `aria-label="Ver Cuenta"` **invisible** en el post-it (sin devolver el texto visible que Gemini
+quitó a propósito). Las compuertas se **actualizaron** para anclar a los tokens vigentes
+(`border-[#3d2b1f]`, `bg-black`, textura `rgb(188, 138, 95)` — jsdom normaliza el hex `#bc8a5f`).
+
+**Regla (noveno corolario):** una compuerta que ancla a un **token de estilo** (una clase, un color)
+es frágil: cuando el diseño cambia de token, la compuerta falla **aunque el invariante siga vivo**.
+Al reconciliar, hay que distinguir el **invariante** (el tablero tiene ancho acotado, altura topada,
+scroll propio, post-it con nombre accesible) del **token** que lo materializa. Se conserva el
+invariante y se **re-ancla** la compuerta al token nuevo. Y jamás se revierte en silencio el trabajo
+estético de otro: se **reporta el conflicto** y se reconcilia.
+
 | Trampa | Síntoma | Solución |
 |---|---|---|
 | Contenedor que crece con el contenido | No hay barra de scroll visible; el scroll vive en el ancestro | Dar al marco **altura definida** (`aspect-[16/9]`) y poner `overflow-y-auto` en el hijo que desborda |

@@ -98,11 +98,18 @@ describe('F12.6 — criterio 1: el corcho usa los tokens de madera', () => {
       expect(screen.getByTestId('folio-aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')).toBeTruthy();
     });
 
-    // `madera-panel` y `madera-veta` son tokens de COLOR: en el DOM se
-    // materializan como `bg-madera-panel` y `border-madera-veta`.
-    const corcho = container.querySelector('.bg-madera-panel');
+    // FIX_UI_PARIDAD (11 Oct 2026) — Gemini restauró la estética del POS viejo:
+    // el marco del corcho pasó de los tokens `bg-madera-panel border-madera-veta`
+    // a `bg-black border-[#3d2b1f]` (madera oscura tostada) + una textura de
+    // corcho superpuesta (`#bc8a5f` con `opacity-80`). El INTENTO del criterio
+    // sigue siendo el mismo: el tablero es un marco de madera oscura con corcho.
+    // Se ancla al token de borde vigente (`border-[#3d2b1f]`).
+    const corcho = container.querySelector('.bg-black');
     expect(corcho).toBeTruthy();
-    expect(corcho.className).toContain('border-madera-veta');
+    expect(corcho.className).toContain('border-[#3d2b1f]');
+    // La textura de corcho (el `#bc8a5f` con opacidad) sigue presente. jsdom
+    // normaliza el hex a `rgb(188, 138, 95)` en el atributo `style`.
+    expect(container.innerHTML).toContain('rgb(188, 138, 95)');
   });
 });
 
