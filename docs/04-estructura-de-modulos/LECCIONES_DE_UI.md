@@ -452,3 +452,77 @@ estético de otro: se **reporta el conflicto** y se reconcilia.
 | Exportar funciones puras junto a componentes en Vite | El **Fast Refresh (HMR) colapsa**. El navegador no actualiza el código y los fixes de layout son invisibles. | No exportar utilidades puras desde el mismo módulo que un componente: extraerlas a un archivo de dominio (ej. `constants/`) o, como mínimo, quitarles el `export`. |
 | Compuerta que no puede fallar (tautología) | El test pasa siempre: verde con el código roto y con el sano; da falsa confianza | La compuerta debe poder **fallar**: afirmar sobre el código real (p. ej. leer la fuente y negar el patrón roto), no sobre un mock que se cumple por construcción |
 | `overflow-y: auto` en SO con barras overlay | La barra **existe** (el layout desplaza) pero **no se ve**: Windows 11/macOS la ocultan hasta hacer scroll; el usuario cree que no hay barra | Usar `overflow-y-scroll` (carril siempre reservado) + `scrollbar-gutter: stable` + `scrollbar-color`/`scrollbar-width` explícitos; y **medir el layout computado** (CDP) antes de seguir tocando CSS |
+
+---
+
+## Cierre de las tres deudas estructurales (11 Oct 2026)
+
+Estas tres deudas no eran defectos de UI: eran **agujeros en el proceso** que
+permitían que los defectos de UI pasaran desapercibidos. Se cerraron con
+**máquinas**, no con disciplina.
+
+### Deuda 1 — El trabajo estético vivía fuera del ciclo de compuertas
+
+**El problema.** Las compuertas anclaban a **tokens de estilo** (una clase, un
+color). Cuando el diseño cambiaba de token, la compuerta fallaba **aunque el
+invariante siguiera vivo** (ver el noveno corolario, arriba). El trabajo estético
+y el trabajo de comportamiento se pisaban.
+
+**El cierre.** Se creó [`apps/pos/src/theme/tokensVigentes.js`](../../apps/pos/src/theme/tokensVigentes.js):
+la **fuente única** de los tokens a los que anclan las compuertas
+(`TOKENS_PIZARRON`, `TOKENS_TICKET`). Las compuertas `f5_3` y `f12_6` ya **no**
+escriben `'max-w-[1100px]'` ni `'rgb(188, 138, 95)'` a mano: importan el token.
+Si el diseño cambia, se cambia **un** archivo y las compuertas siguen ancladas al
+**invariante**, no al literal.
+
+**Regla (décimo corolario):** *una compuerta no debe contener literales de estilo;
+debe importar el token vigente.* El literal en la compuerta es deuda: convierte
+cualquier rediseño en una falsa alarma.
+
+### Deuda 2 — El §10.6 «de adentro hacia afuera» no tenía puerta de máquina
+
+**El problema.** El inventario de componentes
+([`AUDITORIA_POS_VIEJO_VS_NUEVO.md`](../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/AUDITORIA_POS_VIEJO_VS_NUEVO.md))
+veía los **archivos**, no la **operación**. Un componente podía existir y pasar su
+compuerta **con su operación perdida en la traducción** desde el POS viejo. Nada
+comparaba el comportamiento viejo vs nuevo.
+
+**El cierre.** Se creó el
+[`MANIFIESTO_DE_PARIDAD.md`](../../../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/MANIFIESTO_DE_PARIDAD.md)
+(tabla `Operación | Viejo | Nuevo | Compuerta | Estado`) y el guard
+[`scripts/parity.mjs`](../../scripts/parity.mjs). El guard lee el bloque entre
+`<!-- PARITY-TABLE-START -->` y `<!-- PARITY-TABLE-END -->` y exige que **toda
+fila `portada` apunte a un test que exista en disco**. Las filas `pendiente` son
+deuda **declarada**, no oculta: el guard no falla por ellas, pero quedan a la
+vista. Hoy: **21 portadas con compuerta válida, 3 pendientes declaradas**
+(VoiceCartPanel, VisionVisor, POSOverlays).
+
+**Regla (undécimo corolario):** *una operación portada sin compuerta es deuda
+oculta.* El manifiesto la hace visible y el guard la vuelve imposible de ignorar.
+
+### Deuda 3 — Dos repos sincronizados a mano
+
+**El problema.** El código vive en `NUEVO-POS` y los planos en
+`PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS`. Sincronizarlos a mano (commit + push en
+cada uno) es fácil de olvidar: un repo queda adelante y el otro atrás.
+
+**El cierre.** Se crearon dos scripts en la raíz del workspace:
+[`scripts/sync.mjs`](../../../scripts/sync.mjs) (commitea + pushea + **verifica**
+que ambos queden en `## main...origin/main`) y
+[`scripts/check-sync.mjs`](../../../scripts/check-sync.mjs) (guard de arranque:
+avisa si algún repo tiene commits sin pushear). Un comando sincroniza ambos; un
+guard detecta el olvido.
+
+**Regla (duodécimo corolario):** *si dos artefactos deben ir juntos, la
+sincronización es una máquina, no una promesa.* Un `--check` al inicio de cada
+tarea convierte el olvido en un aviso, no en un incidente.
+
+### Deuda colateral descubierta al cerrar la Deuda 2
+
+Al cablear `parity` en el CI, la puerta de **guards** se puso en rojo por una
+violación **pre-existente** de R-01 en
+[`CheckoutScreen.jsx`](../../apps/pos/src/components/CheckoutScreen.jsx:549)
+(`lg:w-[320px]` sin `max-`/`min-`, introducida en F12.21). Se corrigió a
+`lg:w-full lg:max-w-[320px]`, preservando el ancho acotado de 320px. Lección: *al
+añadir una puerta nueva al CI, correr **todas** las puertas juntas; una puerta
+nueva puede destapar deuda vieja que estaba oculta por no correrse en conjunto.*

@@ -32,3 +32,6 @@ jobs:
 
       - name: Guardianes de estándares (5 greps)
         run: npm run guards
+
+      - name: Guard de paridad de operación (§10.6)
+        run: npm run parity

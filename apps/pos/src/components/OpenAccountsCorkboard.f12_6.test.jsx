@@ -32,6 +32,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 
 import OpenAccountsCorkboard from './OpenAccountsCorkboard.jsx';
+// Deuda 1 (11 Oct 2026): las compuertas anclan a la FUENTE ÚNICA de tokens
+// vigentes, no a strings hardcodeados. Cuando el diseño cambia, se toca
+// `tokensVigentes.js` (un solo archivo) y estas compuertas se re-anclan solas.
+import { TOKENS_PIZARRON } from '../theme/tokensVigentes.js';
 
 afterEach(() => {
   cleanup();
@@ -103,13 +107,13 @@ describe('F12.6 — criterio 1: el corcho usa los tokens de madera', () => {
     // a `bg-black border-[#3d2b1f]` (madera oscura tostada) + una textura de
     // corcho superpuesta (`#bc8a5f` con `opacity-80`). El INTENTO del criterio
     // sigue siendo el mismo: el tablero es un marco de madera oscura con corcho.
-    // Se ancla al token de borde vigente (`border-[#3d2b1f]`).
-    const corcho = container.querySelector('.bg-black');
+    // Los tokens se leen de la FUENTE ÚNICA (`tokensVigentes.js`), no hardcodeados.
+    const corcho = container.querySelector(`.${TOKENS_PIZARRON.tableroFondo}`);
     expect(corcho).toBeTruthy();
-    expect(corcho.className).toContain('border-[#3d2b1f]');
+    expect(corcho.className).toContain(TOKENS_PIZARRON.tableroBorde);
     // La textura de corcho (el `#bc8a5f` con opacidad) sigue presente. jsdom
     // normaliza el hex a `rgb(188, 138, 95)` en el atributo `style`.
-    expect(container.innerHTML).toContain('rgb(188, 138, 95)');
+    expect(container.innerHTML).toContain(TOKENS_PIZARRON.corchoRgb);
   });
 });
 

@@ -8,7 +8,8 @@
     "lint": "node scripts/lint.mjs",
     "test": "node scripts/test.mjs",
     "guards": "node scripts/guards.mjs",
-    "ci": "npm run lint && npm run test && npm run guards"
+    "parity": "node scripts/parity.mjs",
+    "ci": "npm run lint && npm run test && npm run guards && npm run parity"
   },
   "engines": {
     "node": ">=20"

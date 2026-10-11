@@ -546,7 +546,7 @@ export default function CheckoutScreen({
             entrega con el cliente ANTES de cobrar. En una VENTA DIRECTA no se
             pinta y el modal conserva su ancho original. */}
         {esPedido ? (
-          <div className="w-full lg:w-[320px] lg:flex-shrink-0 bg-fondo-profundo/60 border-y lg:border-y-0 lg:border-x border-white/10 p-6 flex flex-col gap-4 overflow-y-auto">
+          <div className="w-full lg:w-full lg:max-w-[320px] lg:flex-shrink-0 bg-fondo-profundo/60 border-y lg:border-y-0 lg:border-x border-white/10 p-6 flex flex-col gap-4 overflow-y-auto">
             <div className="flex flex-col gap-1">
               <h3 className="text-lg font-bold text-acento">
                 Confirmar con el Cliente

@@ -27,6 +27,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 
 import OpenAccountsCorkboard from './OpenAccountsCorkboard.jsx';
+// Deuda 1 (11 Oct 2026): las compuertas anclan a la FUENTE ÚNICA de tokens
+// vigentes, no a strings hardcodeados. Cuando el diseño cambia, se toca
+// `tokensVigentes.js` (un solo archivo) y estas compuertas se re-anclan solas.
+import { TOKENS_PIZARRON } from '../theme/tokensVigentes.js';
 
 afterEach(() => {
   cleanup();
@@ -238,7 +242,7 @@ describe('F5.3 — criterio 7: contenedor raíz fluido (R-01)', () => {
 
     const raiz = container.firstChild;
     expect(raiz.className).toContain('w-full');
-    expect(raiz.className).toContain('max-w-[1100px]');
+    expect(raiz.className).toContain(TOKENS_PIZARRON.raizAncho);
     // No debe haber un ancho fijo en píxeles sin un `max-` que lo acote.
     expect(raiz.className).not.toMatch(/(^|\s)w-\[\d+px\]/);
   });
@@ -302,8 +306,8 @@ describe('BUG-10 — scroll lateral del pizarrón', () => {
     // recortando los post-its. Por eso DEBE llevar además un TOPE DURO de alto
     // al viewport: `max-h-[calc(100vh-2rem)]` (2rem = el `p-4` del modal).
     const tablero = container.firstChild.firstChild;
-    expect(tablero.className).toContain('aspect-[16/9]');
-    expect(tablero.className).toContain('max-h-[calc(100vh-2rem)]');
+    expect(tablero.className).toContain(TOKENS_PIZARRON.tableroAspecto);
+    expect(tablero.className).toContain(TOKENS_PIZARRON.tableroTopeAlto);
     expect(tablero.className).not.toContain('max-h-[85vh]');
     expect(tablero.className).not.toContain('h-[85vh]');
     expect(tablero.className).toContain('overflow-hidden');
@@ -317,9 +321,9 @@ describe('BUG-10 — scroll lateral del pizarrón', () => {
     // BUG-10h: `overflow-y-scroll` (no `auto`) para que el carril de la barra
     // esté SIEMPRE reservado y la barra no dependa del modo overlay de Windows.
     const wrapper = container.querySelector('ul').parentElement;
-    expect(wrapper.className).toContain('overflow-y-scroll');
+    expect(wrapper.className).toContain(TOKENS_PIZARRON.wrapperScroll);
     expect(wrapper.className).not.toContain('overflow-y-auto');
-    expect(wrapper.className).toContain('custom-scrollbar');
+    expect(wrapper.className).toContain(TOKENS_PIZARRON.wrapperScrollbar);
     expect(wrapper.className).toContain('flex-1');
     expect(wrapper.className).toContain('min-h-0');
 
@@ -434,11 +438,11 @@ describe('BUG-10e — el modal padre NO captura el scroll del pizarrón', () => 
     // FIX_UI_PARIDAD (11 Oct 2026) — Gemini restauró la estética del POS viejo:
     // el tablero pasó de los tokens `border-madera-veta bg-madera-panel` a
     // `border-[#3d2b1f] bg-black` + una textura de corcho superpuesta. La
-    // compuerta se ancla ahora al token de borde vigente (`border-[#3d2b1f]`),
-    // que es el que identifica la línea del tablero.
+    // compuerta se ancla ahora al token de borde vigente, que se lee de la
+    // FUENTE ÚNICA (`tokensVigentes.js`), no hardcodeado aquí.
     const lineaTablero = fuente
       .split('\n')
-      .find((l) => l.includes('className=') && l.includes('border-[#3d2b1f]'));
+      .find((l) => l.includes('className=') && l.includes(TOKENS_PIZARRON.tableroBorde));
     expect(lineaTablero).toBeTruthy();
 
     // Altura DEFINIDA y ACOTADA por el ancho (`aspect-[16/9]`, como el POS
@@ -449,8 +453,8 @@ describe('BUG-10e — el modal padre NO captura el scroll del pizarrón', () => 
     // scroll) y recorta los post-its. El `max-h` es el tope que lo evita.
     // NO `max-h-[85vh]` (un máximo no acota a los hijos flex) ni `h-[85vh]`
     // (que sumado a los paddings anidados desborda el viewport).
-    expect(lineaTablero).toContain('aspect-[16/9]');
-    expect(lineaTablero).toContain('max-h-[calc(100vh-2rem)]');
+    expect(lineaTablero).toContain(TOKENS_PIZARRON.tableroAspecto);
+    expect(lineaTablero).toContain(TOKENS_PIZARRON.tableroTopeAlto);
     expect(lineaTablero).not.toContain('max-h-[85vh]');
     expect(lineaTablero).not.toContain('h-[85vh]');
 
@@ -458,10 +462,10 @@ describe('BUG-10e — el modal padre NO captura el scroll del pizarrón', () => 
     // BUG-10h: `overflow-y-scroll` fuerza el carril SIEMPRE visible.
     const lineaWrapper = fuente
       .split('\n')
-      .find((l) => l.includes('className=') && l.includes('custom-scrollbar'));
+      .find((l) => l.includes('className=') && l.includes(TOKENS_PIZARRON.wrapperScrollbar));
     expect(lineaWrapper).toBeTruthy();
     expect(lineaWrapper).toContain('min-h-0');
-    expect(lineaWrapper).toContain('overflow-y-scroll');
+    expect(lineaWrapper).toContain(TOKENS_PIZARRON.wrapperScroll);
     expect(lineaWrapper).not.toContain('overflow-y-auto');
     expect(lineaWrapper).toContain('flex-1');
 
