@@ -1,6 +1,9 @@
 /**
  * Puerta de FASE 3.3 — Hooks del POS (el corazón).
  *
+ * @paridad: hooks/hooks.f3_3.test.jsx
+ * @operacion: El escáner de código de barras agrega el producto
+ *
  * Verifica los 5 criterios de la puerta (Plan de Abordaje §4 FASE 3.3):
  *
  *   ✓ clearCart solo ocurre tras HTTP 200 + verificación

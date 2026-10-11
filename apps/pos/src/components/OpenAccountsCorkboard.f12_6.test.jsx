@@ -1,6 +1,9 @@
 /**
  * Puerta de FASE 12.6 — PARIDAD DE PRESENTACIÓN del pizarrón.
  *
+ * @paridad: components/OpenAccountsCorkboard.f12_6.test.jsx
+ * @operacion: El pizarrón muestra tipo de pedido, cliente, entrega, capturista y hora
+ *
  * ─────────────────────────────────────────────────────────────────────────────
  * QUÉ VERIFICA
  * ─────────────────────────────────────────────────────────────────────────────

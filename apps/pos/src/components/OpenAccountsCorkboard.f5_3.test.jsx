@@ -1,6 +1,12 @@
 /**
  * Puerta de FASE 5.3 — Pizarrón de cuentas abiertas (interfaz 13).
  *
+ * @paridad: components/OpenAccountsCorkboard.f5_3.test.jsx
+ * @operacion: El pizarrón muestra el folio CORTO (`#` + últimos 3 dígitos)
+ *
+ * @paridad: components/OpenAccountsCorkboard.f5_3.test.jsx
+ * @operacion: El pizarrón muestra el folio CORTO (# + últimos 3 dígitos); la tarjeta entera es clickeable; scroll lateral interno
+ *
  * Verifica los 8 criterios de la sub-fase 5.3:
  *   1. Renderiza una tarjeta (post-it) por cuenta.
  *   2. Muestra el folio corto (`#` + últimos 3 dígitos) y el total formateado.

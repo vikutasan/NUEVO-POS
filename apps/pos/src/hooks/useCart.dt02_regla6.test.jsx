@@ -2,6 +2,9 @@
  * Puerta DT-02 regla 6 — "El dinero no se suma en el frontend.
  * Los totales vienen del backend. El frontend solo formatea."
  *
+ * @paridad: hooks/useCart.dt02_regla6.test.jsx
+ * @operacion: El total del ticket viene del backend (no se suma en el frontend)
+ *
  * CONTEXTO (deuda arquitectónica detectada por el dueño):
  *
  *   El bug `suma_no_cuadra` se "arregló" 4 veces redondeando una suma de

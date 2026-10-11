@@ -1,6 +1,9 @@
 /**
  * Puerta de FASE 9.1.2 — Servicio + hook de cobro (pagos mixtos).
  *
+ * @paridad: hooks/useCheckout.f9_1_2.test.jsx
+ * @operacion: El cobro del ticket (efectivo/tarjeta)
+ *
  * Verifica los criterios del plan (§3.3):
  *   A. SERVICIO (`checkoutService.js`):
  *      A1. Construye el `payment_details` canónico con N pagos.

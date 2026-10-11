@@ -2,6 +2,9 @@
  * FIX "el orden no se persiste" (10 Oct 2026) — el orden izq-der/der-izq vive
  * en el BACKEND (`terminal_config.json`), no solo en el `localStorage`.
  *
+ * @paridad: hooks/useTerminals.orden_backend.test.jsx
+ * @operacion: El orden de terminales (izq-der / der-izq) persiste en el backend
+ *
  * Antes: la preferencia se guardaba únicamente en `localStorage`, así que se
  * perdía al cambiar de navegador o de máquina. El usuario tenía que
  * reconfigurarla cada vez que entraba.

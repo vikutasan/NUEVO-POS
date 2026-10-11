@@ -1,6 +1,9 @@
 /**
  * Puerta de BUG-02 — COLOR DEL POST-IT POR TERMINAL (vocabulario TERM-0X).
  *
+ * @paridad: components/OpenAccountsCorkboard.bug02.test.jsx
+ * @operacion: El color del post-it depende de la terminal (mapa heredado)
+ *
  * ─────────────────────────────────────────────────────────────────────────────
  * QUÉ VERIFICA
  * ─────────────────────────────────────────────────────────────────────────────

@@ -2,6 +2,9 @@
  * Compuerta de FASE 12.8 — PARIDAD DE OPERACIÓN: el cobro se habilita SOLO
  * cuando la terminal está habilitada como caja (turno abierto).
  *
+ * @paridad: components/SalesReceipt.f12_8.test.jsx
+ * @operacion: Tap sobre la cantidad abre el teclado numérico (sin botones +/- laterales)
+ *
  * QUÉ PRUEBA ESTA COMPUERTA
  * -------------------------
  * El viejo POS (`apps/pos/components/SalesReceipt.jsx:116-135`) deshabilita el

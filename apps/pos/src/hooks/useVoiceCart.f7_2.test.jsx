@@ -1,6 +1,9 @@
 /**
  * Puerta de FASE 7.2 — Voz: `useVoiceCart` (hook).
  *
+ * @paridad: hooks/useVoiceCart.f7_2.test.jsx
+ * @operacion: El carrito por voz agrega productos por nombre
+ *
  * Cubre los criterios 6–9 del gate (§7.4 del plan):
  *   6. Llama al contrato `ia.transcribir_voz` (POST /ai/voice/transcribe).
  *   7. Llama al contrato `ia.interpretar_intencion` (POST /ai/voice/parse-intent).

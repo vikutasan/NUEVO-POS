@@ -1,6 +1,9 @@
 /**
  * Puerta de FASE 12.17 — Auto-heal del 409 en las acciones de línea.
  *
+ * @paridad: hooks/useCart.f12_17.test.jsx
+ * @operacion: El reintento de operaciones de red (withRetries) con auto-heal del 409
+ *
  * BUG runtime (reportado por el dueño: "entré al POS y el bug aún continúa"):
  *
  *   Al pulsar dos productos seguidos (o producto + escáner), dos llamadas

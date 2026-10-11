@@ -1,6 +1,9 @@
 /**
  * Tests guardianes de `sessionReset` — Brecha B3.
  *
+ * @paridad: state/sessionReset.guardian.test.js
+ * @operacion: El reset de sesión al cerrar turno (simetría de limpieza, Regla 19)
+ *
  * Tres guardianes que protegen la simetría de limpieza (Regla 19):
  *
  *   1. GUARDIÁN DE CLAVES CANÓNICAS: `VALOR_INICIAL` tiene exactamente las

@@ -204,7 +204,8 @@ export function useCart(opciones = {}) {
    * Si no hay `api`, opera solo en memoria (modo local).
    *
    * F12.23b — PARIDAD RN-17 CON EL POS VIEJO (§6.8): el POS viejo fusionaba por
-   * `product.id` (`apps/pos/hooks/useCart.js:105`): tocar N veces el mismo
+   * `product.id` (`apps/pos/hooks/useCart.js:105`) [N-01-LEGACY: cita del viejo]:
+   * tocar N veces el mismo
    * producto dejaba UNA línea con `quantity: N`, no N líneas de 1. Aquí se
    * replica esa regla: si el llamador NO trae un `item_id` explícito (es decir,
    * viene de un tap en la ficha del producto o del lector), se fusiona por

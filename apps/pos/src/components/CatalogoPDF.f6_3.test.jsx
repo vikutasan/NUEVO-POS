@@ -1,6 +1,9 @@
 /**
  * Puerta de FASE 6.3 — Carta PDF con selector de categorías (Entregable B).
  *
+ * @paridad: components/CatalogoPDF.f6_3.test.jsx
+ * @operacion: La generación del ticket imprimible (carta PDF con selector de categorías)
+ *
  * Verifica los 10 criterios del plan v2.1 §9.4:
  *   1. `generarCatalogoPDF` devuelve `{outcome:'ok'}` con categorías válidas.
  *   2. El PDF incluye el nombre del negocio y la fecha.

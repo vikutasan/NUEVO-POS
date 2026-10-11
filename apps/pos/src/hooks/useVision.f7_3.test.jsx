@@ -1,6 +1,9 @@
 /**
  * Puerta de FASE 7.3 — Visión: `useVision` (hook).
  *
+ * @paridad: hooks/useVision.f7_3.test.jsx
+ * @operacion: La cámara de visión reconoce productos
+ *
  * Cubre los criterios 1–5, 9 y 10 del gate (§8.4 del plan):
  *   1. Llama al contrato 17 (`vision.reconocer_producto`, POST /vision/predict).
  *   2. NO importa `@google/generative-ai` ni ninguna dependencia de nube.

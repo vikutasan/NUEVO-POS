@@ -1,6 +1,12 @@
 /**
  * Puerta de FASE 8.3 — Hook `useCustomerIdentification`.
  *
+ * @paridad: hooks/useCustomerIdentification.f8_3.test.jsx
+ * @operacion: La identificación de cliente en el ticket
+ *
+ * @paridad: hooks/useCustomerIdentification.f8_3.test.jsx
+ * @operacion: La identificación de cliente en el ticket
+ *
  * Verifica los 6 criterios del plan (§3.4):
  *   1. Superficie: expone cliente, beneficios, cargando, error, identificar, limpiar.
  *   2. Identificar OK: llama al servicio con el teléfono y puebla cliente + beneficios.

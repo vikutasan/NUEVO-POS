@@ -1,6 +1,9 @@
 /**
  * Puerta de FASE 13.3 — Selector de color de post-it en el gestor de terminales.
  *
+ * @paridad: components/TerminalSelector.f13_3.test.jsx
+ * @operacion: El selector de terminales muestra el estado (libre/ocupada) y bloquea
+ *
  * ─────────────────────────────────────────────────────────────────────────────
  * QUÉ VERIFICA
  * ─────────────────────────────────────────────────────────────────────────────

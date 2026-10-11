@@ -9,12 +9,16 @@
  *   ../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/06-prompt-del-arquitecto/PROMPT_DEL_ARQUITECTO_DEL_NUEVO_POS.md §7.4
  *   ../PLANOS-ARQUITECTONICOS-DEL-NUEVO-POS/05-plan-de-construccion/PLAN_DE_CONSTRUCCION_DEL_NUEVO_POS.md §6.2 (A-04)
  *
- * Greps:
+ * Greps (9 en total):
  *   F0 (5): E-05 except...pass · E-15 console.log · E-15 TODO sin "TODO:" ·
  *           E-09 Float en models.py · E-10 DateTime() en models.py
  *   F4 (1): A-04 except...pass acotado a la ruta crítica (guards/)
  *   F5 (1): R-01 ancho fijo (w-[...px]) en el contenedor raíz de la superficie
  *   F12 (1): E-09-FE suma de dinero en el frontend (DT-02 regla 6)
+ *   R3 (1): N-01 nomenclatura `product.id` con punto (trampa latente RN-17)
+ *
+ * El número de greps se verifica por máquina en `guards-coverage.mjs` (R1):
+ * si se agrega un grep aquí sin cablearlo en CI, la puerta FALLA.
  *
  * Regla: si un grep encuentra 1+ coincidencia, la puerta FALLA (exit 1).
  * En F0 el repo está vacío de código, así que los 5 greps deben dar 0 coincidencias.
@@ -82,7 +86,7 @@ function collectFiles() {
  *   - test:    (linea, archivo) => boolean
  *   - onlyModels: si solo aplica a models.py (E-09, E-10)
  */
-const GREPS = [
+export const GREPS = [
   {
     id: 'E-05',
     label: 'Silencios en ruta crítica (except ... pass)',
@@ -165,6 +169,32 @@ const GREPS = [
       !/DT-02-FALLBACK-LOCAL/.test(line),
   },
   {
+    // N-01 (R3) — CONTRATO DE NOMENCLATURA `product_id` / `item_id`.
+    //
+    // RN-17 (fusión por producto) se implementa en el nuevo POS sobre el campo
+    // `product_id` (snake_case, contrato de la API). El POS VIEJO fusionaba por
+    // `product.id` (acceso a propiedad de objeto). Ambos funcionan, pero la
+    // discrepancia de nomenclatura es una TRAMPA LATENTE: alguien que copie un
+    // fragmento del viejo POS (`product.id`) al nuevo introduce un `undefined`
+    // silencioso que rompe la fusión sin que ningún test lo note.
+    //
+    // Este grep prohíbe el acceso `product.id` (con PUNTO) en la superficie del
+    // POS. La forma canónica es `product_id` (guion bajo). Se permite
+    // `product.id` SOLO si la línea lleva el escape hatch auditable
+    // `N-01-LEGACY` (p. ej. un comentario que documenta una lectura del viejo).
+    //
+    // Acotado a la superficie del POS y excluye tests (que pueden citar el viejo).
+    id: 'N-01',
+    label: 'Nomenclatura legacy `product.id` con punto (usar `product_id`) — contrato RN-17',
+    onlyModels: false,
+    onlyPath: 'apps/pos/',
+    skipTests: true,
+    test: (line) =>
+      /\bproduct\.id\b/.test(line) &&
+      // Escape hatch EXPLÍCITO y auditable: documentar una lectura del viejo POS.
+      !/N-01-LEGACY/.test(line),
+  },
+  {
     id: 'E-10',
     label: 'Tiempo naive (DateTime() en models.py)',
     onlyModels: true,
@@ -229,6 +259,11 @@ function main() {
   console.log('PUERTA F4/A-04 EN VERDE: 0 silencios en la ruta crítica (guards/).');
   console.log('PUERTA F5/R-01 EN VERDE: 0 anchos fijos en la superficie (apps/pos/).');
   console.log('PUERTA F12/E-09-FE EN VERDE: 0 sumas de dinero en el frontend (DT-02 regla 6).');
+  console.log('PUERTA R3/N-01 EN VERDE: 0 usos de `product.id` con punto (contrato RN-17).');
 }
 
-main();
+// Solo ejecuta la puerta cuando se invoca como script (no al importarlo desde
+// `guards-coverage.mjs`, que necesita leer `GREPS` sin correr los greps).
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main();
+}

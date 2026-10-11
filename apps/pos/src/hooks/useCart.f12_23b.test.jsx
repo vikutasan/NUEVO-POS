@@ -1,6 +1,12 @@
 /**
  * Puerta de FASE 12.23b — Fusión por producto (paridad RN-17 con el POS viejo).
  *
+ * @paridad: hooks/useCart.f12_23b.test.jsx
+ * @operacion: RN-17: un producto aparece UNA vez; re-agregar incrementa la cantidad (fusión por id)
+ *
+ * @paridad: hooks/useCart.f12_23b.test.jsx
+ * @operacion: RN-17: un producto aparece UNA vez; re-agregar incrementa la cantidad (fusión por id)
+ *
  * BUG runtime (reportado por el dueño):
  *
  *   "en el viejo pos si yo doy tap varias veces sobre el mismo producto aumenta
